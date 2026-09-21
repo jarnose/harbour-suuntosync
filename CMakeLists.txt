@@ -27,7 +27,14 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # tests/test_sbemcontainer.cpp, plain g++) decodes the actual
 # /Logbook/byId/<id>/Data payload once reassembled - Heatshrink
 # decompression (vendored, ISC-licensed, src/ble/heatshrink/) followed by
-# an SBEM0103 TLV walk. See docs/logbook-data-format.md.
+# an SBEM0103 TLV walk. See docs/logbook-data-format.md. Phase 6 continued
+# again: logbookdecoder (tests/test_logbookdecoder.cpp, plain g++) turns
+# the decoded chunks into workout summary fields - GPS/HR/activity/cadence
+# confirmed against Jarno's own FIT exports, no altitude/ascent/descent
+# (extensively searched for, not found - see the doc). Still Qt-free and
+# not yet wired to AppController/WorkoutStore: that needs the BLE bulk-
+# transfer trigger sequence (a generic handle-walk, not yet implemented -
+# see the doc's provenance section) to actually produce input for it.
 add_executable(harbour-suuntosync
     src/harbour-suuntosync.cpp
     src/controller/appcontroller.cpp
@@ -40,6 +47,7 @@ add_executable(harbour-suuntosync
     src/ble/mdswirecodec.cpp
     src/ble/mdswhiteboardclient.cpp
     src/ble/sbemcontainer.cpp
+    src/ble/logbookdecoder.cpp
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/suuntocloudclient.cpp

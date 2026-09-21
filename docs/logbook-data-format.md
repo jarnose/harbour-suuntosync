@@ -283,16 +283,86 @@ to what's already confirmed working here.
 2. **Decode `0x0c`/`0x16`/`0x18`/`0x1f`'s internal value structure** -
    GPS/pace/altitude/cadence samples almost certainly live in here, but
    no byte offset has been confirmed for any of them yet.
-3. **The fastest path to calibrating the above**: Jarno supplying the
-   *known real stats* (sport type, duration, distance, avg HR if
-   available) for these three specific captured workouts, to search for
-   matching encoded values rather than continuing to guess blind. The
-   duration figures above (78.97/61.44/25.88 min) are the first
-   candidate to check against reality.
-4. Add resync-on-malformed-chunk robustness to `Sbem::parseContainer()`
+3. Add resync-on-malformed-chunk robustness to `Sbem::parseContainer()`
    (see point 3 under issue #70 above) before relying on it against a
    live BLE download rather than a replayed historical capture.
-5. Confirm this same pipeline holds for a workout **as it's actively
+4. Confirm this same pipeline holds for a workout **as it's actively
    streamed live** (this capture was of the official Android app doing a
    historical sync, presumably after the workout already ended) -
    probably fine, no reason to expect otherwise, but not yet exercised.
+5. Resolve the offset-13 puzzle and the countdown-counter field, both
+   introduced in the next section.
+
+## Ground-truth calibration (ID = actual UTC timestamp; `0x0c` decoded)
+
+Jarno supplied the real recorded stats for all three captured workouts
+from the app itself, keyed by their logbook entry id - which the
+libdivecomputer issue #70 report already claimed *is itself* the
+workout's Unix start timestamp in seconds. Confirmed exactly right: all
+three logbook ids convert cleanly to the real workout start times.
+
+| id | start (Helsinki) | sport | duration | distance | avg/max speed | energy | ascent/descent |
+|---|---|---|---|---|---|---|---|
+| 1785740504 (stream0) | 2026-08-03 10:01 | Cycling | 38:19 | 5.42 km | 8.5 / 25.7 km/h | 156 kcal | 27.8 / 19.5 m |
+| 1785760357 (stream1) | 2026-08-03 15:32 | Cycling | 37:17 | 5.56 km | 8.9 / 26.5 km/h | 210 kcal | 58.6 / 52.1 m |
+| 1788194033 (stream2) | 2026-08-31 19:33 | Walking | 24:53 | 2.09 km | 5.0 / 5.4 km/h | 132 kcal | 15.4 / 18.7 m, cadence 55/72 rpm, 2672 steps |
+
+With real numbers to search for, brute-force-scanned every byte offset
+of the decompressed stream for a `float32`/`uint32` matching each known
+value, then cross-referenced hits back to their containing chunk. This
+cracked open `0x0c` (the 20-byte, very frequent chunk flagged "not yet
+tested" above):
+
+**Confirmed**: `0x0c`'s bytes `2..8` (6 bytes, not the full 8 a `uint64`
+read would suggest - see below) are an **absolute Unix timestamp in
+milliseconds**. Every sample across all three streams decodes to a time
+within seconds of the real workout's start, climbing steadily through
+the recording - e.g. stream1's first `0x0c` sample reads `1785760359000`
+against a real start of `1785760357000` (2s in), and later samples climb
+from there. This is a much better anchor than the per-chunk leading
+`int16` delta this doc previously assumed applied uniformly (`0x0c`'s
+own leading 2 bytes are usually `0000` - it doesn't consistently carry a
+meaningful delta the way `0x12` does).
+
+**Confirmed**: bytes `8..12` (`float32`) hold a live-updating stat.
+Caught an *exact* hit - `210.0` kcal, bit-for-bit, twice, in
+stream1's `energy_kcal`. Given it's a running total, later samples
+naturally read closer to the true final value than earlier ones (this
+is why the very first broad scan needed generous tolerances rather than
+exact matches to catch it happening mid-workout, not just at the end).
+
+**Not yet resolved - flagging honestly rather than overclaiming**:
+- A *second* position, byte offset `13` (not `12` - i.e. not 4-byte
+  aligned with the offset-8 field), also produces `float32` values that
+  land close to `avg_speed_kmh`/`max_speed_kmh`/`ascent_m`/`descent_m`
+  at various points across the stream - but at *different* sample
+  indices for each target, not simultaneously. Two live hypotheses,
+  neither confirmed: (a) `0x0c` multiplexes *one* "current highlighted
+  stat" per sample across several possible metrics (the field at offset
+  8 *and/or* 13 means something different depending on sample), or (b)
+  there's an alignment/framing detail still missed (the byte-13
+  non-alignment is a bit suspicious on its own). Needs more ground
+  truth to pin down - ideally a full per-second time series from the
+  app, not just workout totals, to check whether the "current metric"
+  at each timestamp is consistent with something like current speed at
+  that specific moment (not just eventually converging to the final
+  average/max).
+- Bytes `12..14` in at least one contiguous run of stream1 samples
+  read as a **linearly *decreasing* 16-bit value** (~7105 counting down
+  toward 0 and past it) across dozens of consecutive `0x0c` chunks -
+  clearly not noise, but purpose unknown (a countdown/remaining-value
+  of some kind, or a raw high-rate sensor channel). Not yet correlated
+  with anything.
+- The three streams' *raw recorded time span* (last sample's timestamp
+  minus first) is roughly **2x** the real reported duration for both
+  cycling workouts, but close to 1:1 for the walking one. Working
+  theory, not confirmed: **auto-pause** - the watch likely keeps logging
+  wall-clock time through stationary/paused segments (common at traffic
+  lights while cycling), while the app's reported "Kesto" only counts
+  active time. Walking rarely triggers auto-pause the same way, which
+  would explain why only that stream's total lines up closely.
+- `distance_m`, `steps`, and `cadence` (workout 3's walking-specific
+  fields) haven't turned up yet in this same brute-force scan - worth
+  another pass, plus specifically checking `0x1f` and `0x18` (both
+  walking-heavy chunk ids) against `steps`/`cadence` now that real
+  target numbers exist for them.

@@ -15,6 +15,24 @@ constexpr double kEarthRadiusMeters = 6371000.0;
 // see logbookdecoder.h and docs/logbook-data-format.md for how this
 // threshold was chosen and validated.
 constexpr int64_t kActiveGapMaxMs = 3000;
+// Max speed specifically uses a tighter window than distance/duration
+// above: confirmed on a real captured cycling workout (2026-09-21) that a
+// single longer (~3s) gap between GPS fixes can cover an implausible
+// distance (a GPS position glitch, not real motion) and dominate the
+// point-to-point "max speed" figure - excluding pairs above ~1.5s (GPS
+// fixes land close to 1s apart in every capture this project has seen)
+// dropped the one outlier and landed on a value matching the real
+// reported max speed almost exactly. Distance/duration aren't as
+// sensitive to one outlier pair the same way (they sum many gaps rather
+// than taking a max), so they keep the wider, already-validated window.
+constexpr int64_t kMaxSpeedGapMaxMs = 1500;
+// The watch reports this exact byte for "cadence" (chunk 0x16 byte 10)
+// when no foot-pod/cadence sensor is present (confirmed on a real
+// captured cycling workout with no cadence sensor paired: every single
+// sample read exactly 255, not 0 or something plausible-looking) - same
+// "sentinel means absent" pattern as heart rate's 0, just a different
+// sentinel value.
+constexpr uint8_t kNoCadenceSentinel = 255;
 
 double toRadians(double degrees)
 {
@@ -122,9 +140,11 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
             const double d = haversineMeters(gpsPoints[i - 1].lat, gpsPoints[i - 1].lon,
                 gpsPoints[i].lat, gpsPoints[i].lon);
             totalDistance += d;
-            const double speed = d / dtSeconds;
-            if (speed > maxSpeed)
-                maxSpeed = speed;
+            if (dtMs <= kMaxSpeedGapMaxMs) {
+                const double speed = d / dtSeconds;
+                if (speed > maxSpeed)
+                    maxSpeed = speed;
+            }
         }
     }
     result.totalDistanceMeters = totalDistance;
@@ -145,7 +165,9 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
     double steps = 0.0;
     for (size_t i = 1; i < cadencePoints.size(); ++i) {
         const int64_t dtMs = static_cast<int64_t>(cadencePoints[i].timeMs) - static_cast<int64_t>(cadencePoints[i - 1].timeMs);
-        if (dtMs > 0 && dtMs <= kActiveGapMaxMs) {
+        if (dtMs > 0 && dtMs <= kActiveGapMaxMs
+                && cadencePoints[i].cadence != kNoCadenceSentinel
+                && cadencePoints[i - 1].cadence != kNoCadenceSentinel) {
             const double dtSeconds = dtMs / 1000.0;
             steps += cadencePoints[i].cadence * 2.0 / 60.0 * dtSeconds;
         }

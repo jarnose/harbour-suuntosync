@@ -743,3 +743,62 @@ step would be a second real capture of the *same* sequence against a
 entry (the handle values, presumably) versus which are fixed (the walk's
 shape/offsets) - a single capture can't distinguish those, which is
 exactly why the general case wasn't attempted this round.
+
+## The shortcut works - first real end-to-end confirmation, and two real bugs it found
+
+**The simplified trigger works.** Jarno ran `testLogbookFetch()` against
+a real logbook id on his Suunto Race (2026-09-21) and got a real
+`/Logbook/byId/<id>/Data` payload back with no handle-walk at all - just
+GET → ack → the simplified trigger → the bulk stream. This is the first
+live confirmation of the *entire* pipeline this document describes, not
+just the historical-capture replay everything above was validated
+against: `OK - 57174 bytes compressed, activity=4, duration=2140s,
+distance=5394m maxSpeed=9,6m/s avgHR=76 maxHR=97 steps=19448`. (57174
+bytes is, reassuringly, the exact compressed size of one of the three
+original historical-capture streams this whole investigation was built
+on - this was the same cycling workout, now fetched live instead of
+replayed.)
+
+Most of that matched the real app-reported stats for this workout
+closely (duration 2140s vs. real 2299s/38:19; distance 5394m vs. real
+5420m; avg/max HR 76/97 vs. real 77/97) - but two fields were clearly
+wrong, and both turned out to be real, fixable bugs rather than
+limitations of the approach:
+
+- **`maxSpeed` = 9.6 m/s (34.6 km/h) against a real max of 25.7 km/h.**
+  Traced to a single ~3-second gap between GPS fixes covering an
+  implausible distance - a position glitch, not 34.6 km/h of real
+  cycling - dominating the naive point-to-point max-speed calculation.
+  Every *other* candidate speed in this workout had a ~1-second gap
+  (GPS fixes land close to 1s apart throughout every capture this
+  project has seen); excluding pairs more than 1.5s apart from the
+  max-speed calculation specifically (distance/duration keep the wider,
+  already-validated 3s window - they sum many gaps rather than taking a
+  single max, so they're far less sensitive to one outlier) drops the
+  glitch and lands on 7.127 m/s = 25.7 km/h, matching the real value
+  almost exactly.
+- **`steps` = 19448, nonsensical for a cycling workout.** Traced to
+  chunk `0x16` byte 10 (cadence) reading the literal value `255` for
+  *every single sample* in this workout (confirmed by direct
+  inspection) - Jarno's Race had no cadence/foot-pod sensor paired for
+  this ride, and `255` is the watch's sentinel for "no reading", the
+  same role `0`'s already-handled sentinel plays for heart rate. The
+  step-integration code was treating that sentinel as a literal (very
+  high) cadence and integrating it into a physically-impossible step
+  count. Fixed by excluding `255` samples from the integration, the
+  same way `0` heart-rate samples are already excluded.
+
+Both fixes are in `src/ble/logbookdecoder.cpp` (`kMaxSpeedGapMaxMs`,
+`kNoCadenceSentinel`) and covered by a second golden-vector fixture in
+`tests/test_logbookdecoder.cpp` built from this exact real device
+result (`tests/fixtures/logbook_data_heatshrink_cycling.bin`) - so this
+specific regression can't silently come back. Confirmed both fixes are
+safe against the original walking fixture too: it has no cadence `255`
+samples and no GPS gaps over 1.5s in the relevant window, so neither
+fix changes that fixture's already-passing expected values at all.
+
+**What this leaves open**: whether the skipped handle-walk is ever
+*required* for some other logbook entry or watch state that happens to
+differ from the one tested here is still unconfirmed - one successful
+fetch is strong evidence, not proof for every case. Still not wired
+into `WorkoutStore`/the UI.

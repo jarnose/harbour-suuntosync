@@ -310,7 +310,11 @@ void AppController::syncCloudWorkouts()
                 }
             }
 
-            m_cloudAccount.lastSync = QDateTime::currentSecsSinceEpoch();
+            // currentSecsSinceEpoch() is Qt 5.8+ - newer than Sailfish OS's
+            // Qt5 (same vintage issue as QRandomGenerator elsewhere in this
+            // project); currentMSecsSinceEpoch() has been available since
+            // Qt 4.7 and works everywhere.
+            m_cloudAccount.lastSync = QDateTime::currentMSecsSinceEpoch() / 1000;
             QString saveError;
             if (!m_cloudAccountStore->save(m_cloudAccount, &saveError))
                 emit errorOccurred(tr("Failed to save account: %1").arg(saveError));

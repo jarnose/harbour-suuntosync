@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(harbour-suuntosync CXX)
+project(harbour-suuntosync CXX C)
 
 # NOTE: no "Bluetooth" component - Sailfish OS 5.1's SDK target has no
 # pkgconfig(Qt5Bluetooth) at all (confirmed by a real build attempt: zypper
@@ -22,7 +22,12 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Secrets) + CloudAccountStore (SQLite metadata), no network yet. Phase 5:
 # BlueZ D-Bus device discovery/pairing. Phase 6: mdswirecodec (already
 # separately unit-tested via tests/test_mdswirecodec.cpp, plain g++) +
-# mdswhiteboardclient wiring it up to real GATT characteristics.
+# mdswhiteboardclient wiring it up to real GATT characteristics. Phase 6
+# continued: sbemcontainer (already separately unit-tested via
+# tests/test_sbemcontainer.cpp, plain g++) decodes the actual
+# /Logbook/byId/<id>/Data payload once reassembled - Heatshrink
+# decompression (vendored, ISC-licensed, src/ble/heatshrink/) followed by
+# an SBEM0103 TLV walk. See docs/logbook-data-format.md.
 add_executable(harbour-suuntosync
     src/harbour-suuntosync.cpp
     src/controller/appcontroller.cpp
@@ -34,6 +39,8 @@ add_executable(harbour-suuntosync
     src/ble/devicelistmodel.cpp
     src/ble/mdswirecodec.cpp
     src/ble/mdswhiteboardclient.cpp
+    src/ble/sbemcontainer.cpp
+    src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp

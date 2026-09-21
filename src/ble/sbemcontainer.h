@@ -1,0 +1,41 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+// Decodes a /Logbook/byId/<id>/Data payload once MdsWhiteboardClient has
+// reassembled it from the BLE bulk-transfer chunks (see
+// docs/logbook-data-format.md for the full pipeline this sits at the end
+// of). Two independent steps, both reverse-engineered against real bytes
+// captured from Jarno's own Suunto Race and cross-checked against
+// libdivecomputer's suunto_nautic driver (a real, working implementation
+// for a related Suunto BLE device that turned out to share this exact
+// on-wire format):
+//
+//   1. Heatshrink (LZSS) decompression - window_sz2=7, lookahead_sz2=5,
+//      confirmed by both suunto_nautic.c's own constants and by these
+//      exact parameters reproducing the literal "SBEM0103" magic at the
+//      start of real captured/decompressed data (see
+//      tests/test_sbemcontainer.cpp).
+//   2. The decompressed bytes are a "SBEM0103"-tagged TLV container:
+//      repeating [chunk id: 1 byte][length: 1 byte][value: length bytes],
+//      where length == 0xFF means an extended 4-byte little-endian length
+//      follows immediately instead of a literal value length.
+namespace Sbem {
+
+// Throws std::runtime_error on a Heatshrink decode error (malformed input).
+std::vector<uint8_t> heatshrinkDecompress(const std::vector<uint8_t> &compressed);
+
+struct Chunk {
+    uint8_t id;
+    std::vector<uint8_t> value;
+};
+
+// Parses the "SBEM0103"-prefixed TLV stream (post-decompression). Returns
+// an empty vector if the magic prefix doesn't match. Stops (without
+// throwing) at the first malformed/truncated chunk, since a partial parse
+// of everything before it is still useful.
+std::vector<Chunk> parseContainer(const std::vector<uint8_t> &decompressed);
+
+} // namespace Sbem

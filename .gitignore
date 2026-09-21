@@ -1,0 +1,9 @@
+build/
+*.user
+.qmake.stash
+.directory
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+bin/

@@ -1,0 +1,50 @@
+#pragma once
+
+#include <QObject>
+#include <QString>
+#include <functional>
+
+class QNetworkAccessManager;
+class QNetworkReply;
+
+// Thin QNetworkAccessManager client for the Suunto cloud account (Sports-
+// Tracker backend). Request signing/TOTP is SuuntoAuth's job (see
+// suuntoauth.h) - this class only builds/sends the actual HTTP requests and
+// parses responses.
+//
+// Auth model here is simpler than the OAuth access/refresh pair Phase 2a's
+// TokenVault/CloudAccountStore were originally scoped for: /login2 returns a
+// single opaque "sessionkey" sent back as the STTAuthorization header on
+// every subsequent request - no separate refresh token or documented expiry
+// (confirmed by reading tajchert/suuntool's client, which never refreshes,
+// only re-logs-in on a 401). AppController stores the sessionkey as
+// TokenVault's "cloud_access_token" secret and leaves the unused
+// "cloud_refresh_token" slot empty.
+class SuuntoCloudClient : public QObject
+{
+    Q_OBJECT
+public:
+    struct Session
+    {
+        QString sessionKey;
+        QString username;
+        QString email;
+        QString userKey;
+        QString country;
+        bool emailVerified = false;
+
+        bool isValid() const { return !sessionKey.isEmpty(); }
+    };
+
+    using LoginCallback = std::function<void(bool ok, const Session &session,
+                                               const QString &error)>;
+
+    explicit SuuntoCloudClient(QObject *parent = nullptr);
+
+    // POSTs to /login2 with the signed+TOTP'd form body SuuntoAuth builds.
+    // callback is invoked exactly once, on this object's thread.
+    void login(const QString &email, const QString &password, LoginCallback callback);
+
+private:
+    QNetworkAccessManager *m_network;
+};

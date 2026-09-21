@@ -1,0 +1,118 @@
+import QtQuick 2.0
+import Sailfish.Silica 1.0
+
+Page {
+    id: page
+
+    // Debugging aid while the BlueZ D-Bus path is unproven on this SDK
+    // target/Sailjail sandbox (see Phase 5 in the plan) - surfaces
+    // AppController::errorOccurred() persistently (not a fading toast) so a
+    // failed GetManagedObjects/StartDiscovery call is visible instead of
+    // looking identical to "scanned fine, found nothing".
+    property string lastError: ""
+
+    Connections {
+        target: AppController
+        onErrorOccurred: page.lastError = message
+        // Phase 6 validation probe result (testWhiteboard()) - reuses the
+        // same banner, not a separate one, since only one is ever relevant
+        // to look at at a time here.
+        onWhiteboardTestResult: page.lastError = summary
+    }
+
+    Component.onCompleted: AppController.refreshDevices()
+
+    onStatusChanged: {
+        // Scanning burns battery and radio time on both ends - only run it
+        // while this page is actually the one the user is looking at.
+        if (status === PageStatus.Active)
+            AppController.startScan()
+        else if (status === PageStatus.Inactive)
+            AppController.stopScan()
+    }
+
+    SilicaListView {
+        id: listView
+        anchors.fill: parent
+        model: AppController.deviceModel
+
+        header: Column {
+            width: parent.width
+
+            PageHeader {
+                title: qsTr("Pair a watch")
+            }
+
+            Label {
+                visible: page.lastError.length > 0
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.WordWrap
+                // Shared between real errors and testWhiteboard()'s success
+                // summary (starts with "OK ") - only tint it red for an
+                // actual failure.
+                color: page.lastError.indexOf("OK ") === 0 ? Theme.secondaryColor : Theme.errorColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: page.lastError
+            }
+        }
+
+        PullDownMenu {
+            MenuItem {
+                text: qsTr("Refresh")
+                onClicked: AppController.refreshDevices()
+            }
+            MenuItem {
+                // Phase 6 validation probe - see AppController::testWhiteboard().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testWhiteboard() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Test Whiteboard (GET /Logbook/Entries)")
+                onClicked: AppController.testWhiteboard()
+            }
+        }
+
+        delegate: ListItem {
+            id: delegateItem
+            contentHeight: Theme.itemSizeMedium
+            enabled: model.paired
+
+            Column {
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    leftMargin: Theme.horizontalPageMargin
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
+                }
+                spacing: Theme.paddingSmall
+
+                Label {
+                    text: model.name
+                    width: parent.width
+                    truncationMode: TruncationMode.Fade
+                    color: delegateItem.enabled ? Theme.primaryColor : Theme.secondaryColor
+                }
+                Label {
+                    text: model.paired
+                          ? (model.connected ? qsTr("Paired · Connected") : qsTr("Paired"))
+                          : qsTr("Not paired - pair it in Settings > Bluetooth first")
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    width: parent.width
+                    truncationMode: TruncationMode.Fade
+                }
+            }
+
+            onClicked: AppController.selectWatch(model.objectPath, model.address, model.name)
+        }
+
+        ViewPlaceholder {
+            enabled: listView.count === 0
+            text: qsTr("No Suunto watch found yet")
+            hintText: qsTr("Make sure the watch is on and nearby, and paired in Settings > Bluetooth")
+        }
+    }
+}

@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-suuntosync
+Exec=harbour-suuntosync
+Name=Suunto Sync
+
+[X-Sailjail]
+OrganizationName=io.github.jarnose
+ApplicationName=suuntosync
+# Internet: cloud API (cloud-api.suunto.com).
+# Bluetooth: direct watch sync + notification push (Phase 5+). NOTE:
+#   unconfirmed on-device that "Bluetooth" is the exact valid Sailjail token
+#   for this SDK/OS version - this workspace has never requested it before.
+#   Verify against another BLE-using Sailfish app's .desktop or the Sailjail
+#   permission list on the actual device before relying on this.
+# Secrets: Sailfish Secrets vault for the Suunto cloud OAuth tokens (Phase 2a+).
+# A "Notifications" (or similar) permission for observing OTHER apps'
+# notifications, needed for Phase 7's phone->watch bridge, is deliberately
+# NOT listed yet - Phase 0c hasn't confirmed such a permission/capability
+# exists for a sandboxed app at all. Add it here once 0c's answer is in.
+Permissions=Internet;Bluetooth;Secrets

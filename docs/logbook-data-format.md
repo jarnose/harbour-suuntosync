@@ -198,26 +198,101 @@ undecoded; `0x01` (`CHUNK_TIMELINE_BASE`, 8 bytes) has a suspicious
 the preceding byte varying, hinting at a version/type marker rather
 than workout-specific data, but this isn't confirmed either.
 
+## What [libdivecomputer issue #70](https://github.com/libdivecomputer/libdivecomputer/issues/70) adds
+
+This is the original reverse-engineering report PR #73 was built from (by
+`urbamax`, MIT-style "here's my research" writeup, not code - fetched
+verbatim via the GitHub REST API, not through an AI summary, after the
+MDS-header-offset mistake below). Two things materially change this
+project's plan:
+
+**1. Confirms our own framing/activity findings independently.** The
+report's own worked example CRC/header explanation matches this
+project's derivation exactly (their `0x01 0x2D` = `0x012D` = 301 decimal
+is this project's own observed 301-byte notification body length,
+derived completely independently). Their `CHUNK_ACTIVITY` (`0x08`)
+description - `Offset 2: Activity Type, Offset 3-5: CustomModeId as an
+ASCII string (e.g. "51\0")` - is the exact same "ASCII tail mirrors the
+numeric id as a decimal string" behavior this project found empirically
+on all three real Race captures. Two independent devices, two
+independent reverse-engineering efforts, same behavior - this is now
+about as confirmed as it can be without Suunto's own source.
+
+**2. The big one - chunk ids are a *dynamic*, not fixed, schema.** A
+follow-up comment (`urbamax`, from ARM64-disassembling the official
+app's `libmds.so`) states plainly: *"You won't find a static Chunk ID
+... hardcoded for the dive summary. The SBEM0103 format uses a Dynamic
+Schema. The app uses `SDS::LogbookDecoder::setDescriptors` to map a
+dictionary of names to dynamically generated Chunk IDs for that specific
+dive or device model."* This is the real explanation for why some
+Ocean/Nautic hardcoded offsets happened to carry over to the Race
+(`CHUNK_ACTIVITY`) while others clearly didn't (`CHUNK_HEARTRATE`,
+`CHUNK_SURFACE_PRESSURE`) - they're not universal constants, they're
+assigned per device/session, and matching by accident is exactly as
+likely as it sounds.
+
+This points straight back at this project's own `docs/
+sml-schema-descriptors.md` - the 246-entry `<PTH>`/`<FRM>` catalog this
+project already pulled from the Race over BLE separately is almost
+certainly *the same descriptor mechanism* (`setDescriptors`) the app
+comment describes. **Correction to that doc's own speculation**,
+checked properly this time (re-extracted all 31 `<GRP>` entries from the
+original capture with correct SLIP unescaping, not just the couple
+spot-checked earlier): the `<GRP>` lists are comma-separated integers up
+to **361**, not in the 1-31 range this project's actual SBEM chunk ids
+occupy - so `<GRP>` numbers are *not* directly the SBEM TLV chunk ids.
+They're a separate, larger index space (most plausibly indices into the
+246-entry `<PTH>` catalog itself, grouping related fields together) -
+related to the dynamic-schema mechanism, but not a direct lookup table
+for it. The actual descriptor-to-chunk-id assignment (or how to trigger
+and read it, if it's exposed over BLE at all rather than being
+compile-time-fixed per firmware) is still unfound.
+
+**3. A robustness tip worth keeping for a live parser.** A separate
+comment warns Heatshrink output can contain small localized corruption
+artifacts (e.g. runs of `1E 1E 1E 1E`) that a naive linear TLV walk will
+misinterpret as a bogus chunk id+length and use to desync the rest of
+the stream - their fix is to validate known chunk ids against an
+*expected* fixed length and fall back to byte-scanning resync on a
+mismatch. This project's own `Sbem::parseContainer()` doesn't do this
+yet - not urgent (it walked one full real capture with zero malformed
+chunks), but worth adding once real chunk lengths are pinned down, since
+a live BLE download is more likely to hit transmission hiccups than a
+clean historical capture replay.
+
+Also noted but **not applicable here**: that comment additionally
+describes ~84 bytes of supposedly-uncompressed plaintext at the start of
+"the file" before the real Heatshrink stream begins, from their own
+debugging process. This doesn't match this project's own pipeline, which
+is already validated end-to-end (decompression starts at byte 0 of the
+MDS-header-stripped stream and immediately produces the literal
+`SBEM0103` magic, byte-exact across three real captures) - very likely
+an artifact of whatever raw/less-processed capture format they were
+working from at that point in their own investigation, not a correction
+to what's already confirmed working here.
+
 ## Still open (where Phase 6/`LogbookSync` picks up next)
 
-1. **Decode `0x0c`/`0x16`/`0x18`/`0x1f`'s internal value structure** -
+1. **Find the actual SBEM chunk-id assignment mechanism** - now
+   understood to be a "dynamic schema" rather than fixed constants (see
+   above), which reframes the whole remaining-chunk question: the next
+   useful step probably isn't more guess-and-check against Ocean/Nautic
+   offsets, it's figuring out how/where the Race exposes its *own*
+   chunk-id assignment (if over BLE at all) or accepting per-firmware
+   calibration against known real values as the practical path.
+2. **Decode `0x0c`/`0x16`/`0x18`/`0x1f`'s internal value structure** -
    GPS/pace/altitude/cadence samples almost certainly live in here, but
    no byte offset has been confirmed for any of them yet.
-2. **Cross-reference chunk IDs against the 246-field SML schema** this
-   project already extracted from the watch itself
-   (`docs/sml-schema-descriptors.md`) - the two were captured from the
-   same device/firmware and almost certainly describe the same data,
-   just via two different self-description mechanisms (the `<GRP>`
-   comma-separated id lists seen alongside the `<PTH>`/`<FRM>` schema
-   entries are a promising lead, not yet checked against these specific
-   chunk ids).
 3. **The fastest path to calibrating the above**: Jarno supplying the
    *known real stats* (sport type, duration, distance, avg HR if
    available) for these three specific captured workouts, to search for
    matching encoded values rather than continuing to guess blind. The
    duration figures above (78.97/61.44/25.88 min) are the first
    candidate to check against reality.
-4. Confirm this same pipeline holds for a workout **as it's actively
+4. Add resync-on-malformed-chunk robustness to `Sbem::parseContainer()`
+   (see point 3 under issue #70 above) before relying on it against a
+   live BLE download rather than a replayed historical capture.
+5. Confirm this same pipeline holds for a workout **as it's actively
    streamed live** (this capture was of the official Android app doing a
    historical sync, presumably after the workout already ended) -
    probably fine, no reason to expect otherwise, but not yet exercised.

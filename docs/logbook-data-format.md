@@ -372,3 +372,74 @@ exact matches to catch it happening mid-workout, not just at the end).
   another pass, plus specifically checking `0x1f` and `0x18` (both
   walking-heavy chunk ids) against `steps`/`cadence` now that real
   target numbers exist for them.
+
+## Cross-referencing Jarno's own FIT exports (per-second ground truth)
+
+Jarno exported all three workouts as `.fit` files from the app (Garmin's
+open, well-documented binary format - parsed here with the `fitparse`
+PyPI package, not hand-rolled, same "use a real implementation" approach
+as Heatshrink). **Not committed to this repo or kept anywhere outside
+this session's scratchpad** - they contain real GPS coordinates and
+other personal data, unlike everything else in this doc (which is wire
+protocol structure, not workout content). If per-second ground truth is
+needed again later, re-export and re-run the analysis scripts described
+here rather than expecting the `.fit` files themselves to be saved
+anywhere in the project.
+
+Each file's `record` messages are a per-second time series
+(`timestamp`, `heart_rate`, `distance`, `speed`, `altitude`, GPS
+`position_lat`/`position_long`, `cadence`, `temperature`,
+`vertical_speed`) - exactly the kind of ground truth needed to move
+past aggregate-stat matching to matching *specific moments*.
+
+**Confirms the auto-pause theory from the previous section, decisively.**
+FIT's own `session.total_elapsed_time` (4736.15s / 3683.66s / 1492.73s)
+matches this project's earlier "sum every chunk's leading delta across
+the whole interleaved stream" derivation (78.97 / 61.44 / 25.88 min)
+almost exactly - confirming that derivation was measuring real elapsed
+wall-clock time correctly all along, not an artifact. Meanwhile FIT's
+`record` message *count* (2301 / 2238 / 1493) lines up almost exactly
+with the real reported **active** duration in seconds (2299 / 2237 /
+1493) - i.e. FIT's own per-second stream already excludes auto-paused
+time, which is exactly the mechanism that explains the earlier 2x gap
+for the two cycling workouts (frequent stops) and its near-absence for
+the walking one (few stops).
+
+**Confirms `0x0c`'s UTC timestamp field completely.** Joining each
+`0x0c` sample's decoded UTC-ms (rounded to the second) against the FIT
+per-second series matched **100% of samples** across all three streams
+(1820/1820, 1520/1520, 732/732) - the timestamp field is fully solved,
+not just plausible.
+
+**The offset-13 field remains unresolved, but ruled out as anything
+simple.** With real per-second `distance`/`speed`/`altitude`/`heart_rate`
+/`cadence` to check against directly (not just eventual convergence to a
+final total), neither a raw correlation nor a *differenced* correlation
+(comparing sample-to-sample changes, which avoids the trap below) found
+a strong, consistent match for the offset-13 field against any of them.
+One moderate hit (`r=+0.71` between offset 3's differenced value and
+Δspeed, walking stream only) didn't replicate on either cycling stream,
+so it's noted but not trusted.
+
+**A methodology trap worth recording**: an initial raw-value correlation
+pass found offset 3/4 "matching" `distance` with `r` near ±1.0 - this
+was spurious. Distance (and the UTC timestamp) both increase
+monotonically through a workout, so *any* two monotonically-trending
+series correlate strongly regardless of whether they're related -
+including, it turned out, reading raw bytes from *inside* the UTC
+timestamp field itself as if they were an unrelated float. Re-ran using
+first-differences (`value[i] - value[i-1]`) instead of raw values, which
+cancels out any shared trend and only responds to genuinely correlated
+*changes* - the offset 3/4 "hit" disappeared under this stricter test,
+confirming it was the trend artifact, not a real field. Any future
+correlation-based field hunting on this data should default to
+differenced series, not raw ones, to avoid this trap.
+
+**Practical upshot**: HR (`0x12`), activity/sport id (`0x08`), and the
+UTC timeline (`0x0c` bytes 2-8) are now solid enough to build a minimal
+BLE-synced workout - a real heart-rate curve against real timestamps -
+before speed/distance/altitude/cadence are fully cracked. The `.fit`
+cross-referencing methodology here (per-second ground truth + differenced
+correlation) is now available as a template for whoever picks up `0x16`/
+`0x18`/`0x1f` next, with a concrete lesson learned about the monotonic-
+trend trap already paid for.

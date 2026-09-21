@@ -555,17 +555,65 @@ the *raw* on-watch value (if present somewhere) would need comparing
 against a barometer-plausible but not DEM-corrected reference to
 confirm, which isn't available from this data alone.
 
+## Steps: no separate counter found - very likely derived from cadence, like distance/speed
+
+Went looking for step count the same way GPS/energy/cadence were found:
+a monotonically-increasing counter that should land near the real total
+(2672 steps, or 1336 "strides" per FIT's `session.total_strides` -
+strides being gait cycles, one per two steps, which is itself a clean
+2672÷1336=2.0 cross-check that these are the same real quantity in two
+conventions).
+
+- **`0x1f` ruled out first** - it looked like the natural candidate
+  (walking-only, same sample count as `0x12`), but its actual structure
+  is `[delta:2][tag:1, constant `0x02`][value:4, constant `float32`
+  `50.0`]` - a fixed marker/threshold of some kind fired periodically,
+  not a per-step or per-stride event. No variation at all in the tag or
+  value across all 1553 samples in the walking stream rules it out
+  completely.
+- **No monotonic counter found in `0x16` or `0x18` either** - scanned
+  every remaining byte offset in both (beyond `0x16`'s now-confirmed
+  cadence at offset 10) for a `u16`/`i16`/`u32` trajectory that starts
+  low and climbs toward ~2672 (or ~1336): nothing did. `0x16`'s bytes
+  11-15 are hard zero for every sample checked; the other unexplained
+  bytes in both chunks show noisy, non-monotonic patterns consistent
+  with delta/status fields, not a running total.
+- **Integrating cadence over time gets close, supporting a "derived, not
+  stored" conclusion**: summing `cadence × 2 ÷ 60 × dt` (the ×2 because
+  cadence is steps-per-foot, so ×2 for total steps) across consecutive
+  `0x16` samples, skipping gaps over 3s the same way the auto-pause
+  handling elsewhere in this doc does, gives **2731 steps** against a
+  real **2672** (2.2% over) - and without the ×2 factor, **1365
+  strides** against a real **1336** (also 2.2% over, the same
+  proportional gap, which is exactly what you'd expect if this is one
+  systematic rounding/pause-boundary effect rather than two unrelated
+  near-misses). That's a real, structural match, just not the
+  bit-exact kind GPS/cadence/energy gave - most plausibly because this
+  project's simple ">3s gap = paused" heuristic doesn't line up exactly
+  with whatever boundary the watch/app itself uses, not because the
+  underlying idea is wrong.
+
+Taken together with distance/speed in the GPS section above, a pattern
+is emerging: **the raw BLE stream seems to carry primitive sensor
+readings (GPS fixes, cadence rate, heart rate) and leaves time-
+integrated quantities (distance, speed, steps) for the app/cloud to
+compute** - consistent with what a resource-constrained watch would
+actually want to transmit. If that holds, a client implementation
+(this project's own `LogbookSync`, eventually) should plan to compute
+distance/speed/steps the same way rather than expecting to find them
+as raw fields.
+
 ## Practical upshot
 
-GPS route, distance, speed, heart rate, activity type, and now cadence
-are confirmed and usable for a real BLE-synced workout view. Altitude/
-ascent/descent and step count remain open - altitude for the reasons
-above, steps not yet attempted (a natural next target for `0x18`/`0x1f`,
-which are otherwise unexplored, using the same cross-chunk timeline and
-exact-value-search approach that found cadence). The `.fit`
-cross-referencing methodology (per-second ground truth, brute-force
-exact-value search for distinctive fields, and differenced correlation
-with an explicit variance check for noisier ones) is now a proven
-template - six real fields confirmed with it (UTC time, GPS lat/lon,
-heart rate, activity/sport id, energy, cadence) - for whoever picks up
-steps or revisits altitude next.
+GPS route, distance (derived), speed (derived), heart rate, activity
+type, cadence, and now a strong approximate reconstruction of steps
+(also derived) are all confirmed and usable for a real BLE-synced
+workout view. Altitude/ascent/descent remains the one open item, for
+the DEM-correction reasons discussed above. The `.fit` cross-referencing
+methodology (per-second ground truth, brute-force exact-value search for
+distinctive fields, differenced correlation with an explicit variance
+check for noisier ones, and - new this round - checking whether a
+"missing" field is actually a derived quantity rather than a stored one)
+is now a proven template, with six real fields confirmed directly (UTC
+time, GPS lat/lon, heart rate, activity/sport id, energy, cadence) and
+two more (distance, steps) understood as derived rather than missing.

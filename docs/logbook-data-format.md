@@ -543,17 +543,64 @@ to the near-zero error seen for GPS, energy, or cadence:
   only within 7-20 m mean error depending on offset/scale, nowhere near
   the exactness seen for other confirmed fields.
 
-**Open hypothesis, not confirmed**: the app's displayed/exported
-altitude may not be the watch's raw barometer reading at all. Many
-fitness platforms apply "elevation correction" - replacing or blending
-noisy on-device barometric altitude with a digital-elevation-model
-lookup keyed on GPS position, server-side or in the app, specifically
-*because* raw barometric altitude drifts with weather and temperature
-over a session. If that's happening here, there may be no byte in the
-raw `/Data` stream that matches the FIT-exported altitude at all -
-the *raw* on-watch value (if present somewhere) would need comparing
-against a barometer-plausible but not DEM-corrected reference to
-confirm, which isn't available from this data alone.
+**Round two, after cadence/steps: extended the search to every remaining
+chunk type, still nothing.** Built the proper cross-chunk timeline (see
+the cadence section above) and re-ran the same rigorous methodology
+against every chunk not yet ruled out:
+
+- **`0x0f`** (6 bytes, fires almost as often as `0x12`/HR - a natural
+  altitude-at-~1Hz candidate) - fully decoded for the first time this
+  round. No altitude correlation anywhere above the noise floor on any
+  stream; the strongest signals found were weak-to-moderate temperature
+  correlations (`r≈0.49-0.57` on the two cycling streams, offset-
+  dependent) - plausible as a real but different field (on-wrist or
+  ambient temperature), not investigated further since altitude was the
+  goal.
+- **`0x15`** (35 bytes, rare - 2-4 occurrences per stream, evidently some
+  kind of periodic/lap-style summary record) - looked promising at
+  first: two of stream0's four instances gave `19.75` at offset 8,
+  suspiciously close to that workout's real descent (`19.5`). Fully
+  refuted on cross-checking the other two streams: the same offset gave
+  `15.0/5.9/8.0` for stream1 (real ascent/descent `58.6`/`52.1` - not
+  close at all) and `23424.0/0.04` for stream2 (real `15.4`/`18.7` -
+  wildly off-scale). The stream0 near-match was coincidence, the same
+  trap noted for the `0x15`-offset-8-as-"energy" red herring earlier in
+  this document - a value landing in a plausible numeric neighbourhood
+  once or twice, out of many blind offset/chunk combinations tried, is
+  expected by chance and isn't evidence on its own.
+- **The one-shot header chunks** (`0x01`-`0x04`, plus `0x08` and `0x15`
+  already covered) - dumped and brute-force-scanned every byte for
+  ascent/descent totals directly (the same technique that found GPS/
+  energy): no hits beyond the already-refuted `0x15` one above.
+- **Vertical speed** (`vertical_speed` from FIT, m/s - motivated by the
+  established pattern that this protocol seems to store *rates*
+  cadence, HR rather than *integrated totals* distance, steps, so a
+  climb-rate field seemed at least as likely as an absolute-altitude
+  one) - tested directly (not differenced, since it's already a rate)
+  against every offset in `0x0c`/`0x16`/`0x17`/`0x18`/`0x0f`: no
+  meaningful correlation anywhere.
+
+**Open hypothesis, not confirmed, now the leading explanation given how
+exhaustive this search has been**: the app's displayed/exported altitude
+may not be the watch's raw barometer reading at all. Many fitness
+platforms apply "elevation correction" - replacing or blending noisy
+on-device barometric altitude with a digital-elevation-model lookup
+keyed on GPS position, server-side or in the app, specifically *because*
+raw barometric altitude drifts with weather and temperature over a
+session. If that's what's happening here, there may be no byte in the
+raw `/Data` stream that matches the FIT-exported altitude at all - it
+would need to be compared against a barometer-plausible but not
+DEM-corrected reference to confirm, which isn't available from this
+data alone. Two concrete ways to make progress if this is picked up
+again: (1) a workout with a much larger, sharper altitude swing (a real
+hill climb rather than ~5-30 m of gentle terrain) would make a genuine
+raw-barometer field's signal much easier to distinguish from noise; (2)
+`/Logbook/byId/<id>/Summary` (confirmed to exist as a separate BLE
+resource, not yet captured/analysed at all in this project) is exactly
+the kind of endpoint that might carry workout-level ascent/descent
+totals the way `/Data` carries the sample stream - worth a dedicated
+capture rather than continuing to mine `/Data` for something that may
+genuinely not be there.
 
 ## Steps: no separate counter found - very likely derived from cadence, like distance/speed
 

@@ -167,27 +167,31 @@ be checked, not assumed:
   for some ids; fixed before trusting these numbers.)
 - **`CHUNK_PROFILE_1HZ` (`0x12`)**: real "1Hz-ish" pacing role confirmed
   (thousands of occurrences, ~500-900ms apart) - this is the timeline's
-  main heartbeat chunk on the Race too, even though...
+  main heartbeat chunk on the Race too, and it turns out to be a literal
+  heartbeat: **byte 2 (the single payload byte after the leading 2-byte
+  delta) is heart rate, `uint8` bpm.** Confirmed against Jarno's real
+  app-reported avg/max HR for all three workouts by scanning every
+  `(chunk id, byte offset)` pair for one whose byte-max across the whole
+  stream matched the real max: `0x12` offset 2 hit an **exact** max-bpm
+  match on all three streams (97/133/99), with the byte-average also
+  landing close to the real reported average in each case. So on the
+  Race, HR lives at `0x12` (not `0x0f`, Ocean/Nautic's id for it) - a
+  clean, concrete example of the "dynamic schema" issue #70 described:
+  the container/framing carries over, the *id assignment* doesn't.
 
 **Refuted / doesn't carry over as documented:**
 - **`CHUNK_HEARTRATE` (`0x0f`)**: on the Race, byte 2 (the claimed `hr:
   uint8 bpm`) takes wildly implausible values (0, 3, 4, 9, 255, ...) -
-  this id does **not** mean heart rate here. Also structurally
-  different: Ocean's HR chunk is 3 bytes, the Race's `0x0f` chunk is
-  always 6 bytes.
-- **`CHUNK_PROFILE_1HZ` (`0x12`)'s payload**: Ocean's version needs
-  `size >= 18` for its temperature decode; the Race's `0x12` chunks are
-  always exactly 3 bytes (a 2-byte delta + 1 payload byte) - a
-  completely different, much smaller record. Only the *pacing role* of
-  this id carries over, not its field layout.
+  this id does **not** mean heart rate here (real HR is at `0x12`, see
+  above). Also structurally different: Ocean's HR chunk is 3 bytes, the
+  Race's `0x0f` chunk is always 6 bytes.
 - **`CHUNK_SURFACE_PRESSURE` (`0x17`)**: tried the documented `float32`
   at offset 2 (barometric pressure, Pa) - a very plausible candidate
   since the Race does have a barometer - but it decoded to a flat `0.0`
   on every sample across all three streams, so this offset/field
   doesn't hold either, at least not as a raw Pa float.
 
-**Not yet tested**: `0x0c` (20 bytes, very frequent - a strong GPS/pace
-candidate given the size), `0x16` (17 bytes, vs. Ocean's 141/195-byte
+**Not yet tested**: `0x16` (17 bytes, vs. Ocean's 141/195-byte
 `CHUNK_EXTENDED_STATUS` - clearly a different, much smaller record on
 Race), `0x18` (5 bytes), and `0x1f` (7 bytes, only seen in one of the
 three streams so far, same frequency as `0x12` in that stream - possibly
@@ -196,7 +200,9 @@ header chunks at the very start of the container are also still
 undecoded; `0x01` (`CHUNK_TIMELINE_BASE`, 8 bytes) has a suspicious
 *constant* 3-byte tail (`01 00 0c`) across all three streams with only
 the preceding byte varying, hinting at a version/type marker rather
-than workout-specific data, but this isn't confirmed either.
+than workout-specific data, but this isn't confirmed either. `0x0c` (20
+bytes, very frequent) is partially decoded - see "Ground-truth
+calibration" below.
 
 ## What [libdivecomputer issue #70](https://github.com/libdivecomputer/libdivecomputer/issues/70) adds
 

@@ -5,9 +5,12 @@
 #include "../ble/devicelistmodel.h"
 #include "../ble/mdswhiteboardclient.h"
 #include "../cloud/suuntocloudclient.h"
+#include "../store/workoutstore.h"
+#include "../model/workoutlistmodel.h"
 
 #include <QStandardPaths>
 #include <QDir>
+#include <QDateTime>
 
 namespace {
 
@@ -28,6 +31,8 @@ AppController::AppController(QObject *parent)
     , m_deviceModel(new DeviceListModel(this))
     , m_pairedWatchStore(new PairedWatchStore(dbPath()))
     , m_whiteboardClient(new MdsWhiteboardClient(this))
+    , m_workoutStore(new WorkoutStore(dbPath()))
+    , m_workoutModel(new WorkoutListModel(this))
 {
     QString error;
     if (!m_cloudAccountStore->open(&error)) {
@@ -37,6 +42,9 @@ AppController::AppController(QObject *parent)
         if (!error.isEmpty())
             emit errorOccurred(tr("Failed to load account: %1").arg(error));
     }
+
+    if (!m_workoutStore->open(&error))
+        emit errorOccurred(tr("Failed to open database: %1").arg(error));
 
     if (!m_pairedWatchStore->open(&error)) {
         emit errorOccurred(tr("Failed to open database: %1").arg(error));
@@ -73,6 +81,11 @@ AppController::~AppController() = default;
 QObject *AppController::deviceModelObject() const
 {
     return m_deviceModel;
+}
+
+QObject *AppController::workoutModelObject() const
+{
+    return m_workoutModel;
 }
 
 void AppController::onDeviceUpdated(const BluezAdapter::Device &device)
@@ -248,4 +261,61 @@ void AppController::logoutFromCloud()
     m_tokenVault->deleteSecret(CloudAccountStore::TokenSecretName, [](bool, const QString &) {});
     m_cloudAccount = CloudAccount();
     emit cloudAccountChanged();
+}
+
+void AppController::loadCachedWorkouts()
+{
+    QString error;
+    const QVector<Workout> workouts = m_workoutStore->loadAll(&error);
+    if (!error.isEmpty()) {
+        emit errorOccurred(tr("Failed to load workouts: %1").arg(error));
+        return;
+    }
+    m_workoutModel->setWorkouts(workouts);
+}
+
+void AppController::syncCloudWorkouts()
+{
+    if (!m_cloudAccount.isSignedIn() || m_workoutSyncInProgress)
+        return;
+
+    m_workoutSyncInProgress = true;
+    emit workoutSyncInProgressChanged();
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this](bool ok, const QByteArray &data, const QString &loadError) {
+        if (!ok) {
+            m_workoutSyncInProgress = false;
+            emit workoutSyncInProgressChanged();
+            emit errorOccurred(tr("Failed to load login session: %1").arg(loadError));
+            return;
+        }
+
+        const QString sessionKey = QString::fromUtf8(data);
+        m_cloudClient->listWorkouts(sessionKey, 100,
+                [this](bool listOk, const QVector<Workout> &workouts, const QString &listError) {
+            m_workoutSyncInProgress = false;
+            emit workoutSyncInProgressChanged();
+
+            if (!listOk) {
+                emit errorOccurred(tr("Failed to sync workouts: %1").arg(listError));
+                return;
+            }
+
+            for (const Workout &w : workouts) {
+                QString storeError;
+                if (!m_workoutStore->upsert(w, &storeError)) {
+                    emit errorOccurred(tr("Failed to save workout: %1").arg(storeError));
+                    return;
+                }
+            }
+
+            m_cloudAccount.lastSync = QDateTime::currentSecsSinceEpoch();
+            QString saveError;
+            if (!m_cloudAccountStore->save(m_cloudAccount, &saveError))
+                emit errorOccurred(tr("Failed to save account: %1").arg(saveError));
+
+            loadCachedWorkouts();
+        });
+    });
 }

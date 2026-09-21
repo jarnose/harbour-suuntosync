@@ -6,6 +6,7 @@
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QDateTime>
 #include <QUrl>
 #include <QByteArray>
@@ -112,5 +113,66 @@ void SuuntoCloudClient::login(const QString &email, const QString &password,
             return;
         }
         callback(true, session, QString());
+    });
+}
+
+void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
+                                      WorkoutListCallback callback)
+{
+    const QString path = QStringLiteral("workouts?since=0&limit=%1&offset=0").arg(limit);
+    QNetworkRequest request(QUrl(kBaseUrl + path));
+    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
+    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
+    request.setRawHeader("Accept-Language", "en");
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, {}, reply->errorString());
+            return;
+        }
+
+        // Envelope per tajchert/suuntool's AskoResponse[T]:
+        // {"error": null|{"code":int,"description":string}, "metadata": {...}, "payload": T}
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        if (!doc.isObject()) {
+            callback(false, {}, tr("Unexpected response from server"));
+            return;
+        }
+        const QJsonObject envelope = doc.object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            callback(false, {},
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+
+        QVector<Workout> workouts;
+        const QJsonArray payload = envelope.value(QStringLiteral("payload")).toArray();
+        workouts.reserve(payload.size());
+        for (const QJsonValue &v : payload) {
+            const QJsonObject o = v.toObject();
+            Workout w;
+            w.key = o.value(QStringLiteral("key")).toString();
+            w.source = QStringLiteral("cloud");
+            w.activityId = o.value(QStringLiteral("activityId")).toInt();
+            // startTime/stopTime (unix ms) arrive as JSON numbers. QJsonValue
+            // stores all numbers as double regardless of accessor, so this
+            // cast isn't losing anything toInt64()-equivalent wouldn't also
+            // lose - a double's 53-bit mantissa covers unix-ms timestamps
+            // exactly until roughly the year 287396, not a practical concern.
+            w.startTime = qint64(o.value(QStringLiteral("startTime")).toDouble());
+            w.stopTime = qint64(o.value(QStringLiteral("stopTime")).toDouble());
+            w.totalTime = o.value(QStringLiteral("totalTime")).toDouble();
+            w.totalDistance = o.value(QStringLiteral("totalDistance")).toDouble();
+            w.totalAscent = o.value(QStringLiteral("totalAscent")).toDouble();
+            w.totalDescent = o.value(QStringLiteral("totalDescent")).toDouble();
+            workouts.append(w);
+        }
+        callback(true, workouts, QString());
     });
 }

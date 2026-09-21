@@ -36,6 +36,8 @@ add_executable(harbour-suuntosync
     src/ble/mdswhiteboardclient.cpp
     src/cloud/suuntoauth.cpp
     src/cloud/suuntocloudclient.cpp
+    src/store/workoutstore.cpp
+    src/model/workoutlistmodel.cpp
 )
 
 target_compile_definitions(harbour-suuntosync PRIVATE
@@ -105,6 +107,7 @@ add_custom_target(distfiles
         qml/pages/MainPage.qml
         qml/pages/PairingPage.qml
         qml/pages/LoginPage.qml
+        qml/pages/WorkoutDetailPage.qml
         rpm/harbour-suuntosync.spec
         ${TS_FILES})
 

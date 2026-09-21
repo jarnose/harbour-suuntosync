@@ -1,7 +1,10 @@
 #pragma once
 
+#include "../store/workout.h"
+
 #include <QObject>
 #include <QString>
+#include <QVector>
 #include <functional>
 
 class QNetworkAccessManager;
@@ -38,12 +41,20 @@ public:
 
     using LoginCallback = std::function<void(bool ok, const Session &session,
                                                const QString &error)>;
+    using WorkoutListCallback = std::function<void(bool ok, const QVector<Workout> &workouts,
+                                                      const QString &error)>;
 
     explicit SuuntoCloudClient(QObject *parent = nullptr);
 
     // POSTs to /login2 with the signed+TOTP'd form body SuuntoAuth builds.
     // callback is invoked exactly once, on this object's thread.
     void login(const QString &email, const QString &password, LoginCallback callback);
+
+    // GET /v1/workouts?since=0&limit=<limit>&offset=0, authenticated with
+    // sessionKey (the STTAuthorization header). Only the first page (most
+    // recent `limit` workouts, server max 100) - older-than-that pagination
+    // isn't implemented yet.
+    void listWorkouts(const QString &sessionKey, int limit, WorkoutListCallback callback);
 
 private:
     QNetworkAccessManager *m_network;

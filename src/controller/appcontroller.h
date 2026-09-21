@@ -13,6 +13,8 @@ class PairedWatchStore;
 class DeviceListModel;
 class MdsWhiteboardClient;
 class SuuntoCloudClient;
+class WorkoutStore;
+class WorkoutListModel;
 
 // QML-facing facade. Phase 6: once BluezAdapter reports a connected watch,
 // attaches MdsWhiteboardClient to it and can run real Whiteboard GET
@@ -32,6 +34,8 @@ class AppController : public QObject
     Q_PROPERTY(bool watchConnected READ isWatchConnected NOTIFY watchConnectedChanged)
     Q_PROPERTY(bool whiteboardReady READ isWhiteboardReady NOTIFY whiteboardReadyChanged)
     Q_PROPERTY(bool cloudLoginInProgress READ isCloudLoginInProgress NOTIFY cloudLoginInProgressChanged)
+    Q_PROPERTY(QObject *workoutModel READ workoutModelObject CONSTANT)
+    Q_PROPERTY(bool workoutSyncInProgress READ isWorkoutSyncInProgress NOTIFY workoutSyncInProgressChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -41,6 +45,9 @@ public:
     bool isCloudSignedIn() const { return m_cloudAccount.isSignedIn(); }
     QString cloudEmail() const { return m_cloudAccount.email; }
     bool isCloudLoginInProgress() const { return m_cloudLoginInProgress; }
+    // Defined in the .cpp - see deviceModelObject()'s comment, same reason.
+    QObject *workoutModelObject() const;
+    bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
 
     // Defined in the .cpp file, not inline here: DeviceListModel is only
     // forward-declared in this header, so the implicit DeviceListModel* ->
@@ -77,6 +84,14 @@ public:
     Q_INVOKABLE void loginToCloud(const QString &email, const QString &password);
     Q_INVOKABLE void logoutFromCloud();
 
+    // Loads whatever's cached in WorkoutStore (call on page open) and,
+    // separately, fetches a fresh page from the cloud and re-populates the
+    // store/model with it (call from pull-to-refresh). Both are silent
+    // no-ops (no errorOccurred) if not signed in - MainPage's placeholder
+    // text already explains that, no need to also toast it.
+    Q_INVOKABLE void loadCachedWorkouts();
+    Q_INVOKABLE void syncCloudWorkouts();
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();
@@ -85,6 +100,7 @@ signals:
     void watchConnectedChanged();
     void whiteboardReadyChanged();
     void whiteboardTestResult(const QString &summary);
+    void workoutSyncInProgressChanged();
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
@@ -113,4 +129,8 @@ private:
     // chunked writes interleaving into one corrupted buffer, which is the
     // leading suspect for why the watch never responded to either.
     bool m_whiteboardTestInFlight = false;
+
+    WorkoutStore *m_workoutStore;
+    WorkoutListModel *m_workoutModel;
+    bool m_workoutSyncInProgress = false;
 };

@@ -22,6 +22,11 @@ public:
         TotalDistanceRole,  // meters
         TotalAscentRole,    // meters
         TotalDescentRole,   // meters
+        MaxSpeedRole,          // m/s, 0 = absent
+        EnergyConsumptionRole, // kcal, 0 = absent
+        StepCountRole,         // 0 = absent
+        AvgHeartRateRole,      // bpm, 0 = absent
+        MaxHeartRateRole,      // bpm, 0 = absent
     };
     Q_ENUM(Roles)
 

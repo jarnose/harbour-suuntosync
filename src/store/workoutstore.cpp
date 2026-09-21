@@ -36,13 +36,38 @@ bool WorkoutStore::open(QString *error)
             "  total_time REAL NOT NULL,"
             "  total_distance REAL NOT NULL,"
             "  total_ascent REAL NOT NULL,"
-            "  total_descent REAL NOT NULL"
+            "  total_descent REAL NOT NULL,"
+            "  max_speed REAL NOT NULL DEFAULT 0,"
+            "  energy_consumption REAL NOT NULL DEFAULT 0,"
+            "  step_count INTEGER NOT NULL DEFAULT 0,"
+            "  avg_heart_rate REAL NOT NULL DEFAULT 0,"
+            "  max_heart_rate REAL NOT NULL DEFAULT 0"
             ")"));
     if (!ok) {
         if (error)
             *error = q.lastError().text();
         return false;
     }
+
+    // The five columns above were added after this table was already in use
+    // on-device (same lesson as PairedWatchStore's model column bug) -
+    // CREATE TABLE IF NOT EXISTS is a no-op against an existing table, so a
+    // pre-existing database needs these added explicitly. SQLite has no
+    // "ADD COLUMN IF NOT EXISTS", so just attempt each and ignore the
+    // "duplicate column" error - which is exactly what happens, harmlessly,
+    // on a fresh database where the CREATE TABLE above already included them.
+    static const QStringList kMigrationColumns = {
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN max_speed REAL NOT NULL DEFAULT 0"),
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN energy_consumption REAL NOT NULL DEFAULT 0"),
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN step_count INTEGER NOT NULL DEFAULT 0"),
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN avg_heart_rate REAL NOT NULL DEFAULT 0"),
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN max_heart_rate REAL NOT NULL DEFAULT 0"),
+    };
+    for (const QString &statement : kMigrationColumns) {
+        QSqlQuery migrate(db);
+        migrate.exec(statement); // failure here just means the column already exists
+    }
+
     return true;
 }
 
@@ -53,7 +78,8 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
     QSqlQuery q(db);
     if (!q.exec(QStringLiteral(
             "SELECT key, source, activity_id, start_time, stop_time, total_time, "
-            "total_distance, total_ascent, total_descent FROM workouts "
+            "total_distance, total_ascent, total_descent, max_speed, energy_consumption, "
+            "step_count, avg_heart_rate, max_heart_rate FROM workouts "
             "ORDER BY start_time DESC"))) {
         if (error)
             *error = q.lastError().text();
@@ -71,6 +97,11 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
         w.totalDistance = q.value(6).toDouble();
         w.totalAscent = q.value(7).toDouble();
         w.totalDescent = q.value(8).toDouble();
+        w.maxSpeed = q.value(9).toDouble();
+        w.energyConsumption = q.value(10).toDouble();
+        w.stepCount = q.value(11).toInt();
+        w.avgHeartRate = q.value(12).toDouble();
+        w.maxHeartRate = q.value(13).toDouble();
         result.append(w);
     }
     return result;
@@ -82,13 +113,17 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
             "INSERT INTO workouts (key, source, activity_id, start_time, stop_time, "
-            "total_time, total_distance, total_ascent, total_descent) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "total_time, total_distance, total_ascent, total_descent, max_speed, "
+            "energy_consumption, step_count, avg_heart_rate, max_heart_rate) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET source = excluded.source, "
             "activity_id = excluded.activity_id, start_time = excluded.start_time, "
             "stop_time = excluded.stop_time, total_time = excluded.total_time, "
             "total_distance = excluded.total_distance, total_ascent = excluded.total_ascent, "
-            "total_descent = excluded.total_descent"));
+            "total_descent = excluded.total_descent, max_speed = excluded.max_speed, "
+            "energy_consumption = excluded.energy_consumption, "
+            "step_count = excluded.step_count, avg_heart_rate = excluded.avg_heart_rate, "
+            "max_heart_rate = excluded.max_heart_rate"));
     q.addBindValue(workout.key);
     q.addBindValue(workout.source);
     q.addBindValue(workout.activityId);
@@ -98,6 +133,11 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
     q.addBindValue(workout.totalDistance);
     q.addBindValue(workout.totalAscent);
     q.addBindValue(workout.totalDescent);
+    q.addBindValue(workout.maxSpeed);
+    q.addBindValue(workout.energyConsumption);
+    q.addBindValue(workout.stepCount);
+    q.addBindValue(workout.avgHeartRate);
+    q.addBindValue(workout.maxHeartRate);
     if (!q.exec()) {
         if (error)
             *error = q.lastError().text();

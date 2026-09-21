@@ -144,6 +144,11 @@ Page {
                 totalDistance: model.totalDistance,
                 totalAscent: model.totalAscent,
                 totalDescent: model.totalDescent,
+                maxSpeed: model.maxSpeed,
+                energyConsumption: model.energyConsumption,
+                stepCount: model.stepCount,
+                avgHeartRate: model.avgHeartRate,
+                maxHeartRate: model.maxHeartRate,
             })
         }
 

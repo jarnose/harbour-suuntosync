@@ -35,6 +35,16 @@ QVariant WorkoutListModel::data(const QModelIndex &index, int role) const
         return w.totalAscent;
     case TotalDescentRole:
         return w.totalDescent;
+    case MaxSpeedRole:
+        return w.maxSpeed;
+    case EnergyConsumptionRole:
+        return w.energyConsumption;
+    case StepCountRole:
+        return w.stepCount;
+    case AvgHeartRateRole:
+        return w.avgHeartRate;
+    case MaxHeartRateRole:
+        return w.maxHeartRate;
     default:
         return QVariant();
     }
@@ -51,6 +61,11 @@ QHash<int, QByteArray> WorkoutListModel::roleNames() const
         { TotalDistanceRole, "totalDistance" },
         { TotalAscentRole, "totalAscent" },
         { TotalDescentRole, "totalDescent" },
+        { MaxSpeedRole, "maxSpeed" },
+        { EnergyConsumptionRole, "energyConsumption" },
+        { StepCountRole, "stepCount" },
+        { AvgHeartRateRole, "avgHeartRate" },
+        { MaxHeartRateRole, "maxHeartRate" },
     };
 }
 

@@ -171,6 +171,16 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
             w.totalDistance = o.value(QStringLiteral("totalDistance")).toDouble();
             w.totalAscent = o.value(QStringLiteral("totalAscent")).toDouble();
             w.totalDescent = o.value(QStringLiteral("totalDescent")).toDouble();
+            w.maxSpeed = o.value(QStringLiteral("maxSpeed")).toDouble();
+            w.energyConsumption = o.value(QStringLiteral("energyConsumption")).toDouble();
+            w.stepCount = o.value(QStringLiteral("stepCount")).toInt();
+            // hrdata is itself an optional nested object (RemoteSyncedWorkout.HRData
+            // in tajchert/suuntool) - toObject() on a missing/non-object value
+            // returns {} harmlessly, so avg/max just fall back to Workout's own
+            // 0-means-absent default without an extra presence check here.
+            const QJsonObject hrData = o.value(QStringLiteral("hrdata")).toObject();
+            w.avgHeartRate = hrData.value(QStringLiteral("avg")).toDouble();
+            w.maxHeartRate = hrData.value(QStringLiteral("max")).toDouble();
             workouts.append(w);
         }
         callback(true, workouts, QString());

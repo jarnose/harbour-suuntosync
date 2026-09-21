@@ -286,9 +286,10 @@ to what's already confirmed working here.
    offsets, it's figuring out how/where the Race exposes its *own*
    chunk-id assignment (if over BLE at all) or accepting per-firmware
    calibration against known real values as the practical path.
-2. **Decode `0x0c`/`0x16`/`0x18`/`0x1f`'s internal value structure** -
-   GPS/pace/altitude/cadence samples almost certainly live in here, but
-   no byte offset has been confirmed for any of them yet.
+2. **Decode `0x16`/`0x18`/`0x1f`'s internal value structure** - `0x0c`
+   is now solved (UTC timestamp + GPS fix, see "GPS found" below, which
+   also gives distance and speed for free); altitude and cadence/steps
+   are the remaining unknowns, most likely in one of these three.
 3. Add resync-on-malformed-chunk robustness to `Sbem::parseContainer()`
    (see point 3 under issue #70 above) before relying on it against a
    live BLE download rather than a replayed historical capture.
@@ -296,8 +297,9 @@ to what's already confirmed working here.
    streamed live** (this capture was of the official Android app doing a
    historical sync, presumably after the workout already ended) -
    probably fine, no reason to expect otherwise, but not yet exercised.
-5. Resolve the offset-13 puzzle and the countdown-counter field, both
-   introduced in the next section.
+5. Resolve the countdown-counter field noted in "Ground-truth
+   calibration" below (the offset-13 puzzle itself is resolved - see
+   "GPS found" further down).
 
 ## Ground-truth calibration (ID = actual UTC timestamp; `0x0c` decoded)
 
@@ -337,28 +339,34 @@ naturally read closer to the true final value than earlier ones (this
 is why the very first broad scan needed generous tolerances rather than
 exact matches to catch it happening mid-workout, not just at the end).
 
-**Not yet resolved - flagging honestly rather than overclaiming**:
-- A *second* position, byte offset `13` (not `12` - i.e. not 4-byte
-  aligned with the offset-8 field), also produces `float32` values that
-  land close to `avg_speed_kmh`/`max_speed_kmh`/`ascent_m`/`descent_m`
-  at various points across the stream - but at *different* sample
-  indices for each target, not simultaneously. Two live hypotheses,
-  neither confirmed: (a) `0x0c` multiplexes *one* "current highlighted
-  stat" per sample across several possible metrics (the field at offset
-  8 *and/or* 13 means something different depending on sample), or (b)
-  there's an alignment/framing detail still missed (the byte-13
-  non-alignment is a bit suspicious on its own). Needs more ground
-  truth to pin down - ideally a full per-second time series from the
-  app, not just workout totals, to check whether the "current metric"
-  at each timestamp is consistent with something like current speed at
-  that specific moment (not just eventually converging to the final
-  average/max).
-- Bytes `12..14` in at least one contiguous run of stream1 samples
-  read as a **linearly *decreasing* 16-bit value** (~7105 counting down
-  toward 0 and past it) across dozens of consecutive `0x0c` chunks -
-  clearly not noise, but purpose unknown (a countdown/remaining-value
-  of some kind, or a raw high-rate sensor channel). Not yet correlated
-  with anything.
+**Update - both of the next two items turned out to be resolved once
+real per-second ground truth was available (see "GPS found" further
+below); kept here for the record rather than deleted, since the dead
+end itself is a useful lesson:**
+- The offset-13 `float32` "matching" various speed/ascent/descent
+  targets at different sample indices, mentioned as two live hypotheses
+  here originally, turned out to be neither - it was simply *misaligned*
+  reads straddling two real, adjacent fields (latitude at bytes `10-14`,
+  longitude at `14-18`, both confirmed below). A byte offset one or two
+  positions off from a real field's boundary will produce numbers that
+  *look* like noisy, semi-plausible values without being anything real -
+  worth remembering as a general trap, not just specific to this field.
+- The "linearly decreasing 16-bit value" at bytes `12..14` is the same
+  artifact: those two bytes are the high half of latitude (bytes `12-13`)
+  overlapping the low byte of a still-unidentified field at byte 14's
+  neighbourhood. A cyclist moving in a roughly consistent direction
+  changes their raw latitude integer roughly monotonically over a short
+  stretch, which is exactly the "smooth countdown" pattern observed -
+  not a counter, just latitude drifting.
+- The energy_kcal exact-`210.0` hit at offset 8 (two instances, out of
+  1520 samples) is now understood too, and was very likely pure chance:
+  `210.0`'s IEEE-754 bytes are `00 00 52 43` - bytes 8-9 being `00 00`
+  (a field that legitimately reads zero most of the time, see below) and
+  latitude's own low two bytes (bytes 10-11) happening to equal `52 43`
+  at exactly those two samples is plausible, not evidence of a real
+  "energy" field at that position. A useful reminder that an *exact*
+  match is strong evidence but not proof by itself when the search space
+  is wide enough and enough samples are checked.
 - The three streams' *raw recorded time span* (last sample's timestamp
   minus first) is roughly **2x** the real reported duration for both
   cycling workouts, but close to 1:1 for the walking one. Working
@@ -367,11 +375,11 @@ exact matches to catch it happening mid-workout, not just at the end).
   lights while cycling), while the app's reported "Kesto" only counts
   active time. Walking rarely triggers auto-pause the same way, which
   would explain why only that stream's total lines up closely.
-- `distance_m`, `steps`, and `cadence` (workout 3's walking-specific
-  fields) haven't turned up yet in this same brute-force scan - worth
-  another pass, plus specifically checking `0x1f` and `0x18` (both
-  walking-heavy chunk ids) against `steps`/`cadence` now that real
-  target numbers exist for them.
+- `distance_m` is now resolved - see "GPS found" below, it's derived
+  from GPS rather than stored. `steps` and `cadence` (workout 3's
+  walking-specific fields) are still open - worth specifically checking
+  `0x1f` and `0x18` (both walking-heavy chunk ids) against them now that
+  real per-second target numbers exist.
 
 ## Cross-referencing Jarno's own FIT exports (per-second ground truth)
 
@@ -411,16 +419,6 @@ per-second series matched **100% of samples** across all three streams
 (1820/1820, 1520/1520, 732/732) - the timestamp field is fully solved,
 not just plausible.
 
-**The offset-13 field remains unresolved, but ruled out as anything
-simple.** With real per-second `distance`/`speed`/`altitude`/`heart_rate`
-/`cadence` to check against directly (not just eventual convergence to a
-final total), neither a raw correlation nor a *differenced* correlation
-(comparing sample-to-sample changes, which avoids the trap below) found
-a strong, consistent match for the offset-13 field against any of them.
-One moderate hit (`r=+0.71` between offset 3's differenced value and
-Δspeed, walking stream only) didn't replicate on either cycling stream,
-so it's noted but not trusted.
-
 **A methodology trap worth recording**: an initial raw-value correlation
 pass found offset 3/4 "matching" `distance` with `r` near ±1.0 - this
 was spurious. Distance (and the UTC timestamp) both increase
@@ -435,11 +433,69 @@ confirming it was the trend artifact, not a real field. Any future
 correlation-based field hunting on this data should default to
 differenced series, not raw ones, to avoid this trap.
 
-**Practical upshot**: HR (`0x12`), activity/sport id (`0x08`), and the
-UTC timeline (`0x0c` bytes 2-8) are now solid enough to build a minimal
-BLE-synced workout - a real heart-rate curve against real timestamps -
-before speed/distance/altitude/cadence are fully cracked. The `.fit`
-cross-referencing methodology here (per-second ground truth + differenced
-correlation) is now available as a template for whoever picks up `0x16`/
-`0x18`/`0x1f` next, with a concrete lesson learned about the monotonic-
-trend trap already paid for.
+## GPS found - and it resolves distance and speed too
+
+The previously-unresolved offset-13 field turned out to be a mis-read
+straddling two *other*, real fields right next to it. Brute-force
+scanning every `(chunk id, byte offset)` in `0x0c` for an `int32` inside
+the plausible geographic bounding box of each real GPS track (using
+Jarno's real FIT coordinates converted from semicircles) found:
+
+- **Bytes `10..14`**: latitude, `int32` LE, degrees × 10⁷.
+- **Bytes `14..18`**: longitude, `int32` LE, degrees × 10⁷.
+
+Both hit **100% of samples** in all three streams (1820/1820, 1520/1520,
+732/732), and - unlike every other field so far - the match isn't just
+"close", it's **essentially exact**: mean distance between the decoded
+coordinate and the real FIT coordinate at the same timestamp was
+**0.00-0.01 m** across all three streams. (The old "offset 13"
+correlation hits from the previous section were reading 1 byte into
+latitude's low end plus 3 bytes into longitude's high end - a
+meaningless straddle that happened to wobble in a vaguely plausible
+range, now fully explained away.) So `0x0c` is really a combined
+**timestamp + GPS fix** record - on Ocean/Nautic this was its own
+separate chunk (`CHUNK_GPS`, `0x0B`, per issue #70), but the Race folds
+it into the same 20-byte record as the clock. This also explains why
+`0x0B` never appeared anywhere in this project's captures: on the Race,
+GPS isn't a separate chunk id at all.
+
+**This unlocks distance and speed for free - they don't need their own
+field, because they're derived, not stored.** Accumulating great-circle
+(haversine) distance between consecutive decoded GPS fixes matched
+Jarno's real reported total distance within 0.04-0.4% on all three
+workouts (5437.1 m vs. 5417.0 m real; 5561.7 m vs. 5557.0 m; 2094.8 m
+vs. 2094.0 m - the small residual is expected haversine-vs-the-app's-own-
+smoothing noise, not a sign anything's wrong). Point-to-point instantaneous
+speed (distance between consecutive fixes ÷ time between them) correlated
+strongly with real per-second speed for both cycling workouts (`r=0.94`
+and `r=0.97`) - walking showed no reliable correlation (`r=-0.04`), which
+makes sense rather than being a failure: at walking pace (~1.3 m/s) a
+single GPS fix's few-metre noise floor is a much larger fraction of the
+actual per-second movement than it is at cycling speed, so raw
+point-to-point differencing is too noisy there without the smoothing a
+real implementation would apply (e.g. averaging over a few seconds).
+
+**Altitude remains open.** It can't come from 2D lat/lon the way
+distance/speed can, so it must be a genuinely separate field somewhere -
+but it wasn't found in `0x0c`'s two still-unaccounted-for byte pairs
+(offsets `8-9` and `18-19`), whether read as `float32`, raw `int16`/
+`uint16` metres, or `int16`/`uint16` decimetres (×10) - ruled out by
+direct comparison against real per-second altitude, not just absence of
+a coincidental match. Nor did a similar brute-force scan turn it up
+elsewhere in `0x0c`. `0x16` (17 bytes, still fully unexplored) and the
+`0x17` barometric-pressure candidate (previously ruled out only as a raw
+`float32` Pa value at offset 2 - worth retrying with other encodings,
+e.g. a fixed-point or reference-relative delta, given `Header.Altitude
+.Min` exists as a named field in the watch's own SML schema catalog and
+Suunto's format elsewhere favours delta-from-reference encoding) are the
+next places to look.
+
+**Practical upshot**: this is now enough to build a real GPS route, pace,
+distance, heart-rate, and activity-type view for a BLE-synced workout -
+everything except altitude/ascent/descent and cadence/steps. HR (`0x12`),
+activity/sport id (`0x08`), the UTC timeline, and now full GPS (all in
+`0x0c`) form a solid, independently-verified foundation. The `.fit`
+cross-referencing methodology here (per-second ground truth, brute-force
+exact-value search for distinctive fields like GPS coordinates, and
+differenced correlation for noisier/less distinctive ones) is the
+template for finishing altitude and cadence/steps (`0x1f`, `0x18`) next.

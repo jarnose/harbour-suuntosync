@@ -116,44 +116,107 @@ real workout: `0x0c`×732, `0x0f`×1492, `0x12`×1553, `0x16`×1483,
 the very start (very likely a one-time header/summary section, not yet
 decoded further).
 
-## Provenance and what's still open
+## Provenance
 
-**Provenance**: the exact `MDS_HEADER_SIZE`/`MDS_CHUNK_SIZE_OFFSET`
-constants and the Heatshrink parameters came from
+The exact `MDS_HEADER_SIZE`/`MDS_CHUNK_SIZE_OFFSET` constants and the
+Heatshrink parameters came from
 [libdivecomputer](https://github.com/libdivecomputer/libdivecomputer)
 PR #73 (`suunto_nautic.c`/`suunto_nautic_parser.c`, LGPL-2.1 per that
 project's `COPYING` file - **not vendored into this project**, only read
-for reference, same as `zappctl`'s docs were used earlier), which adds
-support for the Suunto Nautic/Ocean **dive computer** - a different
-device family on the same underlying Suunto/Movesense BLE firmware
-stack. That driver's own comments note its chunk-id constants
-(`CHUNK_GPS_ACCURACY`, `CHUNK_DIVEROUTE_FEATURES`,
-`CHUNK_SURFACE_PRESSURE`, ...) are diving-specific - three of those four
-literal chunk IDs (`0x0f`→HR, `0x12`→1Hz profile, `0x16`→extended
-status) happened to reappear with plausible-looking frequencies in this
-project's own Suunto Race capture (a sports watch, not a dive computer),
-which is a good sign the *container format and transport* are fully
-shared firmware infrastructure - but the exact chunk-id → field mapping
-for a Race/Vertical-generation *sports* watch hasn't been independently
-confirmed chunk-by-chunk, only the format mechanics (framing,
-compression, TLV walk) have.
+for reference, same as `zappctl`'s docs were used earlier). **Correction
+from an earlier draft of this doc**: this PR's title is "Add Suunto
+Nautic / Ocean (Vaasa) BLE support", and while the Nautic/Nautic S are
+pure dive computers, the **Suunto Ocean is explicitly a hybrid** -
+Suunto's own marketing: "a dive computer and GPS sports watch in one",
+with 95+ sport modes, GPS, barometer, offline maps and on-wrist HR -
+i.e. built on the same sports-watch platform as the Race/Vertical this
+project targets, not a separate lineage. That makes the Ocean-specific
+parts of this driver (wrist HR, GPS, activity/sport id) far more likely
+to carry over to the Race than the pure-diving parts (depth, gas
+mixes, deco/NDL) - and that's exactly the split the empirical checks
+below found.
 
-**Still open** (this is where Phase 6/`LogbookSync` picks up next):
-1. **Decode chunk `0x12`'s (and others') internal value structure** -
-   this is presumably where GPS/pace/etc. samples live, but the raw
-   bytes inside each chunk haven't been mapped to real numbers yet.
+## Chunk semantics: what carries over from Ocean/Nautic to the Race, and what doesn't
+
+Tested every chunk-decode hypothesis from `suunto_nautic_parser.c`
+against all three of this project's real captured streams (not just the
+format mechanics - the actual claimed byte layouts). Every chunk except
+the timeline base (`0x01`) is documented there as starting with a
+signed `int16` LE millisecond delta from the previous chunk's time -
+that convention held up correctly (see below), but which chunk ids
+carry which fields is clearly **firmware/device-specific**, exactly as
+that source's own comments warn (e.g. its `CHUNK_IMU` id is `0x23` on
+one hardware variant and `0x22` on another) - so each hypothesis had to
+be checked, not assumed:
+
+**Confirmed, carries over directly:**
+- **`CHUNK_ACTIVITY` (`0x08`)**: one-shot, `[timeDelta:2][sportId:1
+  ][asciiTail]`. All three streams: the ASCII tail is *literally the
+  decimal string of sportId itself* (`sportId=4` → tail `"4\0"`,
+  `sportId=12` → tail `"12\0"`) - clean, self-consistent confirmation
+  across independent real workouts. This is the field `WorkoutStore`
+  needs for `activityId` on a BLE-synced workout.
+- **The universal leading-delta convention**: walking the *entire*
+  interleaved chunk stream in original order and accumulating every
+  non-`0x01` chunk's leading `int16` delta into one shared clock
+  produces a plausible total elapsed time for all three streams (78.97
+  min / 61.44 min / 25.88 min) - clearly real workout durations, not
+  noise. (An earlier pass summed each chunk id's deltas *separately*,
+  which is not how the format works - chunks of different ids share one
+  interleaved clock - and produced nonsense including negative totals
+  for some ids; fixed before trusting these numbers.)
+- **`CHUNK_PROFILE_1HZ` (`0x12`)**: real "1Hz-ish" pacing role confirmed
+  (thousands of occurrences, ~500-900ms apart) - this is the timeline's
+  main heartbeat chunk on the Race too, even though...
+
+**Refuted / doesn't carry over as documented:**
+- **`CHUNK_HEARTRATE` (`0x0f`)**: on the Race, byte 2 (the claimed `hr:
+  uint8 bpm`) takes wildly implausible values (0, 3, 4, 9, 255, ...) -
+  this id does **not** mean heart rate here. Also structurally
+  different: Ocean's HR chunk is 3 bytes, the Race's `0x0f` chunk is
+  always 6 bytes.
+- **`CHUNK_PROFILE_1HZ` (`0x12`)'s payload**: Ocean's version needs
+  `size >= 18` for its temperature decode; the Race's `0x12` chunks are
+  always exactly 3 bytes (a 2-byte delta + 1 payload byte) - a
+  completely different, much smaller record. Only the *pacing role* of
+  this id carries over, not its field layout.
+- **`CHUNK_SURFACE_PRESSURE` (`0x17`)**: tried the documented `float32`
+  at offset 2 (barometric pressure, Pa) - a very plausible candidate
+  since the Race does have a barometer - but it decoded to a flat `0.0`
+  on every sample across all three streams, so this offset/field
+  doesn't hold either, at least not as a raw Pa float.
+
+**Not yet tested**: `0x0c` (20 bytes, very frequent - a strong GPS/pace
+candidate given the size), `0x16` (17 bytes, vs. Ocean's 141/195-byte
+`CHUNK_EXTENDED_STATUS` - clearly a different, much smaller record on
+Race), `0x18` (5 bytes), and `0x1f` (7 bytes, only seen in one of the
+three streams so far, same frequency as `0x12` in that stream - possibly
+a paired/companion record). The one-shot `0x01`/`0x02`/`0x03`/`0x04`
+header chunks at the very start of the container are also still
+undecoded; `0x01` (`CHUNK_TIMELINE_BASE`, 8 bytes) has a suspicious
+*constant* 3-byte tail (`01 00 0c`) across all three streams with only
+the preceding byte varying, hinting at a version/type marker rather
+than workout-specific data, but this isn't confirmed either.
+
+## Still open (where Phase 6/`LogbookSync` picks up next)
+
+1. **Decode `0x0c`/`0x16`/`0x18`/`0x1f`'s internal value structure** -
+   GPS/pace/altitude/cadence samples almost certainly live in here, but
+   no byte offset has been confirmed for any of them yet.
 2. **Cross-reference chunk IDs against the 246-field SML schema** this
    project already extracted from the watch itself
    (`docs/sml-schema-descriptors.md`) - the two were captured from the
    same device/firmware and almost certainly describe the same data,
    just via two different self-description mechanisms (the `<GRP>`
    comma-separated id lists seen alongside the `<PTH>`/`<FRM>` schema
-   entries, also captured in this same session, are a promising lead:
-   they're small integers in a similar range to these SBEM chunk ids).
-3. **Decode the one-shot `0x01`-`0x08` header chunks** at the start of
-   the container - likely per-workout summary values (duration,
-   distance, start time) that would be the fastest way to validate any
-   proposed field mapping against Jarno's own known real workout stats.
+   entries are a promising lead, not yet checked against these specific
+   chunk ids).
+3. **The fastest path to calibrating the above**: Jarno supplying the
+   *known real stats* (sport type, duration, distance, avg HR if
+   available) for these three specific captured workouts, to search for
+   matching encoded values rather than continuing to guess blind. The
+   duration figures above (78.97/61.44/25.88 min) are the first
+   candidate to check against reality.
 4. Confirm this same pipeline holds for a workout **as it's actively
    streamed live** (this capture was of the official Android app doing a
    historical sync, presumably after the workout already ended) -

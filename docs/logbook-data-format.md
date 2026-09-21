@@ -475,27 +475,97 @@ actual per-second movement than it is at cycling speed, so raw
 point-to-point differencing is too noisy there without the smoothing a
 real implementation would apply (e.g. averaging over a few seconds).
 
-**Altitude remains open.** It can't come from 2D lat/lon the way
-distance/speed can, so it must be a genuinely separate field somewhere -
-but it wasn't found in `0x0c`'s two still-unaccounted-for byte pairs
-(offsets `8-9` and `18-19`), whether read as `float32`, raw `int16`/
-`uint16` metres, or `int16`/`uint16` decimetres (×10) - ruled out by
-direct comparison against real per-second altitude, not just absence of
-a coincidental match. Nor did a similar brute-force scan turn it up
-elsewhere in `0x0c`. `0x16` (17 bytes, still fully unexplored) and the
-`0x17` barometric-pressure candidate (previously ruled out only as a raw
-`float32` Pa value at offset 2 - worth retrying with other encodings,
-e.g. a fixed-point or reference-relative delta, given `Header.Altitude
-.Min` exists as a named field in the watch's own SML schema catalog and
-Suunto's format elsewhere favours delta-from-reference encoding) are the
-next places to look.
+Altitude didn't come from `0x0c` (its two still-unaccounted-for byte
+pairs, offsets `8-9` and `18-19`, were ruled out as `float32`, raw
+`int16`/`uint16` metres, or decimetres, by direct comparison against
+real per-second altitude - absence of a match, not just absence of a
+coincidental one).
 
-**Practical upshot**: this is now enough to build a real GPS route, pace,
-distance, heart-rate, and activity-type view for a BLE-synced workout -
-everything except altitude/ascent/descent and cadence/steps. HR (`0x12`),
-activity/sport id (`0x08`), the UTC timeline, and now full GPS (all in
-`0x0c`) form a solid, independently-verified foundation. The `.fit`
-cross-referencing methodology here (per-second ground truth, brute-force
-exact-value search for distinctive fields like GPS coordinates, and
-differenced correlation for noisier/less distinctive ones) is the
-template for finishing altitude and cadence/steps (`0x1f`, `0x18`) next.
+## Cadence found in `0x16` - and a proper cross-chunk timeline to go with it
+
+Picking this up again to hunt for altitude required first solving a
+prerequisite: `0x16`/`0x17`/`0x18` (unlike `0x0c`) carry no absolute UTC
+timestamp of their own, only the universal leading `int16` delta. Built
+a proper single-pass timeline reconstruction instead of the cruder
+whole-stream summation from earlier: walk every chunk in original
+stream order, and whenever a `0x0c` chunk appears, treat *its* absolute
+UTC as authoritative and reset the running clock to it; for every other
+non-`0x01` chunk, advance the running clock by that chunk's own leading
+delta since the last authoritative reset. This lets any chunk type be
+joined against the FIT per-second series, not just `0x0c`.
+
+With that in place, a differenced-correlation sweep (see the methodology
+trap noted earlier - differenced, not raw, to dodge shared-trend
+artifacts) across `0x16`, `0x17`, `0x18` against every real per-second
+field turned up one unambiguous hit on the walking stream: **`0x16`
+byte 10 correlates with Δcadence at `r=+1.000`.** Checked directly
+against absolute values, not just the correlation: it's an exact,
+byte-for-byte match - `uint8`, raw rpm, every single one of the first 30
+(and by extension all 1483) samples checked. Cycling showed no signal
+there at all, consistent with Jarno's cycling sessions having no cadence
+sensor paired (FIT's own `cadence` field was empty for every cycling
+record). Same offset also showed up as `off=8/9` in some rescans due to
+this byte's neighbours often being `0x00` - `10` is the confirmed exact
+position.
+
+The same sweep found `0x16` offset 1 correlating with Δdistance at
+`r=+0.976` on the walking stream - not yet chased further (distance is
+already solved via GPS so this isn't urgent), but worth a note for
+whoever looks at `0x16` next; it may be a redundant/derived speed-ish
+field the watch itself computes, or something else entirely.
+
+## Altitude: extensively tested, still not found
+
+Several encodings were tried against `0x16`/`0x17`/`0x18` with real
+per-second altitude as ground truth, and none produced anything close
+to the near-zero error seen for GPS, energy, or cadence:
+
+- Raw `int16`/`uint16` in metres, decimetres, and centimetres, at every
+  byte offset in all three chunks: best correlations topped out around
+  `r=0.1-0.64` with mean absolute errors of several metres to several
+  hundred metres depending on scale - no clear winner, and the
+  strongest-*looking* candidate by raw error alone (`0x18` offset 3,
+  centimetre scale) turned out to be a **near-constant** value that
+  barely moved while real altitude changed by over a metre - a
+  reminder that low mean-error alone isn't enough evidence; the
+  candidate also has to *vary* the right amount (this project's `x_std`
+  vs. `real_std` check in the search script exists specifically to catch
+  this).
+- Raw atmospheric pressure (`uint32`/`int32`/`float32`, plausible Pa
+  range 50000-200000) converted through the standard barometric formula
+  (`44330 * (1 - (P/101325)^(1/5.255))`): no candidate came within
+  thousands of metres of the real value - not a near-miss, a clear
+  rejection of this encoding in the offsets tried.
+- Altitude expressed *relative to the workout's own minimum altitude*
+  (motivated by `Header.Altitude.Min` existing as a named field in the
+  watch's own SML schema catalog, suggesting Suunto favours
+  delta-from-reference encoding elsewhere) - closest so far, but still
+  only within 7-20 m mean error depending on offset/scale, nowhere near
+  the exactness seen for other confirmed fields.
+
+**Open hypothesis, not confirmed**: the app's displayed/exported
+altitude may not be the watch's raw barometer reading at all. Many
+fitness platforms apply "elevation correction" - replacing or blending
+noisy on-device barometric altitude with a digital-elevation-model
+lookup keyed on GPS position, server-side or in the app, specifically
+*because* raw barometric altitude drifts with weather and temperature
+over a session. If that's happening here, there may be no byte in the
+raw `/Data` stream that matches the FIT-exported altitude at all -
+the *raw* on-watch value (if present somewhere) would need comparing
+against a barometer-plausible but not DEM-corrected reference to
+confirm, which isn't available from this data alone.
+
+## Practical upshot
+
+GPS route, distance, speed, heart rate, activity type, and now cadence
+are confirmed and usable for a real BLE-synced workout view. Altitude/
+ascent/descent and step count remain open - altitude for the reasons
+above, steps not yet attempted (a natural next target for `0x18`/`0x1f`,
+which are otherwise unexplored, using the same cross-chunk timeline and
+exact-value-search approach that found cadence). The `.fit`
+cross-referencing methodology (per-second ground truth, brute-force
+exact-value search for distinctive fields, and differenced correlation
+with an explicit variance check for noisier ones) is now a proven
+template - six real fields confirmed with it (UTC time, GPS lat/lon,
+heart rate, activity/sport id, energy, cadence) - for whoever picks up
+steps or revisits altitude next.

@@ -90,6 +90,32 @@ std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &pat
 // encodeGetRequest() call - see MdsWhiteboardClient.
 std::vector<uint8_t> literalSessionHandshakeRequest();
 
+// Builds the TYPE=0x10 "start the bulk data stream" trigger for a paginated/
+// streamed resource such as /Logbook/byId/<id>/Data - send this after the
+// initial encodeGetRequest() for that path gets back its TYPE=0x02 ack, and
+// a flood of TYPE=0x01, requestId=0 notifications carrying the (still
+// Heatshrink-compressed) payload should follow (see
+// docs/logbook-data-format.md for that side of the pipeline).
+//
+// ackBody is the *body* of that TYPE=0x02 ack, unmodified. The trigger body
+// is simply ackBody's first 6 bytes with a single 0x00 byte appended in
+// place of the ack's own trailing 2 bytes - confirmed byte-for-byte
+// (including the resulting CRC32) against a real captured trigger (frame
+// 7868, requestId 0x0535, built from the ack at frame 7828) - see
+// tests/test_mdswirecodec.cpp.
+//
+// What's NOT confirmed: the real capture this was derived from didn't go
+// straight from the ack to this trigger - the official app ran a long
+// handle-based "walk" of intermediate 0x0b/0x0d/0x03/0x05 exchanges in
+// between (see docs/logbook-data-format.md's provenance section), which
+// this function skips entirely. Whether that walk is genuinely required to
+// "warm up" the resource before the watch will honour this trigger, or is
+// just the app fetching UI-only metadata (size, a display name, "bytes" as
+// a unit string - all seen in that walk's responses) that isn't needed for
+// the data fetch itself, is unknown until tried on real hardware. Throws
+// std::invalid_argument if ackBody is shorter than 6 bytes.
+std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
+
 // Incremental SLIP frame reassembler + envelope parser/validator. Feed it
 // raw bytes as they arrive from the notify characteristic, in order,
 // regardless of how they were split across BLE PDUs; each call returns the

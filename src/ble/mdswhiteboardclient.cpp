@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace {
 
@@ -25,12 +26,35 @@ const QString kNotifyCharUuid = QStringLiteral("34802252-7185-4d5d-b431-630e7050
 
 constexpr int kRequestTimeoutMs = 10000;
 
+// The MDS bulk-chunk header (see docs/logbook-data-format.md's Stage 1):
+// 28 bytes from the raw wire packet's start, which is 22 bytes into this
+// project's own Mds::Frame::body (packet = 6-byte SYNC/TYPE/LEN/REQID
+// envelope, already stripped, + body). chunk_size is a LE u16 at wire
+// offset 20, i.e. body offset 14.
+constexpr size_t kMdsChunkHeaderSize = 22;
+constexpr size_t kMdsChunkSizeOffset = 14;
+
+// How long to wait after the last bulk chunk before deciding the transfer
+// is over - libdivecomputer issue #70's independent reverse-engineering of
+// the same protocol on a related device settled on 2.0s; not independently
+// re-measured against this project's own capture (the transfer there just
+// ran to completion without a gap to time), so kept as a documented
+// starting point rather than a confirmed value.
+constexpr int kBulkStreamSilenceMs = 2000;
+
 } // namespace
 
 MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
     : QObject(parent)
 {
     registerBluezManagedObjectTypes();
+
+    m_bulkSilenceTimer.setSingleShot(true);
+    connect(&m_bulkSilenceTimer, &QTimer::timeout, this, [this]() {
+        finishBulkFetch(!m_bulkBuffer.empty(),
+                m_bulkBuffer.empty() ? tr("No bulk data arrived before the silence timeout")
+                                      : QString());
+    });
 }
 
 void MdsWhiteboardClient::attachToDevice(const QString &deviceObjectPath)
@@ -81,6 +105,8 @@ void MdsWhiteboardClient::detach()
     }
     while (!m_queue.isEmpty())
         m_queue.dequeue().callback(false, Mds::Frame(), tr("Disconnected"));
+    if (m_bulkFetchActive)
+        finishBulkFetch(false, tr("Disconnected"));
 
     if (wasReady)
         emit readyChanged(false);
@@ -212,6 +238,15 @@ void MdsWhiteboardClient::onNotifyPropertiesChanged(const QString &interface,
             continue;
         }
 
+        // Bulk-transfer chunks (fetchLogbookData()) - unsolicited, like the
+        // handshake reply, so matched the same way (type+reqId) rather than
+        // through the request queue's m_inFlightRequestId.
+        if (frame.type == 0x01 && frame.requestId == 0 && m_bulkFetchActive) {
+            appendBulkChunk(frame.body);
+            armBulkSilenceTimer();
+            continue;
+        }
+
         if (frame.requestId != m_inFlightRequestId)
             continue; // response to a request we've already timed out, or a spontaneous event
         resolveInFlight(frame.requestId, true, frame, QString());
@@ -272,12 +307,19 @@ bool MdsWhiteboardClient::writeChunked(const std::vector<uint8_t> &framed, QStri
 
 void MdsWhiteboardClient::get(const QString &path, ResponseCallback callback)
 {
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, callback);
+}
+
+void MdsWhiteboardClient::getRaw(FrameBuilder builder, ResponseCallback callback)
+{
     if (!isReady()) {
         callback(false, Mds::Frame(), tr("Whiteboard channel isn't ready yet"));
         return;
     }
 
-    m_queue.enqueue({ path, callback });
+    m_queue.enqueue({ std::move(builder), callback });
     dispatchNext();
 }
 
@@ -288,7 +330,7 @@ void MdsWhiteboardClient::dispatchNext()
 
     const QueuedRequest next = m_queue.dequeue();
     const uint16_t requestId = m_nextRequestId++;
-    const std::vector<uint8_t> framed = Mds::encodeGetRequest(requestId, next.path.toStdString());
+    const std::vector<uint8_t> framed = next.builder(requestId);
 
     QString error;
     if (!writeChunked(framed, &error)) {
@@ -304,4 +346,70 @@ void MdsWhiteboardClient::dispatchNext()
         resolveInFlight(requestId, false, Mds::Frame(),
                          tr("Timed out waiting for the watch to respond"));
     });
+}
+
+void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback callback)
+{
+    if (m_bulkFetchActive) {
+        callback(false, {}, tr("Another bulk fetch is already in progress"));
+        return;
+    }
+
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ackFrame, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+
+        try {
+            const std::vector<uint8_t> ackBody = ackFrame.body;
+            getRaw([ackBody](uint16_t requestId) {
+                return Mds::encodeStreamStartTrigger(requestId, ackBody);
+            }, [this, callback](bool triggerOk, const Mds::Frame &, const QString &triggerError) {
+                if (!triggerOk) {
+                    callback(false, {}, tr("Stream-start trigger failed: %1").arg(triggerError));
+                    return;
+                }
+                m_bulkFetchActive = true;
+                m_bulkBuffer.clear();
+                m_bulkCallback = callback;
+                armBulkSilenceTimer();
+            });
+        } catch (const std::exception &e) {
+            callback(false, {}, tr("Could not build the stream-start trigger: %1").arg(e.what()));
+        }
+    });
+}
+
+void MdsWhiteboardClient::appendBulkChunk(const std::vector<uint8_t> &body)
+{
+    if (body.size() < kMdsChunkHeaderSize)
+        return;
+    const uint16_t chunkSize = static_cast<uint16_t>(body[kMdsChunkSizeOffset]
+            | (static_cast<uint16_t>(body[kMdsChunkSizeOffset + 1]) << 8));
+    if (kMdsChunkHeaderSize + chunkSize > body.size())
+        return;
+    m_bulkBuffer.insert(m_bulkBuffer.end(),
+            body.begin() + kMdsChunkHeaderSize,
+            body.begin() + kMdsChunkHeaderSize + chunkSize);
+}
+
+void MdsWhiteboardClient::armBulkSilenceTimer()
+{
+    m_bulkSilenceTimer.start(kBulkStreamSilenceMs);
+}
+
+void MdsWhiteboardClient::finishBulkFetch(bool ok, const QString &error)
+{
+    if (!m_bulkFetchActive)
+        return;
+    m_bulkFetchActive = false;
+    m_bulkSilenceTimer.stop();
+    const DataCallback callback = m_bulkCallback;
+    const std::vector<uint8_t> data = std::move(m_bulkBuffer);
+    m_bulkCallback = nullptr;
+    m_bulkBuffer.clear();
+    callback(ok, data, error);
 }

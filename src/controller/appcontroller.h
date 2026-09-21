@@ -76,6 +76,20 @@ public:
     // stored yet (that's LogbookSync, once this plumbing is proven).
     Q_INVOKABLE void testWhiteboard();
 
+    // Phase 6, next validation probe: fetches and fully decodes one real
+    // workout directly from the watch by its logbook id (the numeric
+    // suffix of /Logbook/byId/<id>/Data - which is itself that workout's
+    // Unix start timestamp in seconds, confirmed in
+    // docs/logbook-data-format.md, so any id already seen via cloud sync or
+    // testWhiteboard()'s /Entries probe works here). Exercises the whole
+    // new pipeline end to end - MdsWhiteboardClient::fetchLogbookData()'s
+    // still-experimental bulk-transfer trigger (see its doc comment) and
+    // Logbook::decode() - and reports either a human-readable field summary
+    // or the failure, via logbookTestResult(). Nothing is stored in
+    // WorkoutStore yet; that's this probe's own follow-up once it's proven
+    // on real hardware.
+    Q_INVOKABLE void testLogbookFetch(const QString &logbookId);
+
     // Signs in to the Suunto cloud account. Progress/result surface via
     // cloudLoginInProgress and cloudAccountChanged (success) /
     // errorOccurred (failure) - no separate "login result" signal, since
@@ -100,6 +114,7 @@ signals:
     void watchConnectedChanged();
     void whiteboardReadyChanged();
     void whiteboardTestResult(const QString &summary);
+    void logbookTestResult(const QString &summary);
     void workoutSyncInProgressChanged();
 
 private:
@@ -129,6 +144,13 @@ private:
     // chunked writes interleaving into one corrupted buffer, which is the
     // leading suspect for why the watch never responded to either.
     bool m_whiteboardTestInFlight = false;
+    // Same "no overlapping request" reasoning as m_whiteboardTestInFlight,
+    // and doubly warranted here: MdsWhiteboardClient::fetchLogbookData()
+    // refuses a second bulk fetch outright while one's active rather than
+    // queueing it (see that method's own doc comment), so a second overlap
+    // would surface as a confusing "Another bulk fetch is already in
+    // progress" error rather than actually retrying.
+    bool m_logbookTestInFlight = false;
 
     WorkoutStore *m_workoutStore;
     WorkoutListModel *m_workoutModel;

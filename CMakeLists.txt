@@ -31,10 +31,14 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # again: logbookdecoder (tests/test_logbookdecoder.cpp, plain g++) turns
 # the decoded chunks into workout summary fields - GPS/HR/activity/cadence
 # confirmed against Jarno's own FIT exports, no altitude/ascent/descent
-# (extensively searched for, not found - see the doc). Still Qt-free and
-# not yet wired to AppController/WorkoutStore: that needs the BLE bulk-
-# transfer trigger sequence (a generic handle-walk, not yet implemented -
-# see the doc's provenance section) to actually produce input for it.
+# (extensively searched for, not found - see the doc). Phase 6 continued
+# once more: MdsWhiteboardClient::fetchLogbookData() and
+# AppController::testLogbookFetch() wire logbookdecoder up to a real BLE
+# fetch - marked experimental throughout (see fetchLogbookData()'s and
+# Mds::encodeStreamStartTrigger()'s doc comments) since it replaces the
+# real captured trigger sequence's elaborate handle-walk with a much
+# simpler hypothesis not yet confirmed on real hardware. Not wired into
+# WorkoutStore yet - that's this probe's own job once proven.
 add_executable(harbour-suuntosync
     src/harbour-suuntosync.cpp
     src/controller/appcontroller.cpp

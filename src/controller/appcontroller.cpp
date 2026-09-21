@@ -7,10 +7,13 @@
 #include "../cloud/suuntocloudclient.h"
 #include "../store/workoutstore.h"
 #include "../model/workoutlistmodel.h"
+#include "../ble/logbookdecoder.h"
 
 #include <QStandardPaths>
 #include <QDir>
 #include <QDateTime>
+
+#include <stdexcept>
 
 namespace {
 
@@ -209,6 +212,48 @@ void AppController::testWhiteboard()
                                            .arg(frame.type, 2, 16, QLatin1Char('0'))
                                            .arg(frame.requestId)
                                            .arg(frame.body.size()));
+    });
+}
+
+void AppController::testLogbookFetch(const QString &logbookId)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight) {
+        emit logbookTestResult(tr("A logbook fetch is already in flight"));
+        return;
+    }
+
+    m_logbookTestInFlight = true;
+    const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
+    m_whiteboardClient->fetchLogbookData(path,
+            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(tr("Fetch failed: %1").arg(error));
+            return;
+        }
+
+        try {
+            const Logbook::DecodedWorkout w = Logbook::decode(data);
+            emit logbookTestResult(
+                    tr("OK - %1 bytes compressed, activity=%2 duration=%3s "
+                       "distance=%4m maxSpeed=%5m/s avgHR=%6 maxHR=%7 steps=%8")
+                            .arg(data.size())
+                            .arg(w.activityId)
+                            .arg(w.totalTimeSeconds, 0, 'f', 0)
+                            .arg(w.totalDistanceMeters, 0, 'f', 0)
+                            .arg(w.maxSpeedMs, 0, 'f', 1)
+                            .arg(w.avgHeartRateBpm, 0, 'f', 0)
+                            .arg(w.maxHeartRateBpm, 0, 'f', 0)
+                            .arg(w.stepCount));
+        } catch (const std::exception &e) {
+            emit logbookTestResult(tr("Fetched %1 bytes but decoding failed: %2")
+                                            .arg(data.size())
+                                            .arg(QString::fromUtf8(e.what())));
+        }
     });
 }
 

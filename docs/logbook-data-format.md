@@ -664,3 +664,82 @@ check for noisier ones, and - new this round - checking whether a
 is now a proven template, with six real fields confirmed directly (UTC
 time, GPS lat/lon, heart rate, activity/sport id, energy, cadence) and
 two more (distance, steps) understood as derived rather than missing.
+
+## `Logbook::decode()`: SBEM chunks to workout summary fields
+
+`src/ble/logbookdecoder.h/.cpp` (Qt-free, `tests/test_logbookdecoder.cpp`)
+turns a decoded `/Data` payload into the fields confirmed above - GPS-
+derived distance/speed, heart rate, activity id, cadence-derived step
+count - using a single pass over the chunk stream that also reconstructs
+absolute time for every chunk (not just `0x0c`): whenever a `0x0c` chunk
+appears its own UTC timestamp resets a running clock; every other
+non-`0x01` chunk advances that same clock by its own leading delta. No
+`totalAscent`/`totalDescent`/`energyConsumption` fields - deliberately
+left out rather than populated with a guess, per the "still not found"
+conclusion above. Validated against the same real captured golden vector
+`sbemcontainer`'s test uses, both against an independent Python
+re-implementation of the identical algorithm (exact match) and against
+Jarno's real reported stats for that workout (within the tolerances
+already documented above - exact for heart rate, ~2-5% for the derived
+fields).
+
+## The BLE trigger sequence: more than a two-message handshake
+
+Implementing `Logbook::decode()`'s BLE-facing counterpart required
+finally pinning down how the real app actually starts the bulk-transfer
+stream - `suunto_nautic.c`'s documented model (GET's ack carries a
+"Watch Magic" session id at body offset 5; send it back +1 then +2 as
+two `FETCH1`/`FETCH2` triggers) turned out not to match this project's
+own capture at all.
+
+**What the real capture (frames 7826-7880) actually shows**: `GET
+/Logbook/byId/<id>/Data` → a `TYPE=0x02` ack → then a long chain of
+`TYPE=0x0b`/`0x0d`/`0x03`/`0x05` exchanges - the same general handle-
+based resource-walking mechanism `/Entries` and the `Descriptors` schema
+fetch already use, just applied to `/Data`'s own structure - eight
+request/response round trips deep, where each response can reveal one or
+two further child handles to visit (confirmed by tracing exactly which
+byte offset of which *earlier* response each subsequent request's handle
+bytes come from - not always the immediately preceding one, e.g. one
+request's handle came from a response two exchanges earlier, and a
+single response yielded two handles visited one after the other) -
+before a final `TYPE=0x10` message triggers the actual `TYPE=0x01`
+stream. This is a genuine binary object-graph walk, not a fixed two-step
+sequence, and reconstructing its general grammar from one example capture
+carries real risk of being subtly wrong for a different logbook entry.
+
+**A much simpler hypothesis, confirmed byte-exact against the same
+capture**: the final `TYPE=0x10` trigger's body is *mechanically* just
+the initial GET's ack body's first 6 bytes with the ack's own trailing 2
+bytes dropped and a single `0x00` appended - no handle-walk needed to
+construct it. Verified by rebuilding the exact captured trigger frame
+(frame 7868, requestId `0x0535`) from the exact captured ack (frame
+7828) with this rule and getting a **byte-for-byte match, CRC32
+included** - see `tests/test_mdswirecodec.cpp`'s
+`testEncodeStreamStartTrigger()`.
+
+**What's genuinely unconfirmed**: whether the elaborate middle walk is
+required to "warm up" the resource before the watch will honour this
+trigger, or whether it's just the official app fetching UI-only metadata
+(a resource size, a display name literally named `"LogDataNotification"`,
+the ASCII string `"bytes"` as a unit label - all seen in that walk's own
+responses) that has nothing to do with making the data fetch itself
+work. `Mds::encodeStreamStartTrigger()` and
+`MdsWhiteboardClient::fetchLogbookData()` implement the **simplified**
+hypothesis - skip straight from the ack to the trigger - specifically
+*because* it's cheap to falsify: if the watch actually needs the walk
+first, this will simply time out (the same safe, informative failure
+mode every other wrong guess in this project has hit), telling us
+definitively that the walk is required without having risked anything
+by trying the shortcut first. `AppController::testLogbookFetch()` (new
+"Test fetch" field on `PairingPage.qml`, taking a logbook id) is the
+validation probe for this - real hardware, not this document, has the
+final answer.
+
+**If the shortcut doesn't work**: the walk's general grammar isn't
+understood well enough yet to implement generically. The concrete next
+step would be a second real capture of the *same* sequence against a
+*different* logbook entry, to see which parts of the walk vary with the
+entry (the handle values, presumably) versus which are fixed (the walk's
+shape/offsets) - a single capture can't distinguish those, which is
+exactly why the general case wasn't attempted this round.

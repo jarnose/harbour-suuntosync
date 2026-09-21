@@ -18,6 +18,9 @@ Page {
         // same banner, not a separate one, since only one is ever relevant
         // to look at at a time here.
         onWhiteboardTestResult: page.lastError = summary
+        // Same reuse as whiteboardTestResult - see testLogbookFetch()'s doc
+        // comment in appcontroller.h for what this probe actually does.
+        onLogbookTestResult: page.lastError = summary
     }
 
     Component.onCompleted: AppController.refreshDevices()
@@ -54,6 +57,40 @@ Page {
                 color: page.lastError.indexOf("OK ") === 0 ? Theme.secondaryColor : Theme.errorColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 text: page.lastError
+            }
+
+            // Next validation probe after Test Whiteboard - see
+            // AppController::testLogbookFetch()'s doc comment for exactly
+            // what this exercises and what's still experimental about it.
+            // Needs a real logbook id (the numeric suffix of
+            // /Logbook/byId/<id>/Data - itself that workout's Unix start
+            // timestamp in seconds) - typed in by hand for now since
+            // there's no on-device /Entries listing UI yet, only
+            // testWhiteboard()'s raw-bytes probe of that same resource.
+            Row {
+                visible: AppController.watchConnected
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                spacing: Theme.paddingSmall
+
+                TextField {
+                    id: logbookIdField
+                    width: parent.width - testLogbookButton.width - parent.spacing
+                    label: qsTr("Logbook id")
+                    placeholderText: qsTr("e.g. 1785740504")
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                    EnterKey.enabled: text.length > 0
+                    EnterKey.onClicked: testLogbookButton.clicked()
+                }
+
+                Button {
+                    id: testLogbookButton
+                    anchors.verticalCenter: logbookIdField.verticalCenter
+                    enabled: logbookIdField.text.length > 0
+                    text: qsTr("Test fetch")
+                    onClicked: AppController.testLogbookFetch(logbookIdField.text)
+                }
             }
         }
 

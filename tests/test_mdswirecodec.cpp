@@ -100,6 +100,21 @@ void testLiteralHandshakeRequest()
               "7ea5122000000009092016455641100441101000000004010200000000000300000000000000004204a8677e");
 }
 
+void testEncodeStreamStartTrigger()
+{
+    // frame 7868, t=390.492s: the TYPE=0x10 trigger that starts the bulk
+    // /Logbook/byId/1785740504/Data stream, requestId 0x0535, built from
+    // the TYPE=0x02 ack at frame 7828 (requestId 0x052A - a *different*
+    // requestId than the trigger itself, since the trigger is its own new
+    // request; only its ack's *body* feeds into this). See
+    // mdswirecodec.h's doc comment on encodeStreamStartTrigger() for what
+    // this does and doesn't confirm about the wider fetch sequence.
+    const auto ackBody = fromHex("00240e018000c800");
+    const auto encoded = Mds::encodeStreamStartTrigger(0x0535, ackBody);
+    expectEq("encodeStreamStartTrigger(...)", toHex(encoded),
+              "7ea5100700350500240e01800000516dae727e");
+}
+
 // --- captured response decode (watch -> phone, Handle Value Notification, handle 0x0015) ---
 
 void testDecodeSinglePacketResponse()
@@ -159,6 +174,7 @@ int main()
     testEncodeSystemMode();
     testEncodeLogbookByIdData();
     testLiteralHandshakeRequest();
+    testEncodeStreamStartTrigger();
     testDecodeSinglePacketResponse();
     testDecodeMultiFragmentResponse();
     testDecoderRejectsCorruptedCrc();

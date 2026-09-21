@@ -1,6 +1,7 @@
 #include "mdswirecodec.h"
 
 #include <array>
+#include <stdexcept>
 
 namespace Mds {
 
@@ -12,6 +13,7 @@ constexpr uint8_t kEscapedDelimiter = 0x5E; // 0x7D 0x5E -> literal 0x7E
 constexpr uint8_t kEscapedEscape = 0x5D;    // 0x7D 0x5D -> literal 0x7D
 constexpr uint8_t kSync = 0xA5;
 constexpr uint8_t kTypeGetRequest = 0x0A;
+constexpr uint8_t kTypeStreamStartTrigger = 0x10;
 constexpr uint8_t kGetVerb = 0x01;
 
 std::array<uint32_t, 256> makeCrcTable()
@@ -39,33 +41,19 @@ void appendEscaped(std::vector<uint8_t> *out, uint8_t byte)
     }
 }
 
-} // namespace
-
-uint32_t crc32(const uint8_t *data, size_t length)
+// Shared by every encoder: SYNC TYPE LEN_LO LEN_HI REQID_LO REQID_HI BODY
+// CRC32_LE, SLIP-escaped and delimited.
+std::vector<uint8_t> encodeFrame(uint8_t type, uint16_t requestId, const std::vector<uint8_t> &body)
 {
-    static const std::array<uint32_t, 256> table = makeCrcTable();
-    uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < length; ++i)
-        crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
-    return crc ^ 0xFFFFFFFFu;
-}
-
-std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &path)
-{
-    // SYNC TYPE LEN_LO LEN_HI REQID_LO REQID_HI BODY(verb, 0x80 0x00, pathLen, path)
     std::vector<uint8_t> inner;
-    const uint16_t bodyLen = static_cast<uint16_t>(4 + path.size()); // verb(1)+const(2)+pathLen(1)+path
+    const uint16_t bodyLen = static_cast<uint16_t>(body.size());
     inner.push_back(kSync);
-    inner.push_back(kTypeGetRequest);
+    inner.push_back(type);
     inner.push_back(static_cast<uint8_t>(bodyLen & 0xFF));
     inner.push_back(static_cast<uint8_t>((bodyLen >> 8) & 0xFF));
     inner.push_back(static_cast<uint8_t>(requestId & 0xFF));
     inner.push_back(static_cast<uint8_t>((requestId >> 8) & 0xFF));
-    inner.push_back(kGetVerb);
-    inner.push_back(0x80);
-    inner.push_back(0x00);
-    inner.push_back(static_cast<uint8_t>(path.size()));
-    inner.insert(inner.end(), path.begin(), path.end());
+    inner.insert(inner.end(), body.begin(), body.end());
 
     const uint32_t crc = Mds::crc32(inner.data(), inner.size());
     inner.push_back(static_cast<uint8_t>(crc & 0xFF));
@@ -80,6 +68,39 @@ std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &pat
         appendEscaped(&framed, b);
     framed.push_back(kFrameDelimiter);
     return framed;
+}
+
+} // namespace
+
+uint32_t crc32(const uint8_t *data, size_t length)
+{
+    static const std::array<uint32_t, 256> table = makeCrcTable();
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < length; ++i)
+        crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+    return crc ^ 0xFFFFFFFFu;
+}
+
+std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &path)
+{
+    // BODY = verb(1)=0x01, const(2)=0x80 0x00, pathLen(1), path
+    std::vector<uint8_t> body;
+    body.reserve(4 + path.size());
+    body.push_back(kGetVerb);
+    body.push_back(0x80);
+    body.push_back(0x00);
+    body.push_back(static_cast<uint8_t>(path.size()));
+    body.insert(body.end(), path.begin(), path.end());
+    return encodeFrame(kTypeGetRequest, requestId, body);
+}
+
+std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+{
+    if (ackBody.size() < 6)
+        throw std::invalid_argument("encodeStreamStartTrigger: ackBody shorter than 6 bytes");
+    std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
+    body.push_back(0x00);
+    return encodeFrame(kTypeStreamStartTrigger, requestId, body);
 }
 
 std::vector<uint8_t> literalSessionHandshakeRequest()

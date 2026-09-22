@@ -56,9 +56,12 @@ struct DecodedSummary
 
     // Training metrics, the same ones the official app's workout view shows.
     // Each is marked nillable=0 in the schema, i.e. the watch writes 0 when
-    // it didn't compute one (VO2max and training load are absent from the
-    // one real capture available here - evidently not produced for every
-    // workout - so their decoding is offset-verified but not value-verified).
+    // it didn't compute one - the captured cycling workout has EPOC, peak
+    // training effect and recovery time but no VO2max or training load, so
+    // not every workout produces every metric. VO2max has since been seen
+    // reading a plausible value on a real synced workout; training load is
+    // the one field here whose offset is confirmed from the descriptor map
+    // but that has never been observed non-zero.
     bool hasEpoc = false;
     double epoc = 0;                  // ml/kg
     bool hasPeakTrainingEffect = false;

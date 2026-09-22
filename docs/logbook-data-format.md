@@ -1728,8 +1728,10 @@ accounted for.
 own spelling). That last one is the figure the app presents as training load
 / TSS - there is no separate TSS field in the watch's schema. The cycling
 capture has EPOC 3.1, PTE 1.2 and 180 s recovery; its VO2max and training
-load are the schema's nillable-0 "not computed", so those two are
-offset-verified rather than value-verified, which the test says explicitly.
+load are the schema's nillable-0 "not computed", so the test exercises the
+absent path for those two. VO2max has since been seen reading a plausible
+value on a real synced workout, which confirms that offset; training load
+remains the one field confirmed only from the descriptor map.
 
 **The route** was already being decoded and thrown away: chunk 0x0c's
 `Sample.Latitude`/`Sample.Longitude` are the same fixes the distance and

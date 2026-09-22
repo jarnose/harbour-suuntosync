@@ -1409,6 +1409,67 @@ run two-at-once against the same `MdsWhiteboardClient`.
 
 `qml/pages/MainPage.qml` gained a "Sync from watch" pull-down menu item
 next to the existing cloud one, visible whenever `whiteboardReady` is
-true. **Not yet run on real hardware** - the individual pieces are
-proven, but this specific chaining (list → sequential per-entry fetch →
-final tally) hasn't itself been exercised end to end on the Race yet.
+true.
+
+## Real-hardware finding: the `/Data` shortcut only works once per BLE connection
+
+**Gate result 2026-09-22**: Jarno ran "Sync from watch" against 3 real
+entries and got `Synced 1 of 3 watch workouts` - the first entry's
+`/Data` fetch succeeded, the next two both failed with `No bulk data
+arrived before the silence timeout` (the same message
+`fetchLogbookData()` uses when the ack/trigger exchange succeeds but no
+`TYPE=0x01` bulk chunks ever follow).
+
+Diagnosed with two cheap, informative real-device tests rather than
+guessing:
+1. Jarno ran `testLogbookFetch()` for one of the two failing ids
+   (`1785760357`) **in isolation** (not via the sync loop) on the *same*
+   still-connected session right after the failed sync - it failed
+   identically.
+2. He then power-cycled Bluetooth, reconnected, restarted the app, and
+   ran the exact same isolated fetch again on a **fresh** connection -
+   it succeeded: `OK - saved. 52517 bytes compressed, activity=4
+   duration=2002s distance=5520m maxSpeed=7.4m/s avgHR=86 maxHR=133
+   steps=0`.
+
+This pins the cause down precisely: it's not about the specific
+logbook id or its data, and it's not about firing multiple requests
+back to back per se - **the same id that fails on an already-used
+connection succeeds immediately on a fresh one.** The conclusion this
+project already flagged as unconfirmed when `encodeStreamStartTrigger()`
+was built (see its doc comment) turns out to matter after all: deriving
+the `TYPE=0x10` trigger from "the ack's first 6 bytes + one zero byte"
+only reconstructs a *valid* reference for whichever handle the watch
+happens to assign to the **first** `/Data`-shaped request on a given
+connection. A second such request within the same connection gets a
+different (presumably incremented, per this document's earlier
+`protocol_v9` handle-numbering findings) handle that this simplified
+formula doesn't account for, so the derived trigger references nothing
+real and the watch never starts streaming - a silent, safe failure
+(exactly the "a wrong guess just times out" pattern this whole project
+has relied on), not a corruption or a crash.
+
+**Workaround shipped (not yet itself tested on real hardware)**, since
+understanding the *real* handle-numbering rule well enough to fix the
+trigger derivation generically is a further open-ended task on top of
+everything already in this document's `protocol_v9` sections:
+`AppController::reconnectWatch()` disconnects and reconnects the watch
+(`BluezAdapter::disconnectFromDevice()`/`connectToDevice()`), explicitly
+calls `MdsWhiteboardClient::detach()` too (`disconnectFromDevice()`
+alone doesn't reset the client's own `m_whiteboardReady` state - would
+have made the reconnect wait a no-op), then polls `whiteboardReady`
+(250ms interval, 15s timeout) before considering the watch ready again.
+`fetchWatchEntryAt()` now calls this before *every* entry's fetch,
+including the first, giving each `/Data` request the same "first fetch
+on a fresh connection" condition that's actually been confirmed to
+work. Real cost: each entry now takes an extra several seconds for the
+disconnect/settle/reconnect/GATT-rediscovery/handshake cycle - acceptable
+for a 3-entry watch, not yet known to be acceptable for a much longer
+history.
+
+**Genuinely open**: the *real* fix - understanding how the watch
+actually assigns/numbers handles per connection well enough to derive a
+correct trigger for the 2nd, 3rd, ... `/Data` fetch without a
+reconnect - is still unsolved. The reconnect-every-time workaround is a
+confirmed-safe (if slow) way to get a multi-entry sync working, not a
+substitute for that understanding.

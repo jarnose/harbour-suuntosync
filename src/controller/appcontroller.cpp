@@ -13,11 +13,22 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDateTime>
+#include <QTimer>
 
 #include <algorithm>
 #include <stdexcept>
 
 namespace {
+
+// See AppController::reconnectWatch()'s doc comment in the header for why
+// this exists at all. kReconnectSettleMs is a guess, not measured against
+// real BlueZ/watch behaviour (disconnectFromDevice() has no completion
+// signal to wait on instead) - long enough that a real disconnect should
+// have landed before Connect() is asked to race it, short enough not to
+// make a multi-entry sync glacially slow.
+constexpr int kReconnectSettleMs = 1500;
+constexpr int kWhiteboardReadyPollIntervalMs = 250;
+constexpr int kWhiteboardReadyTimeoutMs = 15000;
 
 QString dbPath()
 {
@@ -495,7 +506,6 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
     }
 
     const QString logbookId = logbookIds.at(index);
-    const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
     // Capturing "failures" (a const QStringList& parameter) by value would
     // capture it as a *const* QStringList regardless of "mutable" - the
     // const comes from the parameter's own reference type, not from the
@@ -503,25 +513,80 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
     // local copy sidesteps that: capturing a plain (non-reference,
     // non-const) QStringList by value gives an ordinary appendable member.
     QStringList failuresCopy = failures;
-    m_whiteboardClient->fetchLogbookData(path,
-            [this, logbookIds, index, succeeded, failuresCopy, logbookId]
-            (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
-        if (!ok) {
-            failuresCopy.append(tr("%1: %2").arg(logbookId, error));
-        } else {
-            try {
-                const Logbook::DecodedWorkout decoded = Logbook::decode(data);
-                const Workout w = workoutFromDecoded(logbookId, decoded);
-                QString storeError;
-                if (m_workoutStore->upsert(w, &storeError))
-                    ++succeeded;
-                else
-                    failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
-            } catch (const std::exception &e) {
-                failuresCopy.append(tr("%1: decode failed (%2)")
-                                             .arg(logbookId, QString::fromUtf8(e.what())));
-            }
+
+    // See fetchWatchEntryAt()'s doc comment in the header - the /Data
+    // shortcut only works for the first fetch per BLE connection, so every
+    // entry (including the first - a fresh connection is what made the
+    // first fetch work to begin with) gets its own fresh connection.
+    reconnectWatch([this, logbookIds, index, succeeded, failuresCopy, logbookId]
+                    (bool reconnectOk) mutable {
+        if (!reconnectOk) {
+            failuresCopy.append(tr("%1: could not reconnect to the watch before fetching")
+                                         .arg(logbookId));
+            fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+            return;
         }
-        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+
+        const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
+        m_whiteboardClient->fetchLogbookData(path,
+                [this, logbookIds, index, succeeded, failuresCopy, logbookId]
+                (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
+            if (!ok) {
+                failuresCopy.append(tr("%1: %2").arg(logbookId, error));
+            } else {
+                try {
+                    const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+                    const Workout w = workoutFromDecoded(logbookId, decoded);
+                    QString storeError;
+                    if (m_workoutStore->upsert(w, &storeError))
+                        ++succeeded;
+                    else
+                        failuresCopy.append(
+                                tr("%1: failed to save (%2)").arg(logbookId, storeError));
+                } catch (const std::exception &e) {
+                    failuresCopy.append(tr("%1: decode failed (%2)")
+                                                 .arg(logbookId, QString::fromUtf8(e.what())));
+                }
+            }
+            fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+        });
+    });
+}
+
+void AppController::reconnectWatch(std::function<void(bool)> callback)
+{
+    if (!m_pairedWatch.isValid()) {
+        callback(false);
+        return;
+    }
+
+    m_bluezAdapter->disconnectFromDevice(m_pairedWatch.objectPath);
+    // disconnectFromDevice() alone doesn't touch MdsWhiteboardClient's own
+    // state (only forgetWatch() ever calls detach() otherwise) - without
+    // this, m_whiteboardReady would stay stale-true from before the
+    // disconnect, and pollForWhiteboardReady() below would report "ready"
+    // immediately without ever having waited for the reconnect to actually
+    // happen. detach() flips it to false (readyChanged(false)) itself.
+    m_whiteboardClient->detach();
+
+    QTimer::singleShot(kReconnectSettleMs, this, [this, callback]() {
+        m_bluezAdapter->connectToDevice(m_pairedWatch.objectPath);
+        pollForWhiteboardReady(0, callback);
+    });
+}
+
+void AppController::pollForWhiteboardReady(int elapsedMs, std::function<void(bool)> callback)
+{
+    if (m_whiteboardReady) {
+        callback(true);
+        return;
+    }
+    if (elapsedMs >= kWhiteboardReadyTimeoutMs) {
+        callback(false);
+        return;
+    }
+    QTimer::singleShot(kWhiteboardReadyPollIntervalMs, this,
+                        [this, elapsedMs, callback]() {
+        pollForWhiteboardReady(elapsedMs + kWhiteboardReadyPollIntervalMs, callback);
     });
 }

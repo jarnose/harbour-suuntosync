@@ -61,6 +61,11 @@ void testCyclingSummary()
             Summary::decode(readFile("fixtures/logbook_summary_cycling.bin"));
 
     checkInt(s.valid ? 1 : 0, 1, "valid");
+    // Header.DateTime is local64: local-time ms in the low 56 bits, a
+    // quarter-hour UTC offset in the top byte. Raw 864692914206440432 is
+    // 2026-08-03 10:01:45.2 local at +3h, so 07:01:45.2 UTC - 800ms before
+    // the ride's first GPS fix, which is the right side of it.
+    checkInt(s.startTimeMs, 1785740505200LL, "startTimeMs (local64 decoded to UTC)");
     checkInt(s.activityId, 4, "activityId (cycling, same as the /Data decode)");
     checkDouble(s.durationSeconds, 4736.150, 0.001, "durationSeconds (total elapsed)");
     checkDouble(s.pauseDurationSeconds, 2436.334, 0.001, "pauseDurationSeconds");

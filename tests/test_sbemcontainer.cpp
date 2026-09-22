@@ -44,8 +44,27 @@ std::vector<uint8_t> readFile(const std::string &path)
 
 } // namespace
 
+void testDecodeLocal64()
+{
+    // The cycling capture's time base: +3h offset (0x0c quarter-hours) over
+    // 2026-08-03 10:01:45.200 local.
+    check(Sbem::decodeLocal64(864692914206440432ULL) == 1785740505200LL,
+          "decodeLocal64 (+3h, Finnish summer time)");
+    // The walking capture's, which lands exactly on its first GPS fix.
+    check(Sbem::decodeLocal64(864692916659969232ULL) == 1788194034000LL,
+          "decodeLocal64 matches the walking fixture's first fix");
+    // A plain UTC timestamp (offset byte 0) must come back unchanged, and a
+    // negative offset has to widen the other way.
+    check(Sbem::decodeLocal64(1785740505200ULL) == 1785740505200LL,
+          "decodeLocal64 with no offset");
+    check(Sbem::decodeLocal64(1785740505200ULL | (uint64_t(0xECu) << 56))
+              == 1785740505200LL + 5 * 3600 * 1000LL,
+          "decodeLocal64 with a -5h offset");
+}
+
 int main()
 {
+    testDecodeLocal64();
     const std::vector<uint8_t> compressed = readFile("fixtures/logbook_data_heatshrink.bin");
     check(compressed.size() == 27719, "fixture is the expected 27719 compressed bytes");
 

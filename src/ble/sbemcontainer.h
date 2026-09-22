@@ -27,6 +27,17 @@ namespace Sbem {
 // Throws std::runtime_error on a Heatshrink decode error (malformed input).
 std::vector<uint8_t> heatshrinkDecompress(const std::vector<uint8_t> &compressed);
 
+// Decodes the schema's "local64" timestamp format to ordinary UTC
+// milliseconds since the epoch. The low 56 bits are milliseconds since the
+// epoch in *local* time; the top byte is the UTC offset in quarter-hours
+// (signed, so west of Greenwich works too).
+//
+// Confirmed on two independent real workouts: the cycling capture's base
+// timestamp decodes to 800ms before its first GPS fix and the walking one's
+// to exactly its first fix, both with a +3h offset (0x0c = 12 quarter-hours)
+// matching Finnish summer time.
+int64_t decodeLocal64(uint64_t raw);
+
 struct Chunk {
     // 16-bit, not 8: a chunk id of 0xFF means the real id is the next two
     // bytes, little-endian (confirmed by decompiling libmds.so's

@@ -1754,3 +1754,48 @@ Still not decoded, all of it present in the payloads and listed in
 HR/speed/power zone durations in the Header, the running-dynamics group
 (ground contact time, vertical oscillation, flight time, balance), battery,
 GPS quality (EHPE/EVPE/satellite count), and lap/pause events.
+
+## `local64`: the timestamp format, and the GPS-less workout it broke
+
+Jarno recorded a 15-second test workout. `/Entries` listed it fine
+(`1790079628`), but "Sync from watch" didn't show it. A workout that short
+never gets a GPS fix - and that turned out to expose a real gap.
+
+`Logbook::decode()` anchored its clock **only** on chunk 0x0c, the GPS
+chunk: that chunk carries an absolute UTC timestamp, every other chunk
+carries a signed 16-bit delta. With no GPS fix there is no 0x0c chunk at
+all, so the clock was never anchored, `startTimeMs` stayed 0, and the
+workout sorted to the bottom of the list dated 1970 - present, but easy to
+miss entirely.
+
+The format's own answer was already in the descriptor map: chunk **0x01** is
+descriptor 33, `TimeISO8601` with format `local64,baseonly` - the workout's
+time base, written once, which every delta is relative to. The decoder was
+skipping it.
+
+`local64` is not epoch milliseconds, which is worth stating plainly because
+this decoder had it wrong in a second place too (`Summary::decode()` was
+reading `Header.DateTime` as a plain `uint64`, producing a nonsense date
+nothing happened to use yet):
+
+```
+low 56 bits : milliseconds since the epoch in LOCAL time
+top 8 bits  : UTC offset in quarter-hours, signed
+UTC ms      = low56 - offsetQuarterHours * 15 * 60 * 1000
+```
+
+Confirmed on two independent captures, both `0x0c` = 12 quarter-hours = +3h,
+Finnish summer time. The walking capture's base decodes to exactly its first
+GPS fix (1788194034000); the cycling one's to 800 ms before its first fix,
+which is the right side of it. `Sbem::decodeLocal64()` implements it, with
+no-offset and negative-offset cases covered in the tests.
+
+Three fixes followed:
+- `Logbook::decode()` seeds its clock from chunk 0x01, so a workout with no
+  GPS still has a real start and end time. Where both anchors exist the
+  answer is unchanged - the walking fixture's asserted `startTimeMs` is the
+  same either way, which is the regression test for that.
+- `Summary::decode()` decodes `Header.DateTime` properly.
+- `applySummary()` now takes start and stop time from the Summary when it
+  has them, since the watch's own recorded start beats anything derived from
+  a sample stream that may have nothing in it.

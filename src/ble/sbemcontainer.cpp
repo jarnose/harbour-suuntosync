@@ -66,6 +66,13 @@ std::vector<uint8_t> heatshrinkDecompress(const std::vector<uint8_t> &compressed
     return out;
 }
 
+int64_t decodeLocal64(uint64_t raw)
+{
+    const int64_t localMs = static_cast<int64_t>(raw & 0x00FFFFFFFFFFFFFFull);
+    const int offsetQuarterHours = static_cast<int8_t>(raw >> 56);
+    return localMs - static_cast<int64_t>(offsetQuarterHours) * 15 * 60 * 1000;
+}
+
 std::vector<Chunk> parseContainer(const std::vector<uint8_t> &decompressed)
 {
     std::vector<Chunk> chunks;

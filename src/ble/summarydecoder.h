@@ -30,7 +30,9 @@ struct DecodedSummary
     bool valid = false;         // false = no Header chunk found in the payload
 
     int activityId = 0;
-    uint64_t startTimeMs = 0;   // Header.DateTime
+    // Header.DateTime, converted from the schema's local64 format to
+    // ordinary UTC milliseconds (see Sbem::decodeLocal64()).
+    int64_t startTimeMs = 0;
     double durationSeconds = 0; // Header.Duration, total elapsed
     double pauseDurationSeconds = 0;
     // Header.Duration minus Header.PauseDuration. On the one workout with a

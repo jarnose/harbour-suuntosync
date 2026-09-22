@@ -13,7 +13,7 @@ namespace {
 // checked against a real captured Summary before being written down.
 constexpr uint16_t kHeaderChunk = 0x1b;
 
-constexpr size_t kOffsetDateTime = 8;       // local64, ms since epoch
+constexpr size_t kOffsetDateTime = 8;       // local64, not plain epoch ms
 constexpr size_t kOffsetDuration = 16;      // uint32, milliseconds
 constexpr size_t kOffsetPauseDuration = 20; // uint32, milliseconds
 constexpr size_t kOffsetDistance = 24;      // uint32, metres
@@ -63,7 +63,8 @@ DecodedSummary decode(const std::vector<uint8_t> &payload)
 
         const std::vector<uint8_t> &v = chunk.value;
         result.valid = true;
-        result.startTimeMs = readAt<uint64_t>(v, kOffsetDateTime);
+        // local64, not plain epoch milliseconds - see Sbem::decodeLocal64().
+        result.startTimeMs = Sbem::decodeLocal64(readAt<uint64_t>(v, kOffsetDateTime));
         result.durationSeconds = readAt<uint32_t>(v, kOffsetDuration) / 1000.0;
         result.pauseDurationSeconds = readAt<uint32_t>(v, kOffsetPauseDuration) / 1000.0;
         result.movingTimeSeconds = result.durationSeconds - result.pauseDurationSeconds;

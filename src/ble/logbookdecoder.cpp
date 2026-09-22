@@ -126,7 +126,18 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
     size_t altitudeSamplesBeforeEvent = 0;
 
     for (const Sbem::Chunk &chunk : chunks) {
-        if (chunk.id == 0x0c && chunk.value.size() == 20) {
+        // Chunk 0x01 is the workout's own time base (descriptor 33,
+        // TimeISO8601 "baseonly", local64) - every other chunk's leading
+        // int16 is a delta against it. Seeding from it matters for a
+        // workout that never got a GPS fix: chunk 0x0c was the only other
+        // anchor, so without this a short indoor session decoded with a
+        // start time of 0 and sorted to the bottom of the list as 1970.
+        if (chunk.id == 0x01 && chunk.value.size() == sizeof(uint64_t) && !haveCurrentMs) {
+            uint64_t raw = 0;
+            std::memcpy(&raw, chunk.value.data(), sizeof(uint64_t));
+            currentMs = static_cast<uint64_t>(Sbem::decodeLocal64(raw));
+            haveCurrentMs = true;
+        } else if (chunk.id == 0x0c && chunk.value.size() == 20) {
             currentMs = 0;
             std::memcpy(&currentMs, chunk.value.data() + 2, sizeof(uint64_t));
             haveCurrentMs = true;

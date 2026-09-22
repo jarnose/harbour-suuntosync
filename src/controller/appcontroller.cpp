@@ -90,6 +90,13 @@ void applySummary(Workout *w, const Summary::DecodedSummary &s)
     if (!s.valid)
         return;
     w->activityId = s.activityId;
+    // A workout that never got a GPS fix has no timeline anchor in /Data
+    // beyond its time base, so prefer the watch's own recorded start here,
+    // and derive the end from it rather than leaving a stale value.
+    if (s.startTimeMs > 0) {
+        w->startTime = s.startTimeMs;
+        w->stopTime = s.startTimeMs + static_cast<qint64>(s.durationSeconds * 1000);
+    }
     w->totalTime = s.movingTimeSeconds;
     w->totalDistance = s.distanceMeters;
     if (s.stepCount > 0)

@@ -253,6 +253,10 @@ void AppController::testLogbookFetch(const QString &logbookId)
         emit logbookTestResult(tr("A logbook fetch is already in flight"));
         return;
     }
+    if (m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("A watch sync is already in progress"));
+        return;
+    }
 
     m_logbookTestInFlight = true;
     const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
@@ -305,12 +309,18 @@ void AppController::testEntriesFetch()
         return;
     }
 
+    if (m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("A watch sync is already in progress"));
+        return;
+    }
+
     // Replaced the earlier attempt at reusing fetchLogbookData()'s
     // TYPE=0x10 stream-trigger mechanism (confirmed not to work for
     // /Entries on real hardware, see docs/logbook-data-format.md) with
     // fetchLogEntries(), built from decompiling libmds.so's own
     // protocol_v9 structure-deserializer code - a TYPE=0x0D handle-fetch
-    // request, not a stream trigger. Not yet run on real hardware.
+    // request, not a stream trigger. Confirmed working on real hardware
+    // 2026-09-22 (see the doc's "Gate: PASSED" note).
     m_logbookTestInFlight = true;
     m_whiteboardClient->fetchLogEntries(QStringLiteral("/Logbook/Entries"),
             [this](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {
@@ -439,5 +449,72 @@ void AppController::syncCloudWorkouts()
 
             loadCachedWorkouts();
         });
+    });
+}
+
+void AppController::syncWatchWorkouts()
+{
+    if (!m_whiteboardReady || m_workoutSyncInProgress || m_logbookTestInFlight)
+        return;
+
+    m_workoutSyncInProgress = true;
+    emit workoutSyncInProgressChanged();
+
+    m_whiteboardClient->fetchLogEntries(QStringLiteral("/Logbook/Entries"),
+            [this](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {
+        if (!ok) {
+            m_workoutSyncInProgress = false;
+            emit workoutSyncInProgressChanged();
+            emit errorOccurred(tr("Failed to list watch entries: %1").arg(error));
+            return;
+        }
+
+        QVector<QString> logbookIds;
+        logbookIds.reserve(static_cast<int>(entries.size()));
+        for (const LogEntries::Entry &entry : entries)
+            logbookIds.append(QString::number(entry.id));
+
+        fetchWatchEntryAt(logbookIds, 0, 0, 0);
+    });
+}
+
+void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int index,
+                                       int succeeded, int failed)
+{
+    if (index >= logbookIds.size()) {
+        m_workoutSyncInProgress = false;
+        emit workoutSyncInProgressChanged();
+        loadCachedWorkouts();
+        if (failed > 0) {
+            emit errorOccurred(tr("Synced %1 of %2 watch workouts (%3 failed)")
+                                        .arg(succeeded)
+                                        .arg(logbookIds.size())
+                                        .arg(failed));
+        }
+        return;
+    }
+
+    const QString logbookId = logbookIds.at(index);
+    const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
+    m_whiteboardClient->fetchLogbookData(path,
+            [this, logbookIds, index, succeeded, failed, logbookId]
+            (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
+        Q_UNUSED(error);
+        if (ok) {
+            try {
+                const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+                const Workout w = workoutFromDecoded(logbookId, decoded);
+                QString storeError;
+                if (m_workoutStore->upsert(w, &storeError))
+                    ++succeeded;
+                else
+                    ++failed;
+            } catch (const std::exception &) {
+                ++failed;
+            }
+        } else {
+            ++failed;
+        }
+        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failed);
     });
 }

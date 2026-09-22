@@ -6,6 +6,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVector>
 
 class TokenVault;
 class CloudAccountStore;
@@ -109,6 +110,22 @@ public:
     // logbookTestResult() or the failure.
     Q_INVOKABLE void testEntriesFetch();
 
+    // The real end-user "sync directly from the watch" action, now that
+    // both halves are proven on real hardware:
+    // MdsWhiteboardClient::fetchLogEntries() (see testEntriesFetch()) lists
+    // the watch's own logbook entries, then each one is fetched and decoded
+    // the same way testLogbookFetch() does a single entry - sequentially,
+    // one at a time (not fired concurrently), since fetchLogbookData()
+    // refuses a second bulk fetch while one's still active. Uses the same
+    // workoutSyncInProgress property as syncCloudWorkouts() (the two share
+    // one "a sync is running" concept, and mutually exclude each other - see
+    // the .cpp) and refreshes workoutModel once at the end rather than
+    // per-entry. A single entry failing to fetch/decode doesn't abort the
+    // rest; the final tally is reported via errorOccurred() only if at
+    // least one entry failed, so a fully successful sync stays silent like
+    // syncCloudWorkouts() does.
+    Q_INVOKABLE void syncWatchWorkouts();
+
     // Signs in to the Suunto cloud account. Progress/result surface via
     // cloudLoginInProgress and cloudAccountChanged (success) /
     // errorOccurred (failure) - no separate "login result" signal, since
@@ -139,6 +156,13 @@ signals:
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
     void onConnectFinished(const QString &objectPath, bool ok, const QString &error);
+    // The sequential per-entry loop behind syncWatchWorkouts() - fetches
+    // logbookIds[index], then recurses to index+1 (or finishes at the end),
+    // tallying succeeded/failed as it goes. A plain index/counts recursion
+    // rather than an index member variable since only one such loop can
+    // ever be running at a time anyway (guarded by workoutSyncInProgress).
+    void fetchWatchEntryAt(const QVector<QString> &logbookIds, int index, int succeeded,
+                            int failed);
 
     TokenVault *m_tokenVault;
     CloudAccountStore *m_cloudAccountStore;

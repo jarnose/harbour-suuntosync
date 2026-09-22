@@ -1383,3 +1383,32 @@ pagination (the `StartAfterId` parameter) and a different alignment
 selector remain untested - not a reason to doubt this result, just an
 honest note that "works for a 3-entry list" isn't yet "works for any
 list size."
+
+## Wired into a real "sync from the watch" action
+
+Both halves - listing entries (`fetchLogEntries()`) and fetching one
+entry's full data (`fetchLogbookData()`/`Logbook::decode()`, proven
+since breakthrough #4) - are now proven separately on real hardware, so
+`AppController::syncWatchWorkouts()` chains them into the actual
+end-user action Phase 6 has been building toward: list the watch's
+entries, then fetch+decode+save each one, with no logbook id ever
+typed by hand.
+
+Requests are sequenced strictly one at a time
+(`AppController::fetchWatchEntryAt()`, a plain index-recursion over the
+entry list) rather than fired concurrently, since
+`MdsWhiteboardClient::fetchLogbookData()` already refuses a second bulk
+fetch while one's active. A single entry's fetch or decode failing
+doesn't abort the rest - it's tallied and skipped, and the whole sync
+only reports via `errorOccurred()` if at least one entry failed
+(mirroring `syncCloudWorkouts()`'s silent-on-success shape). Shares the
+same `workoutSyncInProgress` property as cloud sync, and the two now
+mutually exclude each other (and the manual `testLogbookFetch()`/
+`testEntriesFetch()` probes), since none of these were ever meant to
+run two-at-once against the same `MdsWhiteboardClient`.
+
+`qml/pages/MainPage.qml` gained a "Sync from watch" pull-down menu item
+next to the existing cloud one, visible whenever `whiteboardReady` is
+true. **Not yet run on real hardware** - the individual pieces are
+proven, but this specific chaining (list → sequential per-entry fetch →
+final tally) hasn't itself been exercised end to end on the Race yet.

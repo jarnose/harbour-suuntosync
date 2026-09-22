@@ -6,6 +6,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 class TokenVault;
@@ -158,11 +159,14 @@ private:
     void onConnectFinished(const QString &objectPath, bool ok, const QString &error);
     // The sequential per-entry loop behind syncWatchWorkouts() - fetches
     // logbookIds[index], then recurses to index+1 (or finishes at the end),
-    // tallying succeeded/failed as it goes. A plain index/counts recursion
-    // rather than an index member variable since only one such loop can
-    // ever be running at a time anyway (guarded by workoutSyncInProgress).
+    // tallying succeeded and collecting one human-readable line per failure
+    // (id + the actual fetch/decode/save error) as it goes, so a partial
+    // sync's errorOccurred() message says *what* went wrong per entry, not
+    // just how many failed. A plain index/counts recursion rather than an
+    // index member variable since only one such loop can ever be running at
+    // a time anyway (guarded by workoutSyncInProgress).
     void fetchWatchEntryAt(const QVector<QString> &logbookIds, int index, int succeeded,
-                            int failed);
+                            const QStringList &failures);
 
     TokenVault *m_tokenVault;
     CloudAccountStore *m_cloudAccountStore;

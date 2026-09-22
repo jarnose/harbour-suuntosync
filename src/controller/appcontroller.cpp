@@ -474,22 +474,22 @@ void AppController::syncWatchWorkouts()
         for (const LogEntries::Entry &entry : entries)
             logbookIds.append(QString::number(entry.id));
 
-        fetchWatchEntryAt(logbookIds, 0, 0, 0);
+        fetchWatchEntryAt(logbookIds, 0, 0, {});
     });
 }
 
 void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int index,
-                                       int succeeded, int failed)
+                                       int succeeded, const QStringList &failures)
 {
     if (index >= logbookIds.size()) {
         m_workoutSyncInProgress = false;
         emit workoutSyncInProgressChanged();
         loadCachedWorkouts();
-        if (failed > 0) {
-            emit errorOccurred(tr("Synced %1 of %2 watch workouts (%3 failed)")
+        if (!failures.isEmpty()) {
+            emit errorOccurred(tr("Synced %1 of %2 watch workouts. Failed: %3")
                                         .arg(succeeded)
                                         .arg(logbookIds.size())
-                                        .arg(failed));
+                                        .arg(failures.join(QStringLiteral("; "))));
         }
         return;
     }
@@ -497,10 +497,11 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
     const QString logbookId = logbookIds.at(index);
     const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
     m_whiteboardClient->fetchLogbookData(path,
-            [this, logbookIds, index, succeeded, failed, logbookId]
+            [this, logbookIds, index, succeeded, failures, logbookId]
             (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
-        Q_UNUSED(error);
-        if (ok) {
+        if (!ok) {
+            failures.append(tr("%1: %2").arg(logbookId, error));
+        } else {
             try {
                 const Logbook::DecodedWorkout decoded = Logbook::decode(data);
                 const Workout w = workoutFromDecoded(logbookId, decoded);
@@ -508,13 +509,12 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 if (m_workoutStore->upsert(w, &storeError))
                     ++succeeded;
                 else
-                    ++failed;
-            } catch (const std::exception &) {
-                ++failed;
+                    failures.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
+            } catch (const std::exception &e) {
+                failures.append(tr("%1: decode failed (%2)")
+                                         .arg(logbookId, QString::fromUtf8(e.what())));
             }
-        } else {
-            ++failed;
         }
-        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failed);
+        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failures);
     });
 }

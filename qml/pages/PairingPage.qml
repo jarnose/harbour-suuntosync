@@ -109,6 +109,15 @@ Page {
                 text: qsTr("Test Whiteboard (GET /Logbook/Entries)")
                 onClicked: AppController.testWhiteboard()
             }
+            MenuItem {
+                // See AppController::testEntriesFetch()'s doc comment -
+                // the cheap experiment towards listing workouts without a
+                // hand-typed id: tries the same bulk-fetch shortcut that
+                // already works for /Data, directly against /Entries.
+                visible: AppController.watchConnected
+                text: qsTr("Test /Entries shortcut")
+                onClicked: AppController.testEntriesFetch()
+            }
         }
 
         delegate: ListItem {

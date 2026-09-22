@@ -14,6 +14,7 @@
 #include <QDir>
 #include <QDateTime>
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace {
@@ -290,6 +291,42 @@ void AppController::testLogbookFetch(const QString &logbookId)
                                             .arg(data.size())
                                             .arg(QString::fromUtf8(e.what())));
         }
+    });
+}
+
+void AppController::testEntriesFetch()
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight) {
+        emit logbookTestResult(tr("A logbook fetch is already in flight"));
+        return;
+    }
+
+    m_logbookTestInFlight = true;
+    m_whiteboardClient->fetchLogbookData(QStringLiteral("/Logbook/Entries"),
+            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(tr("/Entries fetch failed (times out if the shortcut "
+                                       "doesn't work for this resource): %1").arg(error));
+            return;
+        }
+
+        // QByteArray::toHex() rather than QString::asprintf() (Qt 5.5+,
+        // avoids repeating this project's earlier "newer Qt API than
+        // Sailfish actually ships" mistakes with QRandomGenerator/
+        // currentSecsSinceEpoch() - toHex() has existed since Qt 4).
+        const size_t previewLen = std::min<size_t>(data.size(), 64);
+        const QByteArray hexPreview = QByteArray(reinterpret_cast<const char *>(data.data()),
+                static_cast<int>(previewLen)).toHex();
+
+        emit logbookTestResult(tr("OK - /Entries shortcut worked. %1 bytes, first %2 hex: %3")
+                                        .arg(data.size())
+                                        .arg(previewLen)
+                                        .arg(QString::fromLatin1(hexPreview)));
     });
 }
 

@@ -843,3 +843,66 @@ conditional (`> 0`) the same way those already are, rather than passing
 `source` through to gate them more precisely - accepting the same
 small, already-accepted tradeoff (a genuinely-zero cloud value would
 also be hidden) the existing fields already live with.
+
+## What `libmds.so` says about `/Entries` (and altitude, as a bonus)
+
+Picking the `/Entries`-listing question back up, Jarno asked whether the
+official Android app's APK could help. Disassembling its native
+`libmds.so` (dynamic C++ symbols intact - class/method names, not just
+addresses) turned up real, current answers rather than more guessing:
+
+- **`getEntries`/`getData`/`getDescriptors`/`getSummary` are all thin
+  wrappers around one generic mechanism.** `SDS::Logbook::getEntries()`
+  doesn't hand-roll any binary protocol itself - it calls
+  `SDS::WB::Sync<SDS::JsonBody>::op(...)`, the exact same generic
+  "Whiteboard sync" call every other Logbook resource method uses (all
+  found as real exported symbols: `SDS::Logbook::getData`,
+  `getDescriptors`, `getSummary`, `getDataBinaryFromDevice`,
+  `readResourceById`, `parsePath`). **This confirms the handle-walk this
+  document spent so much effort on for `/Data` is not `/Data`-specific at
+  all** - it's `/Entries`'s mechanism too, implemented once, generically,
+  underneath every Logbook call. Whatever is eventually learned about it
+  from one resource should generalize to the others.
+- **The actual wire-level serializer has a name**: `whiteboard::
+  protocol_v9::Serializer`/`Deserializer`/`ChunkSerializer`/
+  `UnknownStructureDeserializer` - a real, versioned, general-purpose
+  binary RPC layer, not ad-hoc per-resource code. `UnknownStructureDeserializer`
+  in particular strongly suggests it deserializes structures generically
+  *using the same kind of self-describing schema* this project already
+  found and reverse-engineered by hand (`docs/sml-schema-descriptors.md`'s
+  `<PTH>`/`<FRM>`/`<GRP>` catalog) - i.e. the Descriptors mechanism isn't
+  a side detail, it's *how the generic deserializer knows what shape to
+  expect*.
+- **This generic layer's actual implementation is not in any public
+  repo.** Suunto's own open-source firmware SDK,
+  [`movesense-device-lib`](https://bitbucket.org/movesense/movesense-device-lib),
+  publishes `MovesenseCoreLib/include/whiteboard/` - real headers,
+  confirmed to be the same Whiteboard framework - but only the
+  *device/firmware*-side interfaces (`ResourceTree`, `ResourceClient`,
+  `ResourceProvider`), not the phone-side path-to-descriptor-id
+  resolution logic `protocol_v9` implements. That part stays proprietary,
+  compiled only into `libmds.so` - see `docs/sml-schema-descriptors.md`'s
+  "Confirmed against the real source" section for what *was* found there
+  (the SBEM format itself, fully confirmed against Suunto's own public
+  header, including a complete explanation of the `<GRP>` mechanism this
+  project had only partially worked out empirically).
+- **Bonus, unprompted confirmation of the altitude finding**:
+  `SDS::LogbookDecoder::applyAltitudeOffsets(SDS::SampleData&)` and
+  `applyTrackRunningCorrection(SDS::SampleData&)` exist as real functions
+  in the app's own decode pipeline - i.e. the app *does* apply a
+  client-side correction to altitude (and to GPS/pace, "track running
+  correction") after decoding the raw watch data, before displaying it.
+  This is exactly the "DEM/map-correction" hypothesis this document's
+  altitude section proposed as the leading explanation for why no raw
+  byte in `/Data` matched the app-displayed altitude - now corroborated
+  by a real function name in the app doing exactly that, not just a
+  plausible guess.
+
+**Practical next step, cheap because it reuses existing infrastructure
+entirely**: since `/Entries` is now confirmed to go through the identical
+generic mechanism `/Data`'s bulk-fetch shortcut already works against,
+the natural, low-cost experiment is trying
+`MdsWhiteboardClient::fetchLogbookData()` - already fully generic, not
+`/Data`-specific in its own implementation - directly against
+`"/Logbook/Entries"` and seeing what comes back, before investing more
+effort in disassembling `protocol_v9` itself.

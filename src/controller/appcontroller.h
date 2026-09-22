@@ -95,6 +95,24 @@ public:
     // does persist.
     Q_INVOKABLE void testLogbookFetch(const QString &logbookId);
 
+    // Cheap experiment towards listing a watch's workouts without typing
+    // in a known id by hand (see docs/logbook-data-format.md's "What
+    // libmds.so says about /Entries" section): disassembling the official
+    // app's native library confirmed /Entries goes through the exact same
+    // generic bulk-fetch mechanism /Data's shortcut already works
+    // against, so this just calls
+    // MdsWhiteboardClient::fetchLogbookData("/Logbook/Entries", ...)
+    // directly - no new protocol code, reusing what's already proven for
+    // /Data. Does not attempt Logbook::decode() (that assumes the SBEM0103
+    // /Data format specifically, which /Entries's actual response shape
+    // is not confirmed to match) or persist anything - reports raw byte
+    // count and a hex preview via logbookTestResult() so the result can be
+    // inspected by hand. A timeout (nothing collected) is itself a real,
+    // informative result: it would mean /Entries does *not* answer to the
+    // same shortcut, and the elaborate handle-walk genuinely is required
+    // for it even though it isn't for /Data.
+    Q_INVOKABLE void testEntriesFetch();
+
     // Signs in to the Suunto cloud account. Progress/result surface via
     // cloudLoginInProgress and cloudAccountChanged (success) /
     // errorOccurred (failure) - no separate "login result" signal, since

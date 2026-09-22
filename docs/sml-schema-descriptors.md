@@ -50,36 +50,102 @@ app-install side).
   alone.
 
 **Open** (next concrete work, not done yet):
-1. **The exact 2-byte field-ID encoding.** Every entry is preceded by what
-   looks like a little-endian uint16 (values increasing roughly
-   sequentially, e.g. 0x0020, 0x0021, 0x0023, ... in the order fields were
-   captured) - but the precise byte offset/boundary wasn't nailed down
-   before this session paused; the raw capture (`wb_traffic.tsv` in that
-   session's scratchpad, or a fresh capture) needs another careful pass to
-   confirm exactly which 2 bytes are the ID for each entry and rule out an
-   off-by-one.
+1. ~~The exact 2-byte field-ID encoding~~ - **resolved, see "Confirmed
+   against the real source" below**: these aren't SBEM chunk ids at all,
+   they're `Descriptor::id_t` values from a completely different,
+   larger-range id space.
 2. **Which exact request produces this Descriptors response**, and whether
    it's per-logbook-entry or a fixed/global schema (i.e. does every watch
    firmware version return the identical descriptor list once, cacheable,
    or does it vary per logbook entry depending on which SuuntoPlus Zapps
-   were active during that specific workout?).
-3. **Decoding an actual `/Logbook/byId/<id>/Data` response** using this
-   schema - i.e. does `Data` actually contain `(fieldId, value)` pairs
-   referencing these same IDs, and in what framing (length-prefixed?
-   fixed-size records per Sample?) - not yet attempted.
-4. Units/precision for several fields aren't obvious from the name alone
-   and need either cross-referencing against the public SML format or
-   empirical calibration against a known real workout (e.g. `Header.Energy`
-   - joules or kcal; `precision=` suffixes seen on some `<FRM>` tokens, e.g.
-   `uint32,precision=1,nillable=4294967295` for `Sample.Distance`, hint at a
-   scale factor and a sentinel "no data" value that need confirming).
+   were active during that specific workout?). Still open.
+3. ~~Decoding an actual `/Logbook/byId/<id>/Data` response~~ - **done, see
+   `docs/logbook-data-format.md`** - though it turned out `/Data`'s SBEM
+   chunk ids are a *separate*, much smaller id space than this document's
+   `<PTH>`/`<GRP>` catalog, not a direct match (see below).
+4. Units/precision - **the encoding is now known precisely** (see "The MOD
+   modifier string" below), but which real fields use which modifier
+   strings hasn't been re-extracted from a fresh capture yet - the
+   original capture's raw modifier strings weren't saved verbatim, only
+   the path/format pairs.
+
+## Confirmed against the real source (2026-09-22)
+
+Jarno asked whether the official Android app's APK could help with a
+*different*, still-open question (the `/Logbook/Entries` handle-walk - see
+`docs/logbook-data-format.md`). Disassembling `libmds.so` (the app's
+native Suunto/Movesense client library, ARM64, dynamic symbols intact -
+not stripped of C++ names) turned up something more valuable for *this*
+document: Suunto's own open-source firmware SDK,
+[`movesense-device-lib`](https://bitbucket.org/movesense/movesense-device-lib)
+(`MovesenseCoreLib/include/sbem/`), which is the real, public header
+declaring the exact same `SBEM0103` format this document reverse-engineered
+from scratch. Genuinely independent confirmation, not a guess:
+
+- `Sbem.hpp` declares `SBEM_VERSION_HEADER("SBEM0103")` verbatim - the
+  magic this project found empirically in `docs/logbook-data-format.md`.
+- **The `<GRP>` mystery is fully explained.** `sbemdescriptor.hpp`'s
+  `Descriptor` class has `Type_e_TagOpen`/`Type_e_TagClose`/`Type_e_Value`
+  and `isGroup()`/`groupDescriptors()`/`numOfGroupDescriptors()` - a group
+  descriptor is a structural "tag" whose value is a **list of its child
+  descriptors' ids**. That's exactly this document's `<GRP>32,36,134,210`
+  entries - a list of *descriptor ids* (this schema catalog's own
+  namespace, `Descriptor::id_t`, `uint16_t`), not SBEM chunk ids. This
+  also explains why the earlier attempt to match `<GRP>` numbers against
+  `/Data`'s actual SBEM chunk ids failed (`docs/logbook-data-format.md`'s
+  "Major breakthrough #2"): they were never the same id space to begin
+  with. `plusDescriptor()` is very likely this document's `<DELTAREF>N`
+  ("reuses descriptor N's definition with a variant") from the same
+  reason - a descriptor that extends another one, same idea as
+  `m_plusDescriptor` here.
+- **`dint16` confirmed** as "differential int16_t" (delta-encoded) -
+  matches this project's own guess when the format first appeared in the
+  raw dump, now confirmed rather than assumed. Full format enum:
+  `bool, uint8/16/32/64, int8/16/32/64, duint8/duint16 (differential
+  unsigned), dint8/dint16 (differential signed), float32/64, local64,
+  enum, utf8, bin8, utc64`.
+- **The MOD modifier string's exact grammar**: `sbemmod.hpp`'s
+  `Mod::init()` parses it as `"x<op><val>,y<op><val>"` where `<op>` is
+  one of `+-*/` - i.e. two chained linear operations (`raw x<op>val
+  y<op>val` in that order) applied to get the real physical value. This
+  is the precise mechanism behind the `precision=`/`nillable=`-style
+  suffixes seen on some `<FRM>` tokens in the raw capture (e.g.
+  `Sample.Distance`'s `uint32,precision=1,nillable=4294967295`) - not
+  re-extracted from a fresh capture yet, but the parsing rule needed to
+  do so is now known exactly rather than guessed at.
+- Reserved descriptor ids: `0` = Descriptor (a self-referential marker)
+  and `255` = Escape - a *different* reserved-255 convention than
+  `/Data`'s own SBEM chunk-level "no reading" sentinel found empirically
+  for cadence (`docs/logbook-data-format.md`) - similar idea, different
+  layer, worth not conflating the two.
+
+**What's still proprietary, not in this public repo**: the actual
+path-to-descriptor-id *resolution* wire protocol (this document's open
+item 2, and `docs/logbook-data-format.md`'s handle-walk) - `libmds.so`
+disassembly named it `whiteboard::protocol_v9` (a real, versioned,
+general-purpose binary RPC serializer/deserializer with its own
+`Serializer`/`Deserializer`/`ChunkSerializer`/
+`UnknownStructureDeserializer` classes, used generically for *every*
+Whiteboard resource, not just Logbook), but its implementation isn't in
+`movesense-device-lib`'s public headers (only interfaces like
+`ResourceTree`/`ResourceClient` are, and only for the *device*/firmware
+side, not the phone-side remote-resolution logic). Confirms the
+mechanism is real and generic (so whatever's learned about it from one
+resource generalizes to others) without handing over how to replicate it.
 
 ## Provenance
 
 Extracted by reassembling and CRC-verifying the raw Whiteboard frames from
 the same Android HCI snoop log used throughout Phase 0a/6 (see
 `~/.claude/plans/agile-hopping-harp.md`) - not from any external/public
-source. Cross-referenced against `stacksjs/ts-watches`
+source originally. Cross-referenced against `stacksjs/ts-watches`
 (`packages/ts-watches/src/drivers/suunto.ts`, MIT) purely to confirm the
 field *names* match Suunto's known public SML format; that project's parser
-itself was not used and doesn't talk BLE.
+itself was not used and doesn't talk BLE. Later corroborated against real
+primary sources (see "Confirmed against the real source" above): Suunto's
+own public `movesense-device-lib` (Bitbucket, header-only, no explicit
+license file found in the repo root at time of reading - treat as
+reference/read-only, not something to vendor) and disassembly of the
+official Android app's own `libmds.so` (reverse engineering of a locally
+possessed APK for interoperability - not decompiled source, no code
+copied, symbol names and structural observations only).

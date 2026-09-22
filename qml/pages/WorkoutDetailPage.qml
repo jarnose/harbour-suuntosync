@@ -42,7 +42,28 @@ Page {
     //-odd fields and the curated stats above are what anyone actually
     // wants, but throwing the rest away after going to the trouble of
     // decoding it would be silly.
-    property var details: workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+    // Not a binding: a cloud workout's extensions arrive from the network
+    // after the page is already up, so this is reloaded when they land.
+    property var details: []
+
+    function reloadDetails() {
+        details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+    }
+
+    Component.onCompleted: {
+        reloadDetails()
+        // No-op for a BLE workout or one already fetched - see
+        // AppController::loadCloudDetails().
+        AppController.loadCloudDetails(workoutKey)
+    }
+
+    Connections {
+        target: AppController
+        onWorkoutDetailsChanged: {
+            if (key === page.workoutKey)
+                page.reloadDetails()
+        }
+    }
 
     // Per-sample curves, already reduced to a drawable number of points -
     // see AppController::workoutSeries().

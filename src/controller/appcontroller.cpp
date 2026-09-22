@@ -301,6 +301,45 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed)
     return laps.isEmpty() ? QByteArray() : QJsonDocument(laps).toJson(QJsonDocument::Compact);
 }
 
+// Flattens an arbitrary JSON object into name -> number, joining nested
+// keys with dots. Deliberately shape-agnostic: the cloud's workout
+// "extensions" are typed by a discriminator this project has no captured
+// example of, so rather than guessing at a model, whatever numbers arrive
+// get shown under their own names. Strings and arrays are skipped - the
+// details view is a numeric table.
+void flattenJson(const QJsonObject &object, const QString &prefix, QJsonObject *out)
+{
+    for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
+        const QString name = prefix.isEmpty() ? it.key() : prefix + QLatin1Char('.') + it.key();
+        const QJsonValue value = it.value();
+        if (value.isObject()) {
+            flattenJson(value.toObject(), name, out);
+        } else if (value.isDouble() || value.isBool()) {
+            QJsonObject entry;
+            entry.insert(QStringLiteral("value"),
+                          value.isBool() ? (value.toBool() ? 1 : 0) : value.toDouble());
+            out->insert(name, entry);
+        }
+    }
+}
+
+// The cloud's per-workout extensions, turned into the same name/value rows
+// the watch's own fields already use. An extension carries its kind in a
+// "type" field, which becomes the name prefix so two extensions with a
+// similarly named number don't collide.
+QByteArray cloudDetailsJson(const QJsonObject &payload)
+{
+    QJsonObject fields;
+    for (const QJsonValue &value : payload.value(QStringLiteral("extensions")).toArray()) {
+        const QJsonObject extension = value.toObject();
+        QString type = extension.value(QStringLiteral("type")).toString();
+        if (type.isEmpty())
+            type = QStringLiteral("Extension");
+        flattenJson(extension, type, &fields);
+    }
+    return fields.isEmpty() ? QByteArray() : QJsonDocument(fields).toJson(QJsonDocument::Compact);
+}
+
 // Overlays the watch's own computed totals onto a workout decoded from
 // /Data. Everything here is exact where Logbook::decode() could only
 // approximate (see summarydecoder.h), so it wins outright; heart rate is
@@ -746,6 +785,35 @@ void AppController::syncCloudWorkouts()
                 emit errorOccurred(tr("Failed to save account: %1").arg(saveError));
 
             loadCachedWorkouts();
+        });
+    });
+}
+
+void AppController::loadCloudDetails(const QString &key)
+{
+    // Only worth a request for a cloud workout we haven't already fetched -
+    // a BLE one's details come from the watch, and re-fetching on every
+    // page open would be a request per tap.
+    if (!m_cloudAccount.isSignedIn() || key.startsWith(QStringLiteral("ble_"))
+            || !m_workoutStore->loadDetails(key).isEmpty()) {
+        return;
+    }
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, key](bool ok, const QByteArray &data, const QString &) {
+        if (!ok)
+            return;
+        m_cloudClient->fetchWorkoutDetail(QString::fromUtf8(data), key,
+                [this, key](bool detailOk, const QJsonObject &payload, const QString &) {
+            // Silent on failure: this is an enrichment, and a workout that
+            // shows its summary without the extras is still useful.
+            if (!detailOk)
+                return;
+            const QByteArray json = cloudDetailsJson(payload);
+            if (json.isEmpty())
+                return;
+            m_workoutStore->saveDetails(key, json, nullptr);
+            emit workoutDetailsChanged(key);
         });
     });
 }

@@ -161,6 +161,13 @@ public:
     // workout or one synced before this existed.
     Q_INVOKABLE QVariantList workoutDetails(const QString &key) const;
 
+    // Fetches a cloud workout's extensions - the analysis the list response
+    // doesn't carry - and merges them into workoutDetails(). Lazy and
+    // one-shot: called when a workout is opened, does nothing for a BLE
+    // workout or one already fetched, and reports completion via
+    // workoutDetailsChanged() rather than blocking the page.
+    Q_INVOKABLE void loadCloudDetails(const QString &key);
+
     // Chartable per-sample series for a BLE-synced workout: a list of
     // { name, unit, min, max, points }, where points is already reduced to
     // a fixed number of averaged buckets ready to draw. Empty for a cloud
@@ -183,6 +190,7 @@ signals:
     void whiteboardTestResult(const QString &summary);
     void logbookTestResult(const QString &summary);
     void workoutSyncInProgressChanged();
+    void workoutDetailsChanged(const QString &key);
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);

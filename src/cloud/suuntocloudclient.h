@@ -2,6 +2,7 @@
 
 #include "../store/workout.h"
 
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -43,6 +44,8 @@ public:
                                                const QString &error)>;
     using WorkoutListCallback = std::function<void(bool ok, const QVector<Workout> &workouts,
                                                       const QString &error)>;
+    using WorkoutDetailCallback = std::function<void(bool ok, const QJsonObject &workout,
+                                                        const QString &error)>;
 
     explicit SuuntoCloudClient(QObject *parent = nullptr);
 
@@ -55,6 +58,15 @@ public:
     // recent `limit` workouts, server max 100) - older-than-that pagination
     // isn't implemented yet.
     void listWorkouts(const QString &sessionKey, int limit, WorkoutListCallback callback);
+
+    // GET /v1/workouts/{key} - the same fields as the list entry plus an
+    // "extensions" array, which is where the cloud keeps the analysis the
+    // list doesn't carry. Handed back as the raw payload object rather than
+    // a struct: the extensions are typed by a discriminator and this
+    // project has no captured example to model them from, so the caller
+    // decides what to make of whatever arrives.
+    void fetchWorkoutDetail(const QString &sessionKey, const QString &workoutKey,
+                             WorkoutDetailCallback callback);
 
 private:
     QNetworkAccessManager *m_network;

@@ -116,6 +116,44 @@ void SuuntoCloudClient::login(const QString &email, const QString &password,
     });
 }
 
+void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
+                                            const QString &workoutKey,
+                                            WorkoutDetailCallback callback)
+{
+    QNetworkRequest request(QUrl(kBaseUrl + QStringLiteral("workouts/") + workoutKey));
+    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
+    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
+    request.setRawHeader("Accept-Language", "en");
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QJsonObject(), reply->errorString());
+            return;
+        }
+
+        // Same ASKO envelope as listWorkouts(), payload being one object
+        // rather than an array.
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        if (!doc.isObject()) {
+            callback(false, QJsonObject(), tr("Unexpected response from server"));
+            return;
+        }
+        const QJsonObject envelope = doc.object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            callback(false, QJsonObject(),
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+        callback(true, envelope.value(QStringLiteral("payload")).toObject(), QString());
+    });
+}
+
 void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
                                       WorkoutListCallback callback)
 {

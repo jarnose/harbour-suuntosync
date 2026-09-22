@@ -216,6 +216,106 @@ this project makes. That change has been reverted;
 it. A third-party client's habit is not the app's behaviour, and only the
 capture could tell them apart.
 
+## The watch-synced capture (2026-09-22, second run)
+
+Paired the watch to the same device and synced. This is the case the first
+capture couldn't reach, and it overturns the conclusion drawn from it.
+
+**A watch-synced upload has no `workoutBinary` at all.** Both requests
+carried exactly two parts:
+
+| part | content |
+|---|---|
+| `workoutExtensions` | `[]` |
+| `sml` | a zip, 2.3-2.5 kB |
+
+Both returned 200. So neither `workoutBinary` nor `sml` is mandatory -
+they are alternatives. A phone-recorded workout sends the binary; a
+watch-recorded one sends SML. **This project therefore never needs to
+produce Sports Tracker's legacy binary format at all**, and the
+`HeaderSerializer` transcription described above is not on the critical
+path. The fixtures and the analysis stay because they document the format,
+not because we need to write it.
+
+### What is in `sml.zip`
+
+Two JSON files - not the binary SBEM the watch serves:
+
+```
+samples.json    {"Samples": [ ... per-sample entries ... ]}
+summary.json    {"Samples": [ ... Windows ..., Header ]}
+```
+
+A samples entry:
+
+```json
+{"Attributes": {"suunto/sml": {"Sample": {"HR": 1.35}}},
+ "Source": "suunto-2352D0000247",
+ "TimeISO8601": "2026-09-22T15:20:28.430+03:00"}
+```
+
+`Source` is `"suunto-"` plus the watch serial. Events appear the same way
+(`Sample.Events[].Lap.Type`, `.Activity.ActivityType`). `summary.json`
+carries `Windows` entries plus a `Header` whose field names match the ones
+`Summary::decode()` already reads off the watch (`ActivityType`,
+`Altitude.Max/Min`, `Ascent`, `DateTime`, `Device.Info`, ...).
+
+The field names and units are the watch's own: `HR: 1.35` is hertz, the
+same canonical unit `sbemdescriptors.cpp` uses. That also closes the
+hertz-vs-bpm question left open in `appcontroller.cpp`'s cloud series
+parser - the cloud stores hertz because the watch uploads hertz.
+
+**So the upload path is a format conversion this project is already most of
+the way through**: `Sml::decode()` yields (descriptor, value, timestamp)
+triples and `Summary::decode()` yields the header fields; both need
+emitting as these two JSON documents, zipped, and posted. No new protocol
+work, no FIT encoder, no legacy binary.
+
+Fixtures: `tests/fixtures/cloud_sml_samples.json`, `cloud_sml_summary.json`.
+
+## Health data: `247.sports-tracker.com`
+
+The same sync also pushed the watch's round-the-clock data to a second
+host, over `AskoTimelineRestApi`:
+
+```
+POST v1/sleep         @Body List    GET v1/sleep/export?since=<ms>
+POST v1/sleepstages   @Body List    GET v1/sleepstages/export?since=<ms>
+POST v1/recovery      @Body List    GET v1/recovery/export?since=<ms>
+POST v1/activity      @Body List    GET v1/activity/export?since=<ms>
+```
+
+Authentication is the same `sttauthorization` session key, `content-type:
+application/json; charset=UTF-8`, nothing else. Reads stream back NDJSON
+(one JSON object per line, no ASKO envelope); writes take a plain JSON
+array. Every entry has the same two-key shape:
+
+```json
+{"timestamp": "2026-09-21T22:54:00.000+03:00", "entryData": { ... }}
+```
+
+Per endpoint, from the real capture (fixtures in `tests/fixtures/cloud_247_*.json`):
+
+- **sleep** - one entry per night: `deepSleepDuration`, `lightSleepDuration`,
+  `remSleepDuration`, `duration`, `hrAvg`, `hrMin` (hertz), `quality`,
+  `sleepId` (a unix timestamp in seconds, same convention as a logbook id),
+  `maxSpo2`, `altitude`, `avgHrv`, `avgHrvSampleCount`, `isNap`,
+  `sleepOnsetLatencyDuration`, `wakeAfterSleepOnsetDuration`,
+  `wakeBeforeOffBedDuration`.
+- **sleepstages** - 21 entries for one night: `stage` (`LIGHT`, `AWAKE`,
+  `DEEP`, and presumably `REM`) and `duration` seconds.
+- **recovery** - 61 entries at 30-minute spacing: `balance`, `stressState`.
+- **activity** - 182 entries at 10-minute spacing: `hr` (hertz),
+  `stepCount`, `energyConsumption`.
+
+Jarno's immediate question - why last night's sleep never reached the
+cloud - is answered by the capture itself: the `POST /v1/sleep` in it
+carried a `2026-09-21T22:54` entry. The data was sitting on the watch
+waiting for a sync that hadn't happened, not missing. Getting it out over
+BLE is a separate matter: the resources exist (`/Sleep/<x>/Entries` and
+`/Activity/<x>/Entries` were both in the very first string dump) but
+neither has been fetched or decoded by this project.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

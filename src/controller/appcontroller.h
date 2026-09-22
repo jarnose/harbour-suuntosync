@@ -6,6 +6,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 #include <QStringList>
 #include <QVector>
 
@@ -142,6 +143,15 @@ public:
     // text already explains that, no need to also toast it.
     Q_INVOKABLE void loadCachedWorkouts();
     Q_INVOKABLE void syncCloudWorkouts();
+
+    // A BLE-synced workout's GPS track, projected for drawing: a list of
+    // { "x": 0..1, "y": 0..1 } points, already aspect-corrected (longitude
+    // degrees are scaled by cos(latitude), so the shape isn't stretched) and
+    // fitted to the unit square with y pointing down, ready to multiply by a
+    // canvas size. Empty for a cloud workout or one synced before routes
+    // were stored. Projection is a plain equirectangular one - fine over a
+    // workout-sized area, not a map projection.
+    Q_INVOKABLE QVariantList workoutRoute(const QString &key) const;
 
 signals:
     void errorOccurred(const QString &message);

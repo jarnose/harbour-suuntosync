@@ -79,7 +79,46 @@ bool WorkoutStore::open(QString *error)
         migrate.exec(statement); // failure here just means the column already exists
     }
 
+    QSqlQuery routes(db);
+    if (!routes.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS workout_routes ("
+            "  key TEXT PRIMARY KEY,"
+            "  points BLOB NOT NULL"
+            ")"))) {
+        if (error)
+            *error = routes.lastError().text();
+        return false;
+    }
+
     return true;
+}
+
+bool WorkoutStore::saveRoute(const QString &key, const QByteArray &packedPoints, QString *error)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+            "INSERT INTO workout_routes (key, points) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET points = excluded.points"));
+    q.addBindValue(key);
+    q.addBindValue(packedPoints);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QByteArray WorkoutStore::loadRoute(const QString &key) const
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral("SELECT points FROM workout_routes WHERE key = ?"));
+    q.addBindValue(key);
+    if (!q.exec() || !q.next())
+        return QByteArray();
+    return q.value(0).toByteArray();
 }
 
 QVector<Workout> WorkoutStore::loadAll(QString *error) const

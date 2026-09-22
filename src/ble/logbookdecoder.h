@@ -62,6 +62,15 @@
 //     docs/logbook-data-format.md.
 namespace Logbook {
 
+// One GPS fix from chunk 0x0c, in degrees. The raw int32s are degrees x 1e7
+// (the watch's schema states the conversion as <MOD>PI*x/(10^7*180), i.e. it
+// stores degrees and the app converts to radians) - kept as degrees here.
+struct TrackPoint
+{
+    double latitude = 0;
+    double longitude = 0;
+};
+
 struct DecodedWorkout
 {
     int activityId = 0;
@@ -78,6 +87,10 @@ struct DecodedWorkout
     double maxAltitudeMeters = 0;
     double totalAscentMeters = 0;
     double totalDescentMeters = 0;
+    // Every GPS fix in the workout, in order - the same points the distance
+    // and speed figures above are derived from. Roughly one per second, so
+    // ~2000 for a 40-minute ride.
+    std::vector<TrackPoint> track;
 };
 
 // Throws std::runtime_error if the Heatshrink stream or SBEM0103 container

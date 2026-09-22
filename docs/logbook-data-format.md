@@ -1716,3 +1716,41 @@ Not decoded yet - the Header fields covered the immediate need.
 Not yet run on real hardware - the paging protocol is transcribed from one
 capture, and like every other shortcut in this project a wrong guess should
 surface as a timeout rather than bad data.
+
+## Training metrics and the route
+
+Everything the official app's workout view shows is now either decoded or
+accounted for.
+
+**Training metrics** all sit in the `/Summary` Header chunk immediately after
+`Header.Energy`: `EPOC` (descriptor 148), `PeakTrainingEffect` (149),
+`RecoveryTime` (150), `MAXVO2` (151) and `TraingingLoadPeak` (154, Suunto's
+own spelling). That last one is the figure the app presents as training load
+/ TSS - there is no separate TSS field in the watch's schema. The cycling
+capture has EPOC 3.1, PTE 1.2 and 180 s recovery; its VO2max and training
+load are the schema's nillable-0 "not computed", so those two are
+offset-verified rather than value-verified, which the test says explicitly.
+
+**The route** was already being decoded and thrown away: chunk 0x0c's
+`Sample.Latitude`/`Sample.Longitude` are the same fixes the distance and
+speed figures are derived from, 1820 of them in the cycling fixture, one per
+second. `Logbook::decode()` now returns them, `AppController` packs them the
+way the watch sends them (int32 pairs, degrees x 1e7) into a
+`workout_routes` table of their own so the workout list doesn't drag tens of
+kilobytes per row around, and `AppController::workoutRoute()` projects them
+for drawing - equirectangular with longitude scaled by cos(latitude), fitted
+to the unit square, north up.
+
+`WorkoutDetailPage` draws that as a polyline on a `Canvas`, with start and
+finish marked. **Deliberately no map tiles underneath**: tiles would mean
+picking a provider, network traffic on every workout view, caching and
+attribution, where the route's own shape is what makes a workout
+recognisable and costs nothing to draw offline. If tiles are wanted later
+that's an additive change - the route data is already stored.
+
+Still not decoded, all of it present in the payloads and listed in
+`sbem-chunk-map.md` if it's ever wanted: the per-window rollups in chunk
+0x1d (min/max/avg for speed, HR, cadence, power, temperature, altitude), the
+HR/speed/power zone durations in the Header, the running-dynamics group
+(ground contact time, vertical oscillation, flight time, balance), battery,
+GPS quality (EHPE/EVPE/satellite count), and lap/pause events.

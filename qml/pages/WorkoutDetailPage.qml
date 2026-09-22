@@ -26,6 +26,14 @@ Page {
     property double recoveryTime: 0
     property double maxVo2: 0
     property double trainingLoad: 0
+    // WorkoutStore key, so the route can be looked up. Empty for a workout
+    // opened from somewhere that doesn't know it.
+    property string workoutKey: ""
+
+    // [{x, y}] in 0..1, already aspect-corrected and fitted - see
+    // AppController::workoutRoute(). Empty unless this is a BLE workout
+    // synced after route storage existed.
+    property var route: workoutKey.length > 0 ? AppController.workoutRoute(workoutKey) : []
 
     function formatDuration(seconds) {
         var h = Math.floor(seconds / 3600)
@@ -85,6 +93,62 @@ Page {
             PageHeader {
                 title: page.activityName
                 description: Qt.formatDateTime(new Date(page.startTime), "d.M.yyyy HH:mm")
+            }
+
+            // The recorded GPS track, drawn as a plain polyline. Deliberately
+            // no map tiles underneath: that would mean a tile provider,
+            // network traffic and attribution, whereas the route's own shape
+            // is what makes a workout recognisable and it costs nothing to
+            // draw offline.
+            Item {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                height: visible ? width * 0.75 : 0
+                visible: page.route.length > 1
+
+                Canvas {
+                    id: routeCanvas
+                    anchors.fill: parent
+                    renderStrategy: Canvas.Cooperative
+
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        var pts = page.route
+                        if (pts.length < 2)
+                            return
+
+                        // Inset so the stroke isn't clipped at the edges.
+                        var pad = Theme.paddingMedium
+                        var w = width - 2 * pad
+                        var h = height - 2 * pad
+                        // The projection fits a square, so keep it square
+                        // here too and centre it in whatever box we got.
+                        var size = Math.min(w, h)
+                        var ox = pad + (w - size) / 2
+                        var oy = pad + (h - size) / 2
+
+                        ctx.lineWidth = 3
+                        ctx.lineJoin = "round"
+                        ctx.lineCap = "round"
+                        ctx.strokeStyle = Theme.highlightColor
+                        ctx.beginPath()
+                        ctx.moveTo(ox + pts[0].x * size, oy + pts[0].y * size)
+                        for (var i = 1; i < pts.length; ++i)
+                            ctx.lineTo(ox + pts[i].x * size, oy + pts[i].y * size)
+                        ctx.stroke()
+
+                        // Start and finish, so the direction is readable.
+                        function dot(p, colour) {
+                            ctx.fillStyle = colour
+                            ctx.beginPath()
+                            ctx.arc(ox + p.x * size, oy + p.y * size, 5, 0, 2 * Math.PI)
+                            ctx.fill()
+                        }
+                        dot(pts[0], Theme.primaryColor)
+                        dot(pts[pts.length - 1], Theme.highlightColor)
+                    }
+                }
             }
 
             Grid {

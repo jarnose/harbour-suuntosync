@@ -156,6 +156,7 @@ Page {
                 recoveryTime: model.recoveryTime,
                 maxVo2: model.maxVo2,
                 trainingLoad: model.trainingLoad,
+                workoutKey: model.key,
             })
         }
 

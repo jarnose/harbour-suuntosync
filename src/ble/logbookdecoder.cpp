@@ -147,6 +147,7 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
             std::memcpy(&latRaw, chunk.value.data() + 10, sizeof(int32_t));
             std::memcpy(&lonRaw, chunk.value.data() + 14, sizeof(int32_t));
             gpsPoints.push_back({currentMs, latRaw / 1e7, lonRaw / 1e7});
+            result.track.push_back({latRaw / 1e7, lonRaw / 1e7});
         } else if (chunk.id == 0x12 && chunk.value.size() == 3) {
             const uint8_t hr = chunk.value[2];
             if (hr > 0)

@@ -12,10 +12,14 @@
 #include "../ble/summarydecoder.h"
 
 #include <QStandardPaths>
+#include <QtMath>
+#include <QVariantMap>
 #include <QDir>
 #include <QDateTime>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <stdexcept>
 
 namespace {
@@ -56,6 +60,25 @@ Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorko
         w.totalDescent = decoded.totalDescentMeters;
     }
     return w;
+}
+
+// The GPS track, packed the way WorkoutStore stores it: pairs of
+// little-endian int32, degrees x 1e7 - the watch's own on-wire form, so
+// nothing is lost and nothing is re-scaled.
+QByteArray packTrack(const std::vector<Logbook::TrackPoint> &track)
+{
+    QByteArray out;
+    out.resize(static_cast<int>(track.size()) * 2 * static_cast<int>(sizeof(qint32)));
+    char *p = out.data();
+    for (const Logbook::TrackPoint &point : track) {
+        const qint32 lat = static_cast<qint32>(qRound(point.latitude * 1e7));
+        const qint32 lon = static_cast<qint32>(qRound(point.longitude * 1e7));
+        std::memcpy(p, &lat, sizeof(qint32));
+        p += sizeof(qint32);
+        std::memcpy(p, &lon, sizeof(qint32));
+        p += sizeof(qint32);
+    }
+    return out;
 }
 
 // Overlays the watch's own computed totals onto a workout decoded from
@@ -490,6 +513,57 @@ void AppController::syncCloudWorkouts()
     });
 }
 
+QVariantList AppController::workoutRoute(const QString &key) const
+{
+    const QByteArray packed = m_workoutStore->loadRoute(key);
+    const int count = packed.size() / (2 * static_cast<int>(sizeof(qint32)));
+    QVariantList points;
+    if (count < 2)
+        return points;
+
+    QVector<double> lats, lons;
+    lats.reserve(count);
+    lons.reserve(count);
+    const char *p = packed.constData();
+    for (int i = 0; i < count; ++i) {
+        qint32 lat = 0, lon = 0;
+        std::memcpy(&lat, p, sizeof(qint32));
+        p += sizeof(qint32);
+        std::memcpy(&lon, p, sizeof(qint32));
+        p += sizeof(qint32);
+        lats.append(lat / 1e7);
+        lons.append(lon / 1e7);
+    }
+
+    const auto latRange = std::minmax_element(lats.begin(), lats.end());
+    const auto lonRange = std::minmax_element(lons.begin(), lons.end());
+    const double minLat = *latRange.first, maxLat = *latRange.second;
+    const double minLon = *lonRange.first, maxLon = *lonRange.second;
+
+    // Equirectangular: a degree of longitude covers cos(latitude) as much
+    // ground as a degree of latitude, so scale it that way before fitting,
+    // otherwise a route at 60N comes out stretched to twice its real width.
+    const double lonScale = std::cos(qDegreesToRadians((minLat + maxLat) / 2.0));
+    const double spanX = (maxLon - minLon) * lonScale;
+    const double spanY = maxLat - minLat;
+    const double span = std::max(spanX, spanY);
+    if (span <= 0)
+        return points;
+
+    // Centre the smaller axis so the shape keeps its proportions.
+    const double offsetX = (span - spanX) / 2.0;
+    const double offsetY = (span - spanY) / 2.0;
+
+    for (int i = 0; i < count; ++i) {
+        QVariantMap point;
+        point.insert(QStringLiteral("x"), ((lons[i] - minLon) * lonScale + offsetX) / span);
+        // y inverted: north should be up, canvas y grows downwards.
+        point.insert(QStringLiteral("y"), 1.0 - ((lats[i] - minLat) + offsetY) / span);
+        points.append(point);
+    }
+    return points;
+}
+
 void AppController::syncWatchWorkouts()
 {
     if (!m_whiteboardReady || m_workoutSyncInProgress || m_logbookTestInFlight)
@@ -552,8 +626,11 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         }
 
         Workout w;
+        std::vector<Logbook::TrackPoint> track;
         try {
-            w = workoutFromDecoded(logbookId, Logbook::decode(data));
+            const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+            w = workoutFromDecoded(logbookId, decoded);
+            track = decoded.track;
         } catch (const std::exception &e) {
             failuresCopy.append(tr("%1: decode failed (%2)")
                                          .arg(logbookId, QString::fromUtf8(e.what())));
@@ -567,16 +644,19 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         // figures are still worth saving, so this never fails the entry.
         const QString summaryPath = QStringLiteral("/Logbook/byId/%1/Summary").arg(logbookId);
         m_whiteboardClient->fetchSummary(summaryPath,
-                [this, logbookIds, index, succeeded, failuresCopy, logbookId, w]
+                [this, logbookIds, index, succeeded, failuresCopy, logbookId, w, track]
                 (bool summaryOk, const std::vector<uint8_t> &payload, const QString &) mutable {
             if (summaryOk)
                 applySummary(&w, Summary::decode(payload));
 
             QString storeError;
-            if (m_workoutStore->upsert(w, &storeError))
+            if (m_workoutStore->upsert(w, &storeError)) {
                 ++succeeded;
-            else
+                if (!track.empty())
+                    m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
+            } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
+            }
             fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
         });
     });

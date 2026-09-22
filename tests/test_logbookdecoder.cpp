@@ -155,6 +155,15 @@ void testCyclingFixtureAgainstRealDeviceFetch()
     // Real app-reported ascent/descent for this workout: 19.75 / 19.5 m.
     checkDouble(w.totalAscentMeters, 19.75, 19.75 * 0.20, "totalAscentMeters within 20% of the real 19.75m");
     checkDouble(w.totalDescentMeters, 19.5, 19.5 * 0.20, "totalDescentMeters within 20% of the real 19.5m");
+
+    // The GPS track, which the route drawing on WorkoutDetailPage uses. One
+    // point per chunk 0x0c, which this fixture has 1820 of; the first fix
+    // should sit in southern Finland where the ride happened.
+    checkInt(static_cast<int64_t>(w.track.size()), 1820, "track point count");
+    if (!w.track.empty()) {
+        checkDouble(w.track.front().latitude, 60, 2.0, "first fix latitude is in southern Finland");
+        checkDouble(w.track.front().longitude, 24, 3.0, "first fix longitude is in southern Finland");
+    }
 }
 
 int main()

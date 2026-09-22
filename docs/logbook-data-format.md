@@ -906,3 +906,31 @@ the natural, low-cost experiment is trying
 `/Data`-specific in its own implementation - directly against
 `"/Logbook/Entries"` and seeing what comes back, before investing more
 effort in disassembling `protocol_v9` itself.
+
+**Result: the shortcut doesn't work for `/Entries`** - Jarno tried
+`testEntriesFetch()` on real hardware (2026-09-22) and got a clean
+timeout, "No bulk data arrived before the silence timeout" - the same
+safe, informative failure mode this project's earlier wrong guesses have
+all hit. Makes sense in hindsight rather than being a surprise: `/Data`
+is a genuinely large payload (tens of KB compressed) that plausibly
+*needs* the dedicated streaming mechanism (`TYPE=0x10` trigger →
+`TYPE=0x01` flood) `Mds::encodeStreamStartTrigger()` targets; `/Entries`
+is small (a list of maybe dozens of workout ids), so it was never
+actually a good candidate for *that specific* mechanism - it almost
+certainly still resolves through the ordinary, smaller handle-walk
+(`TYPE=0x0d`/`0x05` request/response pairs, single small messages, no
+bulk stream at all) this document's earlier sections already traced part
+of for `/Data`'s own preliminary walk, and that mechanism's general
+grammar is still not understood well enough to implement.
+
+**Where this leaves things**: getting a real on-device workout listing
+still needs either (a) generically parsing that ordinary handle-walk
+response format (the actual hard problem, `protocol_v9`'s implementation
+not being public - see above), or (b) a different, narrower path that
+sidesteps `/Entries` for the common case - e.g. a workout already visible
+via cloud sync already carries its own start time, which *is* the BLE
+logbook id (confirmed earlier in this document), so "fetch richer BLE
+detail for an already-cloud-known workout" doesn't need `/Entries` at
+all, only a *watch-only, never-cloud-synced* workout would. Which of
+these is worth pursuing next is an open decision, not a technical
+dead end.

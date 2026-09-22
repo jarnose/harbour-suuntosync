@@ -9,6 +9,7 @@
 #include "../store/workout.h"
 #include "../model/workoutlistmodel.h"
 #include "../ble/logbookdecoder.h"
+#include "../ble/summarydecoder.h"
 
 #include <QStandardPaths>
 #include <QDir>
@@ -55,6 +56,27 @@ Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorko
         w.totalDescent = decoded.totalDescentMeters;
     }
     return w;
+}
+
+// Overlays the watch's own computed totals onto a workout decoded from
+// /Data. Everything here is exact where Logbook::decode() could only
+// approximate (see summarydecoder.h), so it wins outright; heart rate is
+// left alone because this decoder doesn't read the Summary's own HR window.
+void applySummary(Workout *w, const Summary::DecodedSummary &s)
+{
+    if (!s.valid)
+        return;
+    w->activityId = s.activityId;
+    w->totalTime = s.movingTimeSeconds;
+    w->totalDistance = s.distanceMeters;
+    if (s.stepCount > 0)
+        w->stepCount = s.stepCount;
+    if (s.hasAscent) {
+        w->totalAscent = s.ascentMeters;
+        w->totalDescent = s.descentMeters;
+    }
+    if (s.hasEnergy)
+        w->energyConsumption = s.energyKcal;
 }
 
 } // namespace
@@ -515,20 +537,37 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
             (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
         if (!ok) {
             failuresCopy.append(tr("%1: %2").arg(logbookId, error));
-        } else {
-            try {
-                const Logbook::DecodedWorkout decoded = Logbook::decode(data);
-                const Workout w = workoutFromDecoded(logbookId, decoded);
-                QString storeError;
-                if (m_workoutStore->upsert(w, &storeError))
-                    ++succeeded;
-                else
-                    failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
-            } catch (const std::exception &e) {
-                failuresCopy.append(tr("%1: decode failed (%2)")
-                                             .arg(logbookId, QString::fromUtf8(e.what())));
-            }
+            fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+            return;
         }
-        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+
+        Workout w;
+        try {
+            w = workoutFromDecoded(logbookId, Logbook::decode(data));
+        } catch (const std::exception &e) {
+            failuresCopy.append(tr("%1: decode failed (%2)")
+                                         .arg(logbookId, QString::fromUtf8(e.what())));
+            fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+            return;
+        }
+
+        // /Summary carries the watch's own exact totals for the same
+        // workout (see summarydecoder.h). It's a bonus, not a
+        // prerequisite: if the fetch or decode fails the /Data-derived
+        // figures are still worth saving, so this never fails the entry.
+        const QString summaryPath = QStringLiteral("/Logbook/byId/%1/Summary").arg(logbookId);
+        m_whiteboardClient->fetchSummary(summaryPath,
+                [this, logbookIds, index, succeeded, failuresCopy, logbookId, w]
+                (bool summaryOk, const std::vector<uint8_t> &payload, const QString &) mutable {
+            if (summaryOk)
+                applySummary(&w, Summary::decode(payload));
+
+            QString storeError;
+            if (m_workoutStore->upsert(w, &storeError))
+                ++succeeded;
+            else
+                failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
+            fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
+        });
     });
 }

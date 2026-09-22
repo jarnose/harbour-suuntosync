@@ -28,7 +28,12 @@ namespace Sbem {
 std::vector<uint8_t> heatshrinkDecompress(const std::vector<uint8_t> &compressed);
 
 struct Chunk {
-    uint8_t id;
+    // 16-bit, not 8: a chunk id of 0xFF means the real id is the next two
+    // bytes, little-endian (confirmed by decompiling libmds.so's
+    // BSML::SmlStreamParser::parseChunkHeader - the length field's own
+    // 0xFF escape has the same shape). Ids above 254 do occur: the
+    // descriptor table itself runs past 300.
+    uint16_t id;
     std::vector<uint8_t> value;
 };
 

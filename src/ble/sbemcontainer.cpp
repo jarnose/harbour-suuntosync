@@ -74,9 +74,19 @@ std::vector<Chunk> parseContainer(const std::vector<uint8_t> &decompressed)
 
     size_t pos = kMagicLen;
     while (pos + 2 <= decompressed.size()) {
-        uint8_t id = decompressed[pos];
-        uint32_t length = decompressed[pos + 1];
-        size_t p = pos + 2;
+        uint16_t id = decompressed[pos];
+        size_t p = pos + 1;
+        if (id == 0xFF) {
+            if (p + 2 > decompressed.size())
+                break;
+            id = static_cast<uint16_t>(decompressed[p])
+                | (static_cast<uint16_t>(decompressed[p + 1]) << 8);
+            p += 2;
+        }
+        if (p >= decompressed.size())
+            break;
+        uint32_t length = decompressed[p];
+        ++p;
         if (length == 0xFF) {
             if (p + 4 > decompressed.size())
                 break;

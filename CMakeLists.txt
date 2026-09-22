@@ -30,15 +30,16 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # an SBEM0103 TLV walk. See docs/logbook-data-format.md. Phase 6 continued
 # again: logbookdecoder (tests/test_logbookdecoder.cpp, plain g++) turns
 # the decoded chunks into workout summary fields - GPS/HR/activity/cadence
-# confirmed against Jarno's own FIT exports, no altitude/ascent/descent
-# (extensively searched for, not found - see the doc). Phase 6 continued
+# confirmed against Jarno's own FIT exports, plus altitude and derived
+# ascent/descent (found once the APK yielded the watch's own field map -
+# see the doc). Phase 6 continued
 # once more: MdsWhiteboardClient::fetchLogbookData() and
 # AppController::testLogbookFetch() wire logbookdecoder up to a real BLE
 # fetch - marked experimental throughout (see fetchLogbookData()'s and
 # Mds::encodeStreamStartTrigger()'s doc comments) since it replaces the
 # real captured trigger sequence's elaborate handle-walk with a much
-# simpler hypothesis not yet confirmed on real hardware. Not wired into
-# WorkoutStore yet - that's this probe's own job once proven. Phase 6
+# simpler hypothesis, since confirmed on real hardware, and wired into
+# WorkoutStore. Phase 6
 # continued yet again: logentriesdecoder (tests/test_logentriesdecoder.cpp,
 # plain g++) + Mds::encodeEntriesFetchTrigger() +
 # MdsWhiteboardClient::fetchLogEntries() - a *different* shortcut for
@@ -46,8 +47,13 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # trigger), re-derived from decompiling libmds.so's own protocol_v9
 # structure-deserializer code after the /Data-style shortcut was confirmed
 # not to work for /Entries on real hardware. See
-# docs/logbook-data-format.md's "Third decompilation pass" section. Also
-# experimental, also not yet confirmed on real hardware.
+# docs/logbook-data-format.md's "Third decompilation pass" section;
+# confirmed working on real hardware. And finally summarydecoder
+# (tests/test_summarydecoder.cpp) + Mds::encodePagedReadRequest() +
+# MdsWhiteboardClient::fetchSummary(): /Summary is a third transport again,
+# fixed-size pages rather than a stream, carrying the watch's own exact
+# totals (ascent, descent, energy, moving time) that /Data can only
+# approximate.
 add_executable(harbour-suuntosync
     src/harbour-suuntosync.cpp
     src/controller/appcontroller.cpp
@@ -62,6 +68,7 @@ add_executable(harbour-suuntosync
     src/ble/sbemcontainer.cpp
     src/ble/logbookdecoder.cpp
     src/ble/logentriesdecoder.cpp
+    src/ble/summarydecoder.cpp
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/suuntocloudclient.cpp

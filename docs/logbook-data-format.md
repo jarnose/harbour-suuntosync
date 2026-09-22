@@ -1642,3 +1642,77 @@ is its own task:
 - Replace this project's hand-rolled per-chunk knowledge with a generic,
   descriptor-driven decoder, the way the app itself works - the watch serves
   its own schema over BLE, so it would adapt to other models for free.
+
+## `/Summary` decoded: the watch's own totals
+
+`/Logbook/byId/<id>/Summary` turns out to be a **third** transport, distinct
+from both `/Data`'s bulk stream and `/Entries`' single handle-fetch. From the
+capture:
+
+```
+W 0x0a  GET .../Summary                        -> N 0x02  [handle][01 80 00][c8 00]
+W 0x0b  [previous handle][01 80 00]             -> N 0x03  ack
+W 0x0d  [handle][01 80 00][01 06 00][offset:u32]-> N 0x05  19-byte header + <=451 payload bytes
+        ... repeat at offset += payloadLen ...
+```
+
+Two header fields matter: a status at offset 6 (`100` = more pages follow,
+`200` = last page) and the payload length at offset 11 (always
+`body.size() - 19`). This workout's Summary came back as 451 + 451 + 208 =
+1110 bytes, which concatenate into a plain `SBEM0103` container - no
+Heatshrink layer at all, unlike `/Data`.
+
+Inside is **chunk 0x1b**, the 133-field Header group whose absence from
+`/Data` explained the long ascent/descent hunt. Decoding it with the
+descriptor map gives the watch's own figures directly:
+
+| field | raw | meaning |
+|---|---|---|
+| `Header.Duration` | 4736150 | 4736.15 s total elapsed (`<MOD>x/1000`) |
+| `Header.PauseDuration` | 2436334 | 2436.33 s paused |
+| `Header.Distance` | 5417 | 5417 m |
+| `Header.Ascent` | 27.843 | m |
+| `Header.Descent` | 19.470 | m |
+| `Header.Altitude.Max` / `.Min` | 107.516 / 98.654 | m |
+| `Header.Energy` | 651466.125 | J, so 155.7 kcal |
+| `Header.ActivityType` | 4 | cycling |
+
+Three of these settle open questions:
+
+- **Duration minus PauseDuration is 2299.8 s** - exactly the 38:19 Jarno's
+  app reports for this workout. `Logbook::decode()`'s GPS-gap heuristic gets
+  2140 s (-7%); this needs no heuristic at all.
+- **Altitude min/max are 98.65 / 107.52 m**, against the 98.6 / 107.6 m that
+  this project's brand-new delta-chain reconstruction produces from `/Data`.
+  The two were derived completely independently, so that agreement to ~0.1 m
+  is a strong check on the altitude decoding.
+- **Energy finally has a home.** It was never in `/Data`.
+
+Also worth noting: the payload also carries chunk `0x1d` twice - the
+`Windows.Window` group, a per-window rollup (one for `Type=Activity`, one for
+`Type=Move`) with min/max/avg for speed, HR, cadence, power, temperature,
+altitude and the rest. `Windows.Window.HR.Avg` reads 1.2892 Hz, i.e. 77.4
+bpm against the app's reported 77 (this decoder's `/Data` average is 75.7).
+Not decoded yet - the Header fields covered the immediate need.
+
+### Implemented
+
+- `Mds::encodePagedReadRequest()` - golden-vector tested byte-for-byte
+  against two real captured page requests.
+- `Sbem::parseContainer()` gained extended-id support (`id == 0xFF` means a
+  following `uint16`), and `Sbem::Chunk::id` widened to 16 bits. The
+  descriptor table runs past id 300, so this was a latent bug.
+- `Summary::decode()` (`src/ble/summarydecoder.h`/`.cpp`) - field offsets
+  within chunk 0x1b, all verified against the real payload, tested in
+  `tests/test_summarydecoder.cpp` against a new
+  `fixtures/logbook_summary_cycling.bin` (the real captured payload, pages
+  reassembled).
+- `MdsWhiteboardClient::fetchSummary()` - GET, then the page loop until a
+  page reports "last".
+- `AppController::syncWatchWorkouts()` now fetches `/Summary` after each
+  `/Data` and overlays the exact totals (`applySummary()`). A failed Summary
+  fetch is non-fatal: the `/Data`-derived workout is still saved.
+
+Not yet run on real hardware - the paging protocol is transcribed from one
+capture, and like every other shortcut in this project a wrong guess should
+surface as a timeout rather than bad data.

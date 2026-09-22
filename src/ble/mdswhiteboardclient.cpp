@@ -42,6 +42,17 @@ constexpr size_t kMdsChunkSizeOffset = 14;
 // starting point rather than a confirmed value.
 constexpr int kBulkStreamSilenceMs = 2000;
 
+// Paged resources (/Summary, /Descriptors) - see
+// Mds::encodePagedReadRequest()'s doc comment. Every captured page carried
+// a fixed 19-byte header with a status at offset 6: 100 while more pages
+// follow, 200 on the last one.
+constexpr size_t kPagedHeaderSize = 19;
+constexpr size_t kPagedStatusOffset = 6;
+constexpr uint16_t kPageStatusContinue = 100;
+// A real Summary is ~1 KB; this only exists so a watch that never marks a
+// last page can't loop forever.
+constexpr size_t kMaxPagedBytes = 1024 * 1024;
+
 } // namespace
 
 MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
@@ -415,6 +426,57 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
         } catch (const std::exception &e) {
             callback(false, {}, tr("Could not build the entries fetch trigger: %1").arg(e.what()));
         }
+    });
+}
+
+void MdsWhiteboardClient::fetchSummary(const QString &path, DataCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ackFrame, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ackFrame.body.size() < 6) {
+            callback(false, {}, tr("GET %1 was acked with an unusably short body").arg(path));
+            return;
+        }
+        readNextPage(ackFrame.body, 0, {}, callback);
+    });
+}
+
+void MdsWhiteboardClient::readNextPage(const std::vector<uint8_t> &ackBody, uint32_t offset,
+                                        std::vector<uint8_t> collected, DataCallback callback)
+{
+    getRaw([ackBody, offset](uint16_t requestId) {
+        return Mds::encodePagedReadRequest(requestId, ackBody, offset);
+    }, [this, ackBody, offset, collected, callback]
+            (bool ok, const Mds::Frame &frame, const QString &error) mutable {
+        if (!ok) {
+            callback(false, {}, tr("Paged read at offset %1 failed: %2").arg(offset).arg(error));
+            return;
+        }
+        if (frame.body.size() < kPagedHeaderSize) {
+            callback(false, {}, tr("Paged read at offset %1 returned only %2 bytes")
+                                         .arg(offset).arg(frame.body.size()));
+            return;
+        }
+
+        const uint16_t status = static_cast<uint16_t>(frame.body[kPagedStatusOffset]
+                | (static_cast<uint16_t>(frame.body[kPagedStatusOffset + 1]) << 8));
+        collected.insert(collected.end(), frame.body.begin() + kPagedHeaderSize, frame.body.end());
+        const size_t payloadSize = frame.body.size() - kPagedHeaderSize;
+
+        // "Last page" is the watch saying so; the empty-page and size-cap
+        // checks are belt and braces so a watch that never says so can't
+        // spin this loop forever.
+        if (status != kPageStatusContinue || payloadSize == 0
+                || collected.size() >= kMaxPagedBytes) {
+            callback(true, collected, QString());
+            return;
+        }
+        readNextPage(ackBody, offset + static_cast<uint32_t>(payloadSize), collected, callback);
     });
 }
 

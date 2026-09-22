@@ -91,6 +91,15 @@ public:
     // fetchLogbookData()'s own stream-trigger mechanism for /Entries.
     void fetchLogEntries(const QString &path, EntriesCallback callback);
 
+    // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
+    // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at
+    // increasing byte offsets until a page comes back marked "last" (see
+    // that function's doc comment for the paging protocol). Calls back once
+    // with the pages' payloads concatenated - an SBEM0103 container, ready
+    // for Summary::decode(). Unlike fetchLogbookData() there is no bulk
+    // stream and no Heatshrink layer involved.
+    void fetchSummary(const QString &path, DataCallback callback);
+
 signals:
     void readyChanged(bool ready);
     void errorOccurred(const QString &message);
@@ -145,6 +154,11 @@ private:
     // Mds::encodeStreamStopTrigger()'s doc comment.
     void endBulkStream(bool ok, const QString &error);
     void finishBulkFetch(bool ok, const QString &error);
+    // One step of fetchSummary()'s page loop: reads at the given offset,
+    // appends the payload to collected, and either recurses for the next
+    // page or hands the whole thing to callback.
+    void readNextPage(const std::vector<uint8_t> &ackBody, uint32_t offset,
+                       std::vector<uint8_t> collected, DataCallback callback);
 
     QString m_deviceObjectPath;
     QString m_servicePath;

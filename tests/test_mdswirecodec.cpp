@@ -144,6 +144,22 @@ void testEncodeEntriesFetchTrigger()
               "7ea50d0700c504f0240001800000ffc60b617e");
 }
 
+void testEncodePagedReadRequest()
+{
+    // frames 9331 and 9343: the first two pages of the real
+    // /Logbook/byId/1785740504/Summary fetch, requestIds 0x0542 and 0x0543,
+    // both built from the GET's TYPE=0x02 ack at frame 9299 (requestId
+    // 0x0539, body "002412018000c800"). Page size is 451 bytes, so the
+    // second read starts at offset 451 (0x1c3).
+    const auto ackBody = fromHex("002412018000c800");
+    expectEq("encodePagedReadRequest(offset 0)",
+              toHex(Mds::encodePagedReadRequest(0x0542, ackBody, 0)),
+              "7ea50d0d00420500241201800001060000000000bc3cc84b7e");
+    expectEq("encodePagedReadRequest(offset 451)",
+              toHex(Mds::encodePagedReadRequest(0x0543, ackBody, 451)),
+              "7ea50d0d004305002412018000010600c30100008bcc09977e");
+}
+
 // --- captured response decode (watch -> phone, Handle Value Notification, handle 0x0015) ---
 
 void testDecodeSinglePacketResponse()
@@ -206,6 +222,7 @@ int main()
     testEncodeStreamStartTrigger();
     testEncodeStreamStopTrigger();
     testEncodeEntriesFetchTrigger();
+    testEncodePagedReadRequest();
     testDecodeSinglePacketResponse();
     testDecodeMultiFragmentResponse();
     testDecoderRejectsCorruptedCrc();

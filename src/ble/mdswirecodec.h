@@ -161,6 +161,28 @@ std::vector<uint8_t> encodeStreamStopTrigger(uint16_t requestId, const std::vect
 // std::invalid_argument if ackBody is shorter than 3 bytes.
 std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
 
+// Builds a TYPE=0x0D paged read for a resource that is returned in fixed
+// pages rather than as a bulk stream - /Logbook/byId/<id>/Summary and
+// /Descriptors both work this way in the capture. Body is the ack's first
+// 6 bytes (resource handle + the fixed 0x01 0x80 0x00) followed by
+// 0x01 0x06 0x00 and the byte offset to read from, little-endian uint32.
+//
+// The reply is a TYPE=0x05 whose body carries a fixed 19-byte header and
+// then up to 451 payload bytes. Two fields of that header matter:
+//   - offset 6, uint16 LE: a status - 100 ("continue", more pages follow)
+//     or 200 ("ok", this is the last page).
+//   - offset 11, uint16 LE: the payload length, which also equals
+//     body.size() - 19 in every captured page.
+// Read at offset 0, then advance by each page's payload length until a
+// page comes back with status 200. Concatenated, the payloads are an
+// ordinary SBEM0103 stream (see sbemcontainer.h).
+//
+// Byte-for-byte confirmed against the real captured /Summary fetch (frames
+// with requestIds 0x0542/0x0543/0x0544, built from the GET ack at 0x0539).
+// Throws std::invalid_argument if ackBody is shorter than 6 bytes.
+std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                              uint32_t offset);
+
 // Incremental SLIP frame reassembler + envelope parser/validator. Feed it
 // raw bytes as they arrive from the notify characteristic, in order,
 // regardless of how they were split across BLE PDUs; each call returns the

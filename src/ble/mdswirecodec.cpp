@@ -140,6 +140,22 @@ std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::ve
     return encodeFrame(kTypeHandleFetch, requestId, body);
 }
 
+std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                              uint32_t offset)
+{
+    if (ackBody.size() < 6)
+        throw std::invalid_argument("encodePagedReadRequest: ackBody shorter than 6 bytes");
+    std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
+    body.push_back(0x01);
+    body.push_back(0x06);
+    body.push_back(0x00);
+    body.push_back(static_cast<uint8_t>(offset & 0xFF));
+    body.push_back(static_cast<uint8_t>((offset >> 8) & 0xFF));
+    body.push_back(static_cast<uint8_t>((offset >> 16) & 0xFF));
+    body.push_back(static_cast<uint8_t>((offset >> 24) & 0xFF));
+    return encodeFrame(kTypeHandleFetch, requestId, body);
+}
+
 std::vector<uint8_t> literalSessionHandshakeRequest()
 {
     // Captured verbatim (Suunto Race, official Android app, frame 3138 of

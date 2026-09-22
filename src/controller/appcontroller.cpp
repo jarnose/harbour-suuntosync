@@ -70,14 +70,16 @@ Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorko
 
 // The GPS track, packed the way WorkoutStore stores it: pairs of
 // little-endian int32, degrees x 1e7 - the watch's own on-wire form, so
-// nothing is lost and nothing is re-scaled.
+// nothing is lost and nothing is re-scaled. Templated over the point type
+// because a BLE track and a decoded cloud polyline are different structs
+// that happen to agree on latitude/longitude.
 template <typename PointList>
 QByteArray packTrack(const PointList &track)
 {
     QByteArray out;
     out.resize(static_cast<int>(track.size()) * 2 * static_cast<int>(sizeof(qint32)));
     char *p = out.data();
-    for (const Logbook::TrackPoint &point : track) {
+    for (const auto &point : track) {
         const qint32 lat = static_cast<qint32>(qRound(point.latitude * 1e7));
         const qint32 lon = static_cast<qint32>(qRound(point.longitude * 1e7));
         std::memcpy(p, &lat, sizeof(qint32));

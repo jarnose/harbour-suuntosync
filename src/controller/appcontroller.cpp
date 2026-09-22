@@ -31,9 +31,11 @@ QString dbPath()
 // (no reliable cross-reference beyond timestamp proximity, which isn't
 // solid enough to upsert-collide on automatically); they'll just show up
 // as two entries in the list for now. See docs/logbook-data-format.md for
-// which Workout fields Logbook::decode() can and can't populate -
-// totalAscent/totalDescent/energyConsumption stay at 0 (absent) here for
-// the same "not found in this resource" reasons documented there.
+// which Workout fields Logbook::decode() can and can't populate.
+// energyConsumption stays at 0 (absent): it's Header.Energy, which lives in
+// a header chunk that /Data doesn't carry at all. Ascent/descent are now
+// populated but are a ~10%-accurate derivation from the altitude series,
+// not the watch's own figures - see logbookdecoder.h.
 Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorkout &decoded)
 {
     Workout w;
@@ -48,6 +50,10 @@ Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorko
     w.avgHeartRate = decoded.avgHeartRateBpm;
     w.maxHeartRate = decoded.maxHeartRateBpm;
     w.stepCount = decoded.stepCount;
+    if (decoded.hasAltitude) {
+        w.totalAscent = decoded.totalAscentMeters;
+        w.totalDescent = decoded.totalDescentMeters;
+    }
     return w;
 }
 

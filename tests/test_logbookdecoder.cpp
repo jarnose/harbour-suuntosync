@@ -82,6 +82,21 @@ void testWalkingFixture()
     checkDouble(w.totalTimeSeconds, 1493, 1493 * 0.05, "totalTimeSeconds within 5% of the real 1493s");
     checkDouble(w.totalDistanceMeters, 2094, 2094 * 0.02, "totalDistanceMeters within 2% of the real 2094m");
     checkDouble(w.maxHeartRateBpm, 99, 0.5, "maxHeartRateBpm exactly matches the real 99 bpm");
+
+    // Altitude (see logbookdecoder.h). This is the workout whose barometer
+    // hadn't settled at the start: its raw first absolute sample reads
+    // 315.2 m and the Altitude calibration event (chunk 0x04) carries a
+    // -208 m offset. Without applying that to the pre-event samples the
+    // range comes out 103.8-331.0 m and the descent ~229 m instead of ~18 m,
+    // so these assertions are the regression test for that correction.
+    checkInt(w.hasAltitude ? 1 : 0, 1, "hasAltitude");
+    checkDouble(w.minAltitudeMeters, 103.8, 0.05, "minAltitudeMeters");
+    checkDouble(w.maxAltitudeMeters, 123.0, 0.05, "maxAltitudeMeters");
+    checkDouble(w.totalAscentMeters, 16.0, 0.05, "totalAscentMeters");
+    checkDouble(w.totalDescentMeters, 18.4, 0.05, "totalDescentMeters");
+    // Real app-reported ascent/descent for this workout: 15.4 / 18.7 m.
+    checkDouble(w.totalAscentMeters, 15.4, 15.4 * 0.20, "totalAscentMeters within 20% of the real 15.4m");
+    checkDouble(w.totalDescentMeters, 18.7, 18.7 * 0.20, "totalDescentMeters within 20% of the real 18.7m");
 }
 
 void testCyclingFixtureAgainstRealDeviceFetch()
@@ -129,6 +144,17 @@ void testCyclingFixtureAgainstRealDeviceFetch()
     checkDouble(w.totalTimeSeconds, 2299, 2299 * 0.10, "totalTimeSeconds within 10% of the real 2299s (38:19)");
     checkDouble(w.totalDistanceMeters, 5420, 5420 * 0.02, "totalDistanceMeters within 2% of the real 5420m");
     checkDouble(w.maxSpeedMs, 25.7 / 3.6, 0.5, "maxSpeedMs close to the real 25.7 km/h max speed");
+
+    // Altitude (see logbookdecoder.h) - this workout's calibration offset is
+    // a mere -12 m, so unlike the walking fixture it barely moves.
+    checkInt(w.hasAltitude ? 1 : 0, 1, "hasAltitude");
+    checkDouble(w.minAltitudeMeters, 98.6, 0.05, "minAltitudeMeters");
+    checkDouble(w.maxAltitudeMeters, 107.6, 0.05, "maxAltitudeMeters");
+    checkDouble(w.totalAscentMeters, 18.0, 0.05, "totalAscentMeters");
+    checkDouble(w.totalDescentMeters, 16.0, 0.05, "totalDescentMeters");
+    // Real app-reported ascent/descent for this workout: 19.75 / 19.5 m.
+    checkDouble(w.totalAscentMeters, 19.75, 19.75 * 0.20, "totalAscentMeters within 20% of the real 19.75m");
+    checkDouble(w.totalDescentMeters, 19.5, 19.5 * 0.20, "totalDescentMeters within 20% of the real 19.5m");
 }
 
 int main()

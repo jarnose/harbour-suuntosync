@@ -37,11 +37,29 @@
 //     same "active" gaps - confirmed within ~2% of the real total, not
 //     exact (see doc for why the residual is believed to be this project's
 //     own pause-boundary heuristic rather than a wrong idea).
-//   - totalAscentMeters/totalDescentMeters/energyConsumptionKcal are
-//     deliberately left out entirely (not even a zero-valued field) -
-//     extensively searched for across every chunk type in this resource
-//     and not found; see docs/logbook-data-format.md's altitude section
-//     before spending more time looking for them here.
+//   - minAltitudeMeters/maxAltitudeMeters: Sample.Altitude (descriptor 87
+//     in docs/sbem-chunk-map.md) - an absolute uint16 in chunk 0x15 and
+//     int8 deltas against it in chunk 0x16, decoded as raw/5 - 1000 (the
+//     schema's own <MOD> expression). Exact; the earlier "altitude isn't
+//     in this resource" conclusion was wrong, it was just delta-encoded
+//     and needed that transform. An Altitude calibration event (chunk
+//     0x04, descriptor 41) carries a metre offset which is applied to
+//     every sample recorded *before* the event - without that, a workout
+//     whose barometer hadn't settled at the start reads hundreds of
+//     metres off (confirmed against a real capture where the offset was
+//     -208 m).
+//   - totalAscentMeters/totalDescentMeters: derived from that altitude
+//     series with a 2 m hysteresis, since summing every 0.2 m step would
+//     count barometric noise as climb (the raw sum over-reads by 3-4x).
+//     **Approximate**: validated against three real workouts with known
+//     app-reported values, mean error ~10% (worst case ~18%) - noticeably
+//     rougher than this decoder's distance (0.4%) or step count (2%).
+//     /Logbook/byId/<id>/Summary carries the watch's own exact
+//     Header.Ascent/Header.Descent and should be preferred when available.
+//   - energyConsumptionKcal is still left out entirely (not even a
+//     zero-valued field): it's Header.Energy, which lives in chunk 0x1b,
+//     a header group that does not appear in this resource at all - see
+//     docs/logbook-data-format.md.
 namespace Logbook {
 
 struct DecodedWorkout
@@ -55,6 +73,11 @@ struct DecodedWorkout
     double avgHeartRateBpm = 0; // 0 = no heart rate samples seen
     double maxHeartRateBpm = 0;
     int stepCount = 0;
+    bool hasAltitude = false;   // false = no usable altitude samples in this workout
+    double minAltitudeMeters = 0;
+    double maxAltitudeMeters = 0;
+    double totalAscentMeters = 0;
+    double totalDescentMeters = 0;
 };
 
 // Throws std::runtime_error if the Heatshrink stream or SBEM0103 container

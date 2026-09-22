@@ -1801,3 +1801,14 @@ Three fixes followed:
 - `applySummary()` now takes start and stop time from the Summary when it
   has them, since the watch's own recorded start beats anything derived from
   a sample stream that may have nothing in it.
+
+**Gate: PASSED 2026-09-22.** Before the fix Jarno confirmed the workout was
+sitting at the bottom of the list dated 1.1.1970 02:00 - epoch zero rendered
+in Finnish winter time, i.e. exactly an unanchored clock and nothing else
+wrong. After the rebuild it appears at the top with its real date. A
+GPS-less workout now decodes and sorts correctly.
+
+Separately confirmed in the same session: a real BLE-synced workout shows
+its route, peak training effect, EPOC, recovery time and estimated VO2max -
+the last of which the captured fixture has at nillable-0, so its offset had
+been confirmed from the descriptor map alone until then.

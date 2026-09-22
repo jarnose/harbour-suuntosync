@@ -46,7 +46,8 @@ bool WorkoutStore::open(QString *error)
             "  peak_training_effect REAL NOT NULL DEFAULT 0,"
             "  recovery_time REAL NOT NULL DEFAULT 0,"
             "  max_vo2 REAL NOT NULL DEFAULT 0,"
-            "  training_load REAL NOT NULL DEFAULT 0"
+            "  training_load REAL NOT NULL DEFAULT 0,"
+            "  training_stress_score REAL NOT NULL DEFAULT 0"
             ")"));
     if (!ok) {
         if (error)
@@ -73,6 +74,7 @@ bool WorkoutStore::open(QString *error)
         QStringLiteral("ALTER TABLE workouts ADD COLUMN recovery_time REAL NOT NULL DEFAULT 0"),
         QStringLiteral("ALTER TABLE workouts ADD COLUMN max_vo2 REAL NOT NULL DEFAULT 0"),
         QStringLiteral("ALTER TABLE workouts ADD COLUMN training_load REAL NOT NULL DEFAULT 0"),
+        QStringLiteral("ALTER TABLE workouts ADD COLUMN training_stress_score REAL NOT NULL DEFAULT 0"),
     };
     for (const QString &statement : kMigrationColumns) {
         QSqlQuery migrate(db);
@@ -169,7 +171,7 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
             "SELECT key, source, activity_id, start_time, stop_time, total_time, "
             "total_distance, total_ascent, total_descent, max_speed, energy_consumption, "
             "step_count, avg_heart_rate, max_heart_rate, epoc, peak_training_effect, "
-            "recovery_time, max_vo2, training_load FROM workouts "
+            "recovery_time, max_vo2, training_load, training_stress_score FROM workouts "
             "ORDER BY start_time DESC"))) {
         if (error)
             *error = q.lastError().text();
@@ -197,6 +199,7 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
         w.recoveryTime = q.value(16).toDouble();
         w.maxVo2 = q.value(17).toDouble();
         w.trainingLoad = q.value(18).toDouble();
+        w.trainingStressScore = q.value(19).toDouble();
         result.append(w);
     }
     return result;
@@ -210,8 +213,9 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
             "INSERT INTO workouts (key, source, activity_id, start_time, stop_time, "
             "total_time, total_distance, total_ascent, total_descent, max_speed, "
             "energy_consumption, step_count, avg_heart_rate, max_heart_rate, epoc, "
-            "peak_training_effect, recovery_time, max_vo2, training_load) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "peak_training_effect, recovery_time, max_vo2, training_load, "
+            "training_stress_score) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET source = excluded.source, "
             "activity_id = excluded.activity_id, start_time = excluded.start_time, "
             "stop_time = excluded.stop_time, total_time = excluded.total_time, "
@@ -222,7 +226,8 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
             "max_heart_rate = excluded.max_heart_rate, epoc = excluded.epoc, "
             "peak_training_effect = excluded.peak_training_effect, "
             "recovery_time = excluded.recovery_time, max_vo2 = excluded.max_vo2, "
-            "training_load = excluded.training_load"));
+            "training_load = excluded.training_load, "
+            "training_stress_score = excluded.training_stress_score"));
     q.addBindValue(workout.key);
     q.addBindValue(workout.source);
     q.addBindValue(workout.activityId);
@@ -242,6 +247,7 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
     q.addBindValue(workout.recoveryTime);
     q.addBindValue(workout.maxVo2);
     q.addBindValue(workout.trainingLoad);
+    q.addBindValue(workout.trainingStressScore);
     if (!q.exec()) {
         if (error)
             *error = q.lastError().text();

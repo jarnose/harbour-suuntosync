@@ -78,6 +78,7 @@ add_executable(harbour-suuntosync
     src/ble/smldecoder.cpp
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
+    src/cloud/polyline.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/model/workoutlistmodel.cpp

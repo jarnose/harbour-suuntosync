@@ -11,6 +11,7 @@
 #include "../ble/logbookdecoder.h"
 #include "../ble/summarydecoder.h"
 #include "../ble/smldecoder.h"
+#include "../cloud/polyline.h"
 
 #include <QStandardPaths>
 #include <QtMath>
@@ -68,7 +69,8 @@ Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorko
 // The GPS track, packed the way WorkoutStore stores it: pairs of
 // little-endian int32, degrees x 1e7 - the watch's own on-wire form, so
 // nothing is lost and nothing is re-scaled.
-QByteArray packTrack(const std::vector<Logbook::TrackPoint> &track)
+template <typename PointList>
+QByteArray packTrack(const PointList &track)
 {
     QByteArray out;
     out.resize(static_cast<int>(track.size()) * 2 * static_cast<int>(sizeof(qint32)));
@@ -557,6 +559,16 @@ void AppController::syncCloudWorkouts()
             }
 
             for (const Workout &w : workouts) {
+                // The cloud carries the route as an encoded polyline in the
+                // same list response, so a cloud workout gets a map too -
+                // stored in exactly the format a BLE one uses, which means
+                // the drawing code doesn't care where it came from.
+                if (!w.polyline.isEmpty()) {
+                    const auto points = Polyline::decode(w.polyline.toStdString());
+                    if (!points.empty())
+                        m_workoutStore->saveRoute(w.key, packTrack(points), nullptr);
+                }
+
                 QString storeError;
                 if (!m_workoutStore->upsert(w, &storeError)) {
                     emit errorOccurred(tr("Failed to save workout: %1").arg(storeError));

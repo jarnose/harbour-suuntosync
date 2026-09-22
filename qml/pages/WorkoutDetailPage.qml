@@ -26,6 +26,7 @@ Page {
     property double recoveryTime: 0
     property double maxVo2: 0
     property double trainingLoad: 0
+    property double trainingStressScore: 0
     // WorkoutStore key, so the route can be looked up. Empty for a workout
     // opened from somewhere that doesn't know it.
     property string workoutKey: ""
@@ -84,6 +85,8 @@ Page {
             entries.push({ label: qsTr("EPOC"), value: qsTr("%1 ml/kg").arg(epoc.toFixed(1)) })
         if (trainingLoad > 0)
             entries.push({ label: qsTr("Training load"), value: trainingLoad.toFixed(0) })
+        if (trainingStressScore > 0)
+            entries.push({ label: qsTr("TSS"), value: trainingStressScore.toFixed(0) })
         if (maxVo2 > 0)
             entries.push({ label: qsTr("Estimated VO2max"), value: qsTr("%1 ml/kg/min").arg(maxVo2.toFixed(1)) })
         if (recoveryTime > 0)

@@ -181,6 +181,19 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
             const QJsonObject hrData = o.value(QStringLiteral("hrdata")).toObject();
             w.avgHeartRate = hrData.value(QStringLiteral("avg")).toDouble();
             w.maxHeartRate = hrData.value(QStringLiteral("max")).toDouble();
+
+            // Three more fields the list response has always carried and
+            // this client used to drop on the floor. "tss" is an object
+            // rather than a number (it also holds intensity factor and
+            // normalised power, not used yet), and recoveryTime is in
+            // seconds like the watch's own.
+            w.recoveryTime = o.value(QStringLiteral("recoveryTime")).toDouble();
+            const QJsonObject tss = o.value(QStringLiteral("tss")).toObject();
+            w.trainingStressScore =
+                    tss.value(QStringLiteral("trainingStressScore")).toDouble();
+            // Kept as-is here and decoded on the way into storage, so this
+            // client stays a thin JSON-to-struct mapping.
+            w.polyline = o.value(QStringLiteral("polyline")).toString();
             workouts.append(w);
         }
         callback(true, workouts, QString());

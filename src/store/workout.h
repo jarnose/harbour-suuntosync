@@ -34,13 +34,23 @@ struct Workout
     double avgHeartRate = 0; // bpm (hrdata.avg)
     double maxHeartRate = 0; // bpm (hrdata.max)
 
-    // Training metrics. Only a BLE sync fills these, from the watch's own
-    // /Summary header (see src/ble/summarydecoder.h) - the cloud workout
-    // list doesn't carry them. Same "0 means absent" convention as above,
+    // Training metrics. Mostly filled by a BLE sync from the watch's own
+    // /Summary header (see src/ble/summarydecoder.h); the cloud list
+    // carries recoveryTime and its own training stress score too. Same "0 means absent" convention as above,
     // which matches the watch's own schema marking every one nillable=0.
     double epoc = 0;              // ml/kg
     double peakTrainingEffect = 0; // 1.0-5.0
     double recoveryTime = 0;      // seconds
     double maxVo2 = 0;            // ml/kg/min
     double trainingLoad = 0;      // Suunto's Header.TraingingLoadPeak
+    // The cloud's own training stress score, a different figure from the
+    // watch's trainingLoad above (different source, different scale), so
+    // they get separate fields rather than one being made to stand in for
+    // the other. Cloud sync only.
+    double trainingStressScore = 0;
+
+    // Transient: the cloud's encoded polyline for this workout, used to
+    // build the stored route on sync. Not a column - the decoded route
+    // lives in its own table (see WorkoutStore::saveRoute()).
+    QString polyline;
 };

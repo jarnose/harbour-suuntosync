@@ -141,6 +141,7 @@ add_custom_target(distfiles
         qml/harbour-suuntosync.qml
         qml/cover/CoverPage.qml
         qml/pages/MainPage.qml
+        qml/pages/ActivityTypes.js
         qml/pages/PairingPage.qml
         qml/pages/LoginPage.qml
         qml/pages/WorkoutDetailPage.qml

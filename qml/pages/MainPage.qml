@@ -1,47 +1,18 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "ActivityTypes.js" as ActivityTypes
 
 Page {
     id: page
 
     property string lastError: ""
 
-    // Deliberately incomplete: only the activity IDs actually seen in
-    // testing/suuntool's own example output are named - Suunto's full
-    // activity-type table isn't ported. Falls back to a numeric label.
-    //
-    // Cloud and BLE workouts use *different* activityId vocabularies - the
-    // cloud API's numbering (this table, from suuntool) isn't the same as
-    // the watch's own SML ActivityType the BLE path decodes (see
-    // src/ble/logbookdecoder.h and docs/logbook-data-format.md): a BLE
-    // cycling workout's activityId is confirmed 4 on Jarno's Race, not 2.
-    // Mixing the two tables up would show a wrong or missing name, so
-    // source picks which one applies - see bleActivityName() below.
+    // Both id vocabularies, complete, extracted from the official Android
+    // app's own ActivityMapping enum - see docs/activity-types.md. The two
+    // are genuinely different (Cycling is 4 on the watch and 2 in the
+    // cloud), which is why source has to be passed in.
     function activityName(id, source) {
-        if (source === "ble")
-            return bleActivityName(id)
-
-        var names = {
-            1: qsTr("Running"),
-            2: qsTr("Cycling"),
-            11: qsTr("Hiking"),
-            22: qsTr("Trail running"),
-        }
-        return names[id] || qsTr("Activity %1").arg(id)
-    }
-
-    // Only the two SML ActivityType ids actually confirmed against real
-    // BLE-fetched workouts (see docs/logbook-data-format.md's "GPS found"/
-    // ground-truth calibration sections) - unlike activityName()'s cloud
-    // table above, nothing here is carried over from a third-party example,
-    // every id was independently verified against Jarno's own real watch
-    // data. Falls back to the same numeric label for anything else.
-    function bleActivityName(id) {
-        var names = {
-            4: qsTr("Cycling"),
-            12: qsTr("Walking"),
-        }
-        return names[id] || qsTr("Activity %1").arg(id)
+        return ActivityTypes.name(id, source)
     }
 
     function formatDuration(seconds) {

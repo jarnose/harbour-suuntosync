@@ -1364,3 +1364,22 @@ alignment selector than this one response happened to use. Like every
 other shortcut in this project, a wrong guess should fail safely (an
 empty result or a decode that doesn't match, not a crash) - the real
 test is Jarno running `testEntriesFetch()` against his own watch.
+
+**Gate: ✅ PASSED 2026-09-22.** Jarno ran `testEntriesFetch()` against
+the real Race: `OK - 3 entries: 1785740504, 1785760357, 1788194033` -
+an exact match, in order, to the three ids this document predicted from
+offline analysis of the historical capture alone, before ever touching
+real hardware. This is the strongest possible confirmation available
+without a differently-shaped watch state to test against: the whole
+chain (GET, `Mds::encodeEntriesFetchTrigger()`, the real watch's live
+response, `LogEntries::decode()`) works end to end on real hardware,
+not just against a replayed capture. `/Logbook/Entries` no longer
+needs a hand-typed logbook id - this closes the "still open" item that
+has stood since breakthrough #4.
+
+**Still genuinely open**: this watch's real entries list happened to
+be exactly 3 long, same as the capture this was derived from, so
+pagination (the `StartAfterId` parameter) and a different alignment
+selector remain untested - not a reason to doubt this result, just an
+honest note that "works for a 3-entry list" isn't yet "works for any
+list size."

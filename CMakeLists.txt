@@ -38,7 +38,16 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Mds::encodeStreamStartTrigger()'s doc comments) since it replaces the
 # real captured trigger sequence's elaborate handle-walk with a much
 # simpler hypothesis not yet confirmed on real hardware. Not wired into
-# WorkoutStore yet - that's this probe's own job once proven.
+# WorkoutStore yet - that's this probe's own job once proven. Phase 6
+# continued yet again: logentriesdecoder (tests/test_logentriesdecoder.cpp,
+# plain g++) + Mds::encodeEntriesFetchTrigger() +
+# MdsWhiteboardClient::fetchLogEntries() - a *different* shortcut for
+# /Entries specifically (a TYPE=0x0D handle-fetch, not a TYPE=0x10 stream
+# trigger), re-derived from decompiling libmds.so's own protocol_v9
+# structure-deserializer code after the /Data-style shortcut was confirmed
+# not to work for /Entries on real hardware. See
+# docs/logbook-data-format.md's "Third decompilation pass" section. Also
+# experimental, also not yet confirmed on real hardware.
 add_executable(harbour-suuntosync
     src/harbour-suuntosync.cpp
     src/controller/appcontroller.cpp
@@ -52,6 +61,7 @@ add_executable(harbour-suuntosync
     src/ble/mdswhiteboardclient.cpp
     src/ble/sbemcontainer.cpp
     src/ble/logbookdecoder.cpp
+    src/ble/logentriesdecoder.cpp
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/suuntocloudclient.cpp

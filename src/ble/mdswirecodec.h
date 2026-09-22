@@ -116,6 +116,32 @@ std::vector<uint8_t> literalSessionHandshakeRequest();
 // std::invalid_argument if ackBody is shorter than 6 bytes.
 std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
 
+// Builds the TYPE=0x0D "fetch by handle" request that returns a structured
+// resource's actual data directly from the handle named by a GET's ack -
+// for /Logbook/Entries specifically, this skips the entire multi-step
+// handle-walk (the 0x0b/0x0d/0x03/0x05 property-by-property descriptor
+// walk documented in docs/logbook-data-format.md) and goes straight from
+// the initial GET's ack to the real LogEntries array.
+//
+// ackBody is the body of the TYPE=0x02 ack to the initial GET (same as
+// encodeStreamStartTrigger's ackBody parameter). The request body is
+// [0xF0][ackBody[1]][ackBody[2]][0x01][0x80][0x00][0x00] - i.e. the same
+// 2-byte "handle" the ack names at offset 1-2, wrapped in a fixed 7-byte
+// envelope. Confirmed byte-for-byte (CRC32 included) against a real
+// captured request (frame reqid 0x04c5, built from the ack at reqid
+// 0x04af) whose real response decoded to three LogEntry records whose Id
+// values exactly match logbook ids independently observed elsewhere in
+// the same capture (used in separate /Logbook/byId/<id>/Data,
+// /Summary and /Descriptors requests) - see
+// docs/logbook-data-format.md and tests/test_mdswirecodec.cpp.
+//
+// What's NOT confirmed: whether this shortcut is reliable in general (it
+// comes from re-deriving one real capture, the same low-risk-to-try,
+// only-checkable-on-real-hardware situation as encodeStreamStartTrigger)
+// or specific to this one capture's watch/firmware state. Throws
+// std::invalid_argument if ackBody is shorter than 3 bytes.
+std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
+
 // Incremental SLIP frame reassembler + envelope parser/validator. Feed it
 // raw bytes as they arrive from the notify characteristic, in order,
 // regardless of how they were split across BLE PDUs; each call returns the

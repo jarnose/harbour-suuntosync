@@ -305,28 +305,28 @@ void AppController::testEntriesFetch()
         return;
     }
 
+    // Replaced the earlier attempt at reusing fetchLogbookData()'s
+    // TYPE=0x10 stream-trigger mechanism (confirmed not to work for
+    // /Entries on real hardware, see docs/logbook-data-format.md) with
+    // fetchLogEntries(), built from decompiling libmds.so's own
+    // protocol_v9 structure-deserializer code - a TYPE=0x0D handle-fetch
+    // request, not a stream trigger. Not yet run on real hardware.
     m_logbookTestInFlight = true;
-    m_whiteboardClient->fetchLogbookData(QStringLiteral("/Logbook/Entries"),
-            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+    m_whiteboardClient->fetchLogEntries(QStringLiteral("/Logbook/Entries"),
+            [this](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {
         m_logbookTestInFlight = false;
         if (!ok) {
-            emit logbookTestResult(tr("/Entries fetch failed (times out if the shortcut "
-                                       "doesn't work for this resource): %1").arg(error));
+            emit logbookTestResult(tr("/Entries fetch failed: %1").arg(error));
             return;
         }
 
-        // QByteArray::toHex() rather than QString::asprintf() (Qt 5.5+,
-        // avoids repeating this project's earlier "newer Qt API than
-        // Sailfish actually ships" mistakes with QRandomGenerator/
-        // currentSecsSinceEpoch() - toHex() has existed since Qt 4).
-        const size_t previewLen = std::min<size_t>(data.size(), 64);
-        const QByteArray hexPreview = QByteArray(reinterpret_cast<const char *>(data.data()),
-                static_cast<int>(previewLen)).toHex();
+        QStringList ids;
+        for (const LogEntries::Entry &entry : entries)
+            ids.append(QString::number(entry.id));
 
-        emit logbookTestResult(tr("OK - /Entries shortcut worked. %1 bytes, first %2 hex: %3")
-                                        .arg(data.size())
-                                        .arg(previewLen)
-                                        .arg(QString::fromLatin1(hexPreview)));
+        emit logbookTestResult(tr("OK - %1 entries: %2")
+                                        .arg(entries.size())
+                                        .arg(ids.join(QStringLiteral(", "))));
     });
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "logentriesdecoder.h"
 #include "mdswirecodec.h"
 
 #include <QObject>
@@ -33,6 +34,9 @@ public:
                                                   const QString &error)>;
     using DataCallback = std::function<void(bool ok, const std::vector<uint8_t> &data,
                                               const QString &error)>;
+    using EntriesCallback = std::function<void(bool ok,
+                                                 const std::vector<LogEntries::Entry> &entries,
+                                                 const QString &error)>;
 
     explicit MdsWhiteboardClient(QObject *parent = nullptr);
 
@@ -75,6 +79,17 @@ public:
     // or nothing at all was collected. Like get(), queued behind anything
     // else already in flight.
     void fetchLogbookData(const QString &path, DataCallback callback);
+
+    // Experimental - see Mds::encodeEntriesFetchTrigger()'s doc comment for
+    // exactly what's confirmed vs. not. Fetches a structured (non-bulk)
+    // resource such as "/Logbook/Entries" by issuing the ordinary GET, then
+    // - unlike fetchLogbookData()'s TYPE=0x10 stream trigger - a single
+    // TYPE=0x0D handle-fetch request built from the ack, decoded via
+    // LogEntries::decode() (src/ble/logentriesdecoder.h). This is the
+    // shortcut that replaced the earlier (confirmed-not-working on real
+    // hardware, see docs/logbook-data-format.md) attempt to reuse
+    // fetchLogbookData()'s own stream-trigger mechanism for /Entries.
+    void fetchLogEntries(const QString &path, EntriesCallback callback);
 
 signals:
     void readyChanged(bool ready);

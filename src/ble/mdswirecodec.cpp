@@ -14,6 +14,7 @@ constexpr uint8_t kEscapedEscape = 0x5D;    // 0x7D 0x5D -> literal 0x7D
 constexpr uint8_t kSync = 0xA5;
 constexpr uint8_t kTypeGetRequest = 0x0A;
 constexpr uint8_t kTypeStreamStartTrigger = 0x10;
+constexpr uint8_t kTypeHandleFetch = 0x0D;
 constexpr uint8_t kGetVerb = 0x01;
 
 std::array<uint32_t, 256> makeCrcTable()
@@ -101,6 +102,22 @@ std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vec
     std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
     body.push_back(0x00);
     return encodeFrame(kTypeStreamStartTrigger, requestId, body);
+}
+
+std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+{
+    if (ackBody.size() < 3)
+        throw std::invalid_argument("encodeEntriesFetchTrigger: ackBody shorter than 3 bytes");
+    std::vector<uint8_t> body;
+    body.reserve(7);
+    body.push_back(0xF0);
+    body.push_back(ackBody[1]);
+    body.push_back(ackBody[2]);
+    body.push_back(0x01);
+    body.push_back(0x80);
+    body.push_back(0x00);
+    body.push_back(0x00);
+    return encodeFrame(kTypeHandleFetch, requestId, body);
 }
 
 std::vector<uint8_t> literalSessionHandshakeRequest()

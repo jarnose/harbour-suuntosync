@@ -383,6 +383,39 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
     });
 }
 
+void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ackFrame, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+
+        try {
+            const std::vector<uint8_t> ackBody = ackFrame.body;
+            getRaw([ackBody](uint16_t requestId) {
+                return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
+            }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+                if (!fetchOk) {
+                    callback(false, {}, tr("Entries fetch failed: %1").arg(fetchError));
+                    return;
+                }
+                const std::vector<LogEntries::Entry> entries = LogEntries::decode(frame.body);
+                if (entries.empty()) {
+                    callback(false, {}, tr("Entries response didn't decode to any entries "
+                                            "(%1 byte body)").arg(frame.body.size()));
+                    return;
+                }
+                callback(true, entries, QString());
+            });
+        } catch (const std::exception &e) {
+            callback(false, {}, tr("Could not build the entries fetch trigger: %1").arg(e.what()));
+        }
+    });
+}
+
 void MdsWhiteboardClient::appendBulkChunk(const std::vector<uint8_t> &body)
 {
     if (body.size() < kMdsChunkHeaderSize)

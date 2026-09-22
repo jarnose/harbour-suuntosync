@@ -115,6 +115,20 @@ void testEncodeStreamStartTrigger()
               "7ea5100700350500240e01800000516dae727e");
 }
 
+void testEncodeEntriesFetchTrigger()
+{
+    // frame reqid 0x04c5: the TYPE=0x0D request that returns the real
+    // /Logbook/Entries array directly, built from the TYPE=0x02 ack at
+    // frame 6646 (requestId 0x04af, body "f02400018000c800") to the
+    // initial GET /Logbook/Entries at frame 6644. See mdswirecodec.h's
+    // doc comment on encodeEntriesFetchTrigger() - this skips the entire
+    // 15-step handle-walk documented in docs/logbook-data-format.md.
+    const auto ackBody = fromHex("f02400018000c800");
+    const auto encoded = Mds::encodeEntriesFetchTrigger(0x04c5, ackBody);
+    expectEq("encodeEntriesFetchTrigger(...)", toHex(encoded),
+              "7ea50d0700c504f0240001800000ffc60b617e");
+}
+
 // --- captured response decode (watch -> phone, Handle Value Notification, handle 0x0015) ---
 
 void testDecodeSinglePacketResponse()
@@ -175,6 +189,7 @@ int main()
     testEncodeLogbookByIdData();
     testLiteralHandshakeRequest();
     testEncodeStreamStartTrigger();
+    testEncodeEntriesFetchTrigger();
     testDecodeSinglePacketResponse();
     testDecodeMultiFragmentResponse();
     testDecoderRejectsCorruptedCrc();

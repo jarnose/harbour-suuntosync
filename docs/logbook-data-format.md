@@ -1292,3 +1292,75 @@ now than "solve `protocol_v9` in general," but still a real
 implementation effort, not a one-line fix, and - like everything else
 in this project - only checkable against a real device, not from this
 sandbox.
+
+## `/Entries` shortcut #2: skip the whole descriptor walk, not just understand it
+
+Kept re-tracing the capture past the 15-step descriptor walk (reqid
+`0x04af`-`0x04bd`, all schema/field-name traffic - `StartAfterId`,
+`IncludeSummaryOnly`, `LogEntries`, `elements`, `LogEntry`, `Id`,
+`ModificationTimestamp`, `Size`) and found it continues: at reqid
+`0x04c5`, the app sends one more `TYPE=0x0D` request whose body is just
+`[0xF0][the ORIGINAL ack's own 2-byte handle][0x01 0x80 0x00][0x00]` -
+**the same handle named by the very first GET's ack (reqid `0x04af`,
+frame 6646), not anything produced by the 14 intervening steps.** Its
+response is the real data: three `LogEntry` records, each 24 bytes,
+decoding (after the shared 8-byte response prefix and a 2-byte
+`protocol_v9` structure header - see above) to `[id: uint32 LE]
+[modificationTimestamp: uint32 LE][16 more bytes, not yet decoded]`
+repeated.
+
+**Confirmed correct, not just plausible**: the three decoded `id`
+values - 1785740504, 1785760357, 1788194033 - are not novel numbers
+invented for this analysis. They are the *exact* logbook ids
+independently captured elsewhere in this same HCI log as literal ASCII
+path segments in separate, unrelated requests:
+`/Logbook/byId/1785740504/Data` (frame 7826), `/Logbook/byId/
+1785760357/Summary`, `/Logbook/byId/1788194033/Summary`. Three
+independent byte-for-byte matches against real, separately-captured
+resource paths is about as strong a confirmation as this project can
+get without new hardware access - this is genuinely decoded, not
+guessed.
+
+**This means the whole 15-step schema walk (`0x04b0`-`0x04c4`) is
+skippable** for actually fetching the entries list, exactly the same
+shape of shortcut this document already found for `/Data`'s stream
+trigger: go straight from the initial GET's ack to the one request that
+actually answers with data, instead of replaying (or trying to
+generically reimplement) the descriptor introspection the official app
+does in between. Whether that walk serves some other real purpose (a
+one-time, cacheable schema fetch the app does before ever needing to
+re-fetch it) or is pure overhead for this specific request shape is
+still open, but irrelevant to getting the entries list itself.
+
+**Implemented and unit-tested (not yet run on real hardware)**:
+- `Mds::encodeEntriesFetchTrigger(requestId, ackBody)`
+  (`src/ble/mdswirecodec.h`/`.cpp`) - builds the 7-byte-body `TYPE=0x0D`
+  request from a GET's ack body. Golden-vector-tested byte-for-byte
+  (CRC32 included) against the real captured frame (reqid `0x04c5`) in
+  `tests/test_mdswirecodec.cpp`.
+- `LogEntries::decode()` (`src/ble/logentriesdecoder.h`/`.cpp`, Qt-free)
+  - decodes a response body into `std::vector<LogEntries::Entry>{id,
+  modificationTimestamp}`. Tested in
+  `tests/test_logentriesdecoder.cpp` against the real captured response,
+  with the three-way real-id cross-check above spelled out in the test
+  file's own comment. Only `id`/`modificationTimestamp` are decoded -
+  the remaining 16 bytes per record (likely including the `Size` field
+  this project separately recovered the name of) are left undecoded
+  rather than guessed at.
+- `MdsWhiteboardClient::fetchLogEntries()` - GET, then the new trigger,
+  then `LogEntries::decode()`, following the same queued/serialized
+  request pattern as `get()`/`fetchLogbookData()`.
+- `AppController::testEntriesFetch()` - now calls `fetchLogEntries()`
+  instead of the old (confirmed-failing) `fetchLogbookData()` reuse
+  attempt, reporting the decoded entry ids via `logbookTestResult()`.
+
+**What's NOT confirmed**: whether the fixed byte offsets this decoder
+assumes (entry count position, 24-byte record stride, records starting
+16 bytes into the array payload) hold for a different number of
+entries, a list large enough to need pagination (the `StartAfterId`
+parameter strongly suggests pagination exists - this capture's list of
+3 may just be short enough to fit in one response), or a different
+alignment selector than this one response happened to use. Like every
+other shortcut in this project, a wrong guess should fail safely (an
+empty result or a decode that doesn't match, not a crash) - the real
+test is Jarno running `testEntriesFetch()` against his own watch.

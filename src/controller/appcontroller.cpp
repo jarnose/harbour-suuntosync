@@ -10,10 +10,13 @@
 #include "../model/workoutlistmodel.h"
 #include "../ble/logbookdecoder.h"
 #include "../ble/summarydecoder.h"
+#include "../ble/smldecoder.h"
 
 #include <QStandardPaths>
 #include <QtMath>
 #include <QVariantMap>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QDir>
 #include <QDateTime>
 
@@ -79,6 +82,61 @@ QByteArray packTrack(const std::vector<Logbook::TrackPoint> &track)
         p += sizeof(qint32);
     }
     return out;
+}
+
+// The schema's canonical units are SI-ish and not always what a person
+// wants to read: heart rate and cadence come back in hertz, temperature in
+// kelvin, energy in joules. Convert those here, once, and carry the unit
+// along so the UI doesn't have to know the schema.
+//
+// Anything not matched keeps its canonical value, with an empty unit - that
+// covers counts, flags, enums and the handful of fields whose unit this
+// project hasn't established. Better a bare number than a confidently wrong
+// label.
+struct DisplayValue
+{
+    double value;
+    QString unit;
+};
+
+DisplayValue toDisplayUnits(const QString &name, double value)
+{
+    if (name.contains(QStringLiteral("HR")) || name.endsWith(QStringLiteral("Cadence")))
+        return { value * 60.0, QStringLiteral("bpm") };
+    if (name.contains(QStringLiteral("Temperature")))
+        return { value - 273.15, QStringLiteral("\u00b0C") };
+    if (name.contains(QStringLiteral("Energy")))
+        return { value / 4184.0, QStringLiteral("kcal") };
+    if (name.contains(QStringLiteral("Duration")) || name.endsWith(QStringLiteral("Time")))
+        return { value, QStringLiteral("s") };
+    if (name.contains(QStringLiteral("Distance")) || name.contains(QStringLiteral("Altitude"))
+            || name.contains(QStringLiteral("Ascent")) || name.contains(QStringLiteral("Descent")))
+        return { value, QStringLiteral("m") };
+    if (name.contains(QStringLiteral("Speed")))
+        return { value, QStringLiteral("m/s") };
+    if (name.contains(QStringLiteral("Pressure")))
+        return { value, QStringLiteral("Pa") };
+    return { value, QString() };
+}
+
+// Decodes every field in a /Summary payload - not just the dozen that get
+// their own Workout column - into { name: { value, unit } } for storage.
+// See WorkoutStore::saveDetails() for why this isn't a set of columns.
+QByteArray summaryDetailsJson(const std::vector<uint8_t> &payload)
+{
+    QJsonObject fields;
+    Sml::decode(Sbem::parseContainer(payload), [&fields](const Sml::Reading &reading) {
+        const QString name = QString::fromLatin1(reading.descriptor->name);
+        if (name.isEmpty())
+            return;
+        const DisplayValue display = toDisplayUnits(name, reading.value);
+        QJsonObject entry;
+        entry.insert(QStringLiteral("value"), display.value);
+        if (!display.unit.isEmpty())
+            entry.insert(QStringLiteral("unit"), display.unit);
+        fields.insert(name, entry);
+    });
+    return QJsonDocument(fields).toJson(QJsonDocument::Compact);
 }
 
 // Overlays the watch's own computed totals onto a workout decoded from
@@ -520,6 +578,29 @@ void AppController::syncCloudWorkouts()
     });
 }
 
+QVariantList AppController::workoutDetails(const QString &key) const
+{
+    const QJsonObject fields =
+            QJsonDocument::fromJson(m_workoutStore->loadDetails(key)).object();
+
+    QVariantList out;
+    for (auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
+        const QJsonObject entry = it.value().toObject();
+        const double value = entry.value(QStringLiteral("value")).toDouble();
+        // Skip fields the watch didn't record. Zero is the schema's own
+        // "absent" marker for most of these (nillable=0), and a screen of
+        // a hundred zeroes would bury the dozen that mean something.
+        if (qFuzzyIsNull(value))
+            continue;
+        QVariantMap row;
+        row.insert(QStringLiteral("name"), it.key());
+        row.insert(QStringLiteral("value"), value);
+        row.insert(QStringLiteral("unit"), entry.value(QStringLiteral("unit")).toString());
+        out.append(row);
+    }
+    return out;
+}
+
 QVariantList AppController::workoutRoute(const QString &key) const
 {
     const QByteArray packed = m_workoutStore->loadRoute(key);
@@ -661,6 +742,8 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 ++succeeded;
                 if (!track.empty())
                     m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
+                if (summaryOk)
+                    m_workoutStore->saveDetails(w.key, summaryDetailsJson(payload), nullptr);
             } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             }

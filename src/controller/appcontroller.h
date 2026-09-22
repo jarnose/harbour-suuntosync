@@ -153,6 +153,14 @@ public:
     // workout-sized area, not a map projection.
     Q_INVOKABLE QVariantList workoutRoute(const QString &key) const;
 
+    // Every field the watch recorded for a BLE-synced workout beyond the
+    // dozen with a column of their own - zone durations, running dynamics,
+    // device and settings, and the rest of the hundred-plus in
+    // docs/sbem-chunk-map.md. A list of { name, value, unit }, sorted by
+    // name, with unrecorded (zero) fields left out. Empty for a cloud
+    // workout or one synced before this existed.
+    Q_INVOKABLE QVariantList workoutDetails(const QString &key) const;
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();

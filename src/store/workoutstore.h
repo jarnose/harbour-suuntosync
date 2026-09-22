@@ -28,6 +28,16 @@ public:
     bool saveRoute(const QString &key, const QByteArray &packedPoints, QString *error);
     QByteArray loadRoute(const QString &key) const;
 
+    // Everything else the watch recorded for a workout, as a JSON object of
+    // field name -> { value, unit }. There are well over a hundred of these
+    // (see docs/sbem-chunk-map.md) and only a handful are worth a column of
+    // their own, so the rest live here rather than widening the workouts
+    // table every time another field gets decoded. Empty for a cloud
+    // workout. Its own table for the same reason as the route: the list
+    // view has no use for it.
+    bool saveDetails(const QString &key, const QByteArray &json, QString *error);
+    QByteArray loadDetails(const QString &key) const;
+
 private:
     QString m_dbPath;
     QString m_connectionName;

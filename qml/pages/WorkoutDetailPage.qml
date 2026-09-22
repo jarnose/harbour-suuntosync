@@ -36,6 +36,14 @@ Page {
     // synced after route storage existed.
     property var route: workoutKey.length > 0 ? AppController.workoutRoute(workoutKey) : []
 
+    // Everything else the watch recorded - see
+    // AppController::workoutDetails(). Collapsed by default: it's a hundred
+    //-odd fields and the curated stats above are what anyone actually
+    // wants, but throwing the rest away after going to the trouble of
+    // decoding it would be silly.
+    property var details: workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+    property bool detailsExpanded: false
+
     function formatDuration(seconds) {
         var h = Math.floor(seconds / 3600)
         var m = Math.floor((seconds % 3600) / 60)
@@ -190,6 +198,62 @@ Page {
                     }
                 }
             }
+
+            // Everything the watch recorded beyond the stats above. Behind
+            // a tap because it is a hundred-odd fields in the watch's own
+            // naming, useful to have but not to lead with.
+            Item { width: 1; height: Theme.paddingLarge }
+
+            Button {
+                visible: page.details.length > 0
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: page.detailsExpanded
+                      ? qsTr("Hide all recorded fields")
+                      : qsTr("All recorded fields (%1)").arg(page.details.length)
+                onClicked: page.detailsExpanded = !page.detailsExpanded
+            }
+
+            Column {
+                width: parent.width
+                visible: page.detailsExpanded
+
+                Repeater {
+                    model: page.detailsExpanded ? page.details : []
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        spacing: Theme.paddingMedium
+
+                        Label {
+                            width: parent.width * 0.6
+                            text: modelData.name
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            wrapMode: Text.WrapAnywhere
+                        }
+                        Label {
+                            width: parent.width * 0.4 - Theme.paddingMedium
+                            horizontalAlignment: Text.AlignRight
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: {
+                                // Integers stay integers; everything else
+                                // gets two decimals, which suits the range
+                                // these fields span (0.02 to 650000).
+                                var v = modelData.value
+                                var shown = (Math.abs(v - Math.round(v)) < 0.005)
+                                        ? Math.round(v).toString()
+                                        : v.toFixed(2)
+                                return modelData.unit.length > 0
+                                        ? shown + " " + modelData.unit
+                                        : shown
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item { width: 1; height: Theme.paddingLarge }
         }
     }
 }

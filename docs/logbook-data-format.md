@@ -1812,3 +1812,59 @@ Separately confirmed in the same session: a real BLE-synced workout shows
 its route, peak training effect, EPOC, recovery time and estimated VO2max -
 the last of which the captured fixture has at nillable-0, so its offset had
 been confirmed from the descriptor map alone until then.
+
+## Decoding the rest: a generic decoder instead of more offsets
+
+With the watch's own descriptor table in hand, hand-writing byte offsets for
+the remaining hundred-odd fields would have been the wrong shape of work -
+tedious, and stale the moment a different firmware reorders a group. So the
+table became code instead: `tools/generate_sbem_tables.py` turns
+`sbem-descriptor-map.json` into `src/ble/sbemdescriptors.{h,cpp}` (359
+entries, committed, so a normal build never runs Python), and
+`Sml::decode()` walks any payload against it the way `BSML::DecoderBase`
+does in the official app.
+
+It resolves `<DELTAREF>` chains onto their target descriptor, applies the
+`<MOD>` scaling (all eleven expressions in the captured table are linear, so
+a scale and an offset per field is enough), skips nillable sentinels, and
+tracks the clock through the time base. A consumer gets a callback per
+reading and picks what it wants.
+
+**Cross-validated, not just exercised.** On the cycling fixture it agrees
+with `Logbook::decode()` on heart rate to six figures and on the GPS fix
+count exactly, and `Sample.Distance`'s final value lands on the 5417 m that
+`/Summary` independently reports as `Header.Distance`. Run against the
+Summary payload it reproduces all 126 of that decoder's fields, including
+the `local64` start time. Two independently written decoders agreeing is
+what makes the table trustworthy.
+
+Fields that nothing had touched before now fall out for free: temperature,
+absolute and sea-level pressure, vertical speed, battery current/voltage/
+charge, GPS quality (satellite count, best SNR, EHPE/EVPE), recorded speed
+and distance, and lap and pause events.
+
+**One real bug it surfaced**: a nillable sentinel was being stored as the
+base that later deltas accumulate from, turning a 7 m/s ride into 1317 m/s.
+A "no reading" must not seed a chain.
+
+**Two honest limits**, both pinned in the tests so they don't get mistaken
+for regressions later:
+- This decoder reports readings, not corrections, so altitude comes back
+  without the chunk-0x04 calibration offset that `Logbook::decode()`
+  applies. On the walking fixture that's a 208 m difference at the start.
+- The int8 delta chains drift between the rare absolute snapshots - four in
+  a 38-minute ride - so reconstructed peak speed undershoots the watch's own
+  figure by ~14%. Tracing each snapshot against the accumulated chain showed
+  the large divergences are the calibration step rather than accumulation
+  error, with a few metres of genuine drift on top. The snapshots exist to
+  re-sync the chain, and `/Summary` remains the number to trust.
+
+### Where it all ends up
+
+Rather than widening the `workouts` table for every newly decoded field, the
+full set is stored per workout as JSON in a `workout_details` table and
+surfaced behind an "All recorded fields" toggle on the detail page, with
+canonical units converted for display (hertz to bpm, kelvin to Celsius,
+joules to kcal) and unrecorded zero-valued fields filtered out. The dozen
+fields worth leading with keep their own columns and their place in the
+stats grid.

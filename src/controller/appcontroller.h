@@ -9,8 +9,6 @@
 #include <QStringList>
 #include <QVector>
 
-#include <functional>
-
 class TokenVault;
 class CloudAccountStore;
 class PairedWatchStore;
@@ -108,9 +106,9 @@ public:
     // libmds.so's whiteboard::protocol_v9::StructureDeserializer code and
     // re-deriving the real captured request/response byte-for-byte (see
     // MdsWhiteboardClient::fetchLogEntries(),
-    // Mds::encodeEntriesFetchTrigger(), LogEntries::decode()). Not yet run
-    // on real hardware - reports either the decoded entry ids via
-    // logbookTestResult() or the failure.
+    // Mds::encodeEntriesFetchTrigger(), LogEntries::decode()). Confirmed
+    // working on real hardware 2026-09-22 - reports either the decoded
+    // entry ids via logbookTestResult() or the failure.
     Q_INVOKABLE void testEntriesFetch();
 
     // The real end-user "sync directly from the watch" action, now that
@@ -168,28 +166,8 @@ private:
     // index member variable since only one such loop can ever be running at
     // a time anyway (guarded by workoutSyncInProgress).
     //
-    // Reconnects the watch (see reconnectWatch()) before every entry,
-    // including the first - real-hardware testing 2026-09-22 found the
-    // /Data shortcut (Mds::encodeStreamStartTrigger()) only works for the
-    // first "Data" fetch on a given BLE connection; a second consecutive
-    // fetch on the same connection times out with no bulk data at all, but
-    // the exact same logbook id succeeds when fetched right after a fresh
-    // reconnect. Not a real fix (the shortcut's trigger derivation is
-    // presumably only valid for whichever handle the watch happens to
-    // assign first per connection - see docs/logbook-data-format.md) but a
-    // confirmed-working, if slow, way to sync more than one entry until
-    // that's understood properly.
     void fetchWatchEntryAt(const QVector<QString> &logbookIds, int index, int succeeded,
                             const QStringList &failures);
-    // Disconnects and reconnects the paired watch, then waits (polling, see
-    // the .cpp) for whiteboardReady to come back up before calling back -
-    // ok=false if reconnecting or re-establishing the Whiteboard channel
-    // didn't happen within a bounded timeout. BluezAdapter::
-    // disconnectFromDevice() has no completion signal of its own (see its
-    // header), so this waits out a fixed settle delay before asking BlueZ
-    // to reconnect rather than racing the two.
-    void reconnectWatch(std::function<void(bool ok)> callback);
-    void pollForWhiteboardReady(int elapsedMs, std::function<void(bool ok)> callback);
 
     TokenVault *m_tokenVault;
     CloudAccountStore *m_cloudAccountStore;

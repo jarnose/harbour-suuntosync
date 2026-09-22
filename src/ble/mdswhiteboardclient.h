@@ -137,6 +137,13 @@ private:
     // (Re)arms m_bulkSilenceTimer; when it fires with no further bulk chunk
     // having reset it, the fetch is considered complete.
     void armBulkSilenceTimer();
+    // Sends the TYPE=0x11 stop for the stream just collected, then
+    // finishes the fetch with the given result regardless of whether the
+    // watch acked the stop - the collected data is what the caller asked
+    // for, and a failed stop shouldn't throw it away. Sending this at all
+    // is what makes a *second* fetch on the same connection possible; see
+    // Mds::encodeStreamStopTrigger()'s doc comment.
+    void endBulkStream(bool ok, const QString &error);
     void finishBulkFetch(bool ok, const QString &error);
 
     QString m_deviceObjectPath;
@@ -167,4 +174,8 @@ private:
     std::vector<uint8_t> m_bulkBuffer;
     DataCallback m_bulkCallback;
     QTimer m_bulkSilenceTimer;
+    // The GET ack the stream was started from, kept so the matching stop
+    // can be built from it. Cleared once the stop has been sent, so a late
+    // chunk re-arming the silence timer can't send a second one.
+    std::vector<uint8_t> m_bulkAckBody;
 };

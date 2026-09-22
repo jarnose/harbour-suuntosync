@@ -14,6 +14,7 @@ constexpr uint8_t kEscapedEscape = 0x5D;    // 0x7D 0x5D -> literal 0x7D
 constexpr uint8_t kSync = 0xA5;
 constexpr uint8_t kTypeGetRequest = 0x0A;
 constexpr uint8_t kTypeStreamStartTrigger = 0x10;
+constexpr uint8_t kTypeStreamStopTrigger = 0x11;
 constexpr uint8_t kTypeHandleFetch = 0x0D;
 constexpr uint8_t kGetVerb = 0x01;
 
@@ -95,13 +96,32 @@ std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &pat
     return encodeFrame(kTypeGetRequest, requestId, body);
 }
 
-std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+namespace {
+
+// Start and stop differ only in the message type - the body (the resource
+// handle the ack named, the fixed 0x01 0x80 0x00, and a trailing zero) is
+// byte-for-byte identical in the capture.
+std::vector<uint8_t> streamTriggerBody(const std::vector<uint8_t> &ackBody, const char *what)
 {
     if (ackBody.size() < 6)
-        throw std::invalid_argument("encodeStreamStartTrigger: ackBody shorter than 6 bytes");
+        throw std::invalid_argument(std::string(what) + ": ackBody shorter than 6 bytes");
     std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
     body.push_back(0x00);
-    return encodeFrame(kTypeStreamStartTrigger, requestId, body);
+    return body;
+}
+
+} // namespace
+
+std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+{
+    return encodeFrame(kTypeStreamStartTrigger, requestId,
+                        streamTriggerBody(ackBody, "encodeStreamStartTrigger"));
+}
+
+std::vector<uint8_t> encodeStreamStopTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+{
+    return encodeFrame(kTypeStreamStopTrigger, requestId,
+                        streamTriggerBody(ackBody, "encodeStreamStopTrigger"));
 }
 
 std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)

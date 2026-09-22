@@ -115,6 +115,21 @@ void testEncodeStreamStartTrigger()
               "7ea5100700350500240e01800000516dae727e");
 }
 
+void testEncodeStreamStopTrigger()
+{
+    // frame 10767, t=409.638s: the TYPE=0x11 "stop the stream" the official
+    // app sends once the bulk /Data transfer has finished, requestId
+    // 0x054E - built from the very same ack (frame 9407, requestId 0x054B,
+    // body "00240e018000c800") its TYPE=0x10 start trigger was built from,
+    // and byte-identical to it apart from the message type. Skipping this
+    // is what made every /Data fetch after the first on one connection time
+    // out in silence - see mdswirecodec.h's doc comment.
+    const auto ackBody = fromHex("00240e018000c800");
+    const auto encoded = Mds::encodeStreamStopTrigger(0x054E, ackBody);
+    expectEq("encodeStreamStopTrigger(...)", toHex(encoded),
+              "7ea51107004e0500240e01800000367cfd9b7e");
+}
+
 void testEncodeEntriesFetchTrigger()
 {
     // frame reqid 0x04c5: the TYPE=0x0D request that returns the real
@@ -189,6 +204,7 @@ int main()
     testEncodeLogbookByIdData();
     testLiteralHandshakeRequest();
     testEncodeStreamStartTrigger();
+    testEncodeStreamStopTrigger();
     testEncodeEntriesFetchTrigger();
     testDecodeSinglePacketResponse();
     testDecodeMultiFragmentResponse();

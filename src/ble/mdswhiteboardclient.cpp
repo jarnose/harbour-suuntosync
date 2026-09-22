@@ -51,7 +51,7 @@ MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
 
     m_bulkSilenceTimer.setSingleShot(true);
     connect(&m_bulkSilenceTimer, &QTimer::timeout, this, [this]() {
-        finishBulkFetch(!m_bulkBuffer.empty(),
+        endBulkStream(!m_bulkBuffer.empty(),
                 m_bulkBuffer.empty() ? tr("No bulk data arrived before the silence timeout")
                                       : QString());
     });
@@ -367,7 +367,8 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
             const std::vector<uint8_t> ackBody = ackFrame.body;
             getRaw([ackBody](uint16_t requestId) {
                 return Mds::encodeStreamStartTrigger(requestId, ackBody);
-            }, [this, callback](bool triggerOk, const Mds::Frame &, const QString &triggerError) {
+            }, [this, callback, ackBody](bool triggerOk, const Mds::Frame &,
+                                           const QString &triggerError) {
                 if (!triggerOk) {
                     callback(false, {}, tr("Stream-start trigger failed: %1").arg(triggerError));
                     return;
@@ -375,6 +376,7 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
                 m_bulkFetchActive = true;
                 m_bulkBuffer.clear();
                 m_bulkCallback = callback;
+                m_bulkAckBody = ackBody;
                 armBulkSilenceTimer();
             });
         } catch (const std::exception &e) {
@@ -434,12 +436,40 @@ void MdsWhiteboardClient::armBulkSilenceTimer()
     m_bulkSilenceTimer.start(kBulkStreamSilenceMs);
 }
 
+void MdsWhiteboardClient::endBulkStream(bool ok, const QString &error)
+{
+    if (!m_bulkFetchActive)
+        return;
+
+    m_bulkSilenceTimer.stop();
+
+    // No ack body (or the stop already went out for this stream) - nothing
+    // to tear down, just report.
+    if (m_bulkAckBody.size() < 6) {
+        finishBulkFetch(ok, error);
+        return;
+    }
+
+    const std::vector<uint8_t> ackBody = m_bulkAckBody;
+    m_bulkAckBody.clear();
+
+    getRaw([ackBody](uint16_t requestId) {
+        return Mds::encodeStreamStopTrigger(requestId, ackBody);
+    }, [this, ok, error](bool, const Mds::Frame &, const QString &) {
+        // Deliberately ignoring the stop's own result: whatever the watch
+        // said about it, the bytes already collected are what the caller
+        // asked for.
+        finishBulkFetch(ok, error);
+    });
+}
+
 void MdsWhiteboardClient::finishBulkFetch(bool ok, const QString &error)
 {
     if (!m_bulkFetchActive)
         return;
     m_bulkFetchActive = false;
     m_bulkSilenceTimer.stop();
+    m_bulkAckBody.clear();
     const DataCallback callback = m_bulkCallback;
     const std::vector<uint8_t> data = std::move(m_bulkBuffer);
     m_bulkCallback = nullptr;

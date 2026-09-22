@@ -1435,41 +1435,67 @@ guessing:
 This pins the cause down precisely: it's not about the specific
 logbook id or its data, and it's not about firing multiple requests
 back to back per se - **the same id that fails on an already-used
-connection succeeds immediately on a fresh one.** The conclusion this
-project already flagged as unconfirmed when `encodeStreamStartTrigger()`
-was built (see its doc comment) turns out to matter after all: deriving
-the `TYPE=0x10` trigger from "the ack's first 6 bytes + one zero byte"
-only reconstructs a *valid* reference for whichever handle the watch
-happens to assign to the **first** `/Data`-shaped request on a given
-connection. A second such request within the same connection gets a
-different (presumably incremented, per this document's earlier
-`protocol_v9` handle-numbering findings) handle that this simplified
-formula doesn't account for, so the derived trigger references nothing
-real and the watch never starts streaming - a silent, safe failure
-(exactly the "a wrong guess just times out" pattern this whole project
-has relied on), not a corruption or a crash.
+connection succeeds immediately on a fresh one.**
 
-**Workaround shipped (not yet itself tested on real hardware)**, since
-understanding the *real* handle-numbering rule well enough to fix the
-trigger derivation generically is a further open-ended task on top of
-everything already in this document's `protocol_v9` sections:
-`AppController::reconnectWatch()` disconnects and reconnects the watch
-(`BluezAdapter::disconnectFromDevice()`/`connectToDevice()`), explicitly
-calls `MdsWhiteboardClient::detach()` too (`disconnectFromDevice()`
-alone doesn't reset the client's own `m_whiteboardReady` state - would
-have made the reconnect wait a no-op), then polls `whiteboardReady`
-(250ms interval, 15s timeout) before considering the watch ready again.
-`fetchWatchEntryAt()` now calls this before *every* entry's fetch,
-including the first, giving each `/Data` request the same "first fetch
-on a fresh connection" condition that's actually been confirmed to
-work. Real cost: each entry now takes an extra several seconds for the
-disconnect/settle/reconnect/GATT-rediscovery/handshake cycle - acceptable
-for a 3-entry watch, not yet known to be acceptable for a much longer
-history.
+### The first answer was wrong, and the capture had the real one all along
 
-**Genuinely open**: the *real* fix - understanding how the watch
-actually assigns/numbers handles per connection well enough to derive a
-correct trigger for the 2nd, 3rd, ... `/Data` fetch without a
-reconnect - is still unsolved. The reconnect-every-time workaround is a
-confirmed-safe (if slow) way to get a multi-entry sync working, not a
-substitute for that understanding.
+The obvious guess was that the `TYPE=0x10` trigger's derivation ("the
+ack's first 6 bytes plus a zero") only reconstructs a valid reference
+for whichever handle the watch assigns *first* on a connection, and the
+first fix attempted was to disconnect/reconnect the watch before every
+entry. That was both wrong and shotgun-shaped, and it failed on real
+hardware too (the forced reconnect couldn't re-establish the session
+handshake in time). Jarno pushed back on it - correctly - which is what
+prompted actually re-reading the capture instead of theorising.
+
+The capture contains **all three** `/Data` fetches
+(`1785740504`, `1785760357`, `1788194033`) over **one** connection, so
+the official app's own answer was sitting there the whole time.
+Decoding every non-bulk frame around them shows each fetch is exactly
+this, three times, identically:
+
+```
+W  0x0a  GET /Logbook/byId/<id>/Data   ->  N 0x02  [handle][01 80 00][c8 00]   (c8 00 = status 200)
+W  0x0b  [previous handle][01 80 00]   ->  N 0x03  ack      (release the previously-held resource)
+W  0x10  [handle][01 80 00][00]        ->  N 0x08  ack      START the stream
+         ... TYPE=0x01/reqid=0 bulk chunks ...
+W  0x11  [handle][01 80 00][00]        ->  N 0x09  ack      STOP the stream
+```
+
+**`TYPE=0x11` is the missing piece** - the stream teardown, byte-for-byte
+identical to the `0x10` start apart from the type byte, sent after every
+single bulk transfer completes. This project never sent it, so the watch
+still considered the stream open, and every subsequent `0x10` for that
+resource was ignored: ack fine, then silence. Exactly the observed
+symptom, and it explains the fresh-connection behaviour too (a new
+connection resets the stream state).
+
+Two other things fell out of the same re-reading, both correcting
+earlier guesses in this document:
+- **The handle is the resource's, not the request's.** All three fetches
+  use the same handle `00 24 0e`, because `/Logbook/byId/{id}/Data` is
+  one Whiteboard ResourceId with the log id as a path *parameter* - the
+  id isn't part of the resource's identity. So there was never any
+  "handle numbering" problem to solve.
+- **The handle-walk really is skippable, and the official app skips it
+  too.** Only the *first* `/Data` fetch on the connection ran the long
+  `0x0d` walk (schema introspection, cached afterwards); fetches 2 and 3
+  went straight `GET -> 0x0b -> 0x10 -> stream -> 0x11`. The shortcut
+  this project built was right all along - it was just missing the
+  teardown.
+
+`TYPE=0x0b` (release the *previously held* resource when acquiring a
+different one) is still not implemented here. The app sends it on every
+acquisition, but this client only ever touches `/Logbook/Entries` and
+`/Logbook/byId/*/Data`, and the `Entries -> Data` transition is
+confirmed working on real hardware without it, so it's left out rather
+than added speculatively.
+
+**Implemented**: `Mds::encodeStreamStopTrigger()` (golden-vector tested
+byte-for-byte against the real captured frame, including CRC) and
+`MdsWhiteboardClient::endBulkStream()`, which sends the stop once the
+bulk silence timer says the transfer is done and only then hands the
+collected bytes to the caller - deliberately ignoring whether the watch
+acked the stop, since a failed teardown shouldn't discard data that
+already arrived. The reconnect-per-entry workaround is reverted
+entirely.

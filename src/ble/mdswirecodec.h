@@ -104,17 +104,36 @@ std::vector<uint8_t> literalSessionHandshakeRequest();
 // 7868, requestId 0x0535, built from the ack at frame 7828) - see
 // tests/test_mdswirecodec.cpp.
 //
-// What's NOT confirmed: the real capture this was derived from didn't go
-// straight from the ack to this trigger - the official app ran a long
-// handle-based "walk" of intermediate 0x0b/0x0d/0x03/0x05 exchanges in
-// between (see docs/logbook-data-format.md's provenance section), which
-// this function skips entirely. Whether that walk is genuinely required to
-// "warm up" the resource before the watch will honour this trigger, or is
-// just the app fetching UI-only metadata (size, a display name, "bytes" as
-// a unit string - all seen in that walk's responses) that isn't needed for
-// the data fetch itself, is unknown until tried on real hardware. Throws
+// The handle-walk this skips turned out NOT to be required: re-reading the
+// capture showed the official app itself runs it only for the *first*
+// /Data fetch on a connection (it's schema introspection, cached
+// afterwards) and then fetches the 2nd and 3rd workouts with exactly this
+// GET -> 0x10 -> stream sequence and no walk at all. Throws
 // std::invalid_argument if ackBody is shorter than 6 bytes.
 std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
+
+// The matching "stop the bulk stream" request for a stream started with
+// encodeStreamStartTrigger() - same body, byte for byte, only the message
+// type differs (0x11 rather than 0x10); the watch answers TYPE=0x09 the
+// way it answers a start with TYPE=0x08.
+//
+// **This is not optional.** Real-hardware testing 2026-09-22: a second
+// /Data fetch on the same BLE connection gets its GET acked normally and
+// its start trigger acked normally, and then the watch simply never sends
+// any bulk data - because as far as it's concerned the previous stream on
+// that resource is still open. The capture shows the official app sending
+// this stop after every single bulk transfer completes, before going on to
+// anything else. Without it, exactly one /Data fetch per connection works
+// and every one after it times out in silence.
+//
+// (The handle here is the resource's, not the request's: /Logbook/byId/
+// <id>/Data resolves to the same Whiteboard ResourceId - 00 24 0e on
+// Jarno's Race - for every logbook id, since the id is a path *parameter*
+// rather than part of the resource's identity. That's why the same stop
+// body works for whichever workout was just fetched.)
+//
+// Throws std::invalid_argument if ackBody is shorter than 6 bytes.
+std::vector<uint8_t> encodeStreamStopTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
 
 // Builds the TYPE=0x0D "fetch by handle" request that returns a structured
 // resource's actual data directly from the handle named by a GET's ack -

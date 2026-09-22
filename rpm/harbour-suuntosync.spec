@@ -16,6 +16,8 @@ BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(Qt5Concurrent)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5DBus)
+# Raw deflate for the sml.zip upload part - see src/cloud/zipwriter.cpp.
+BuildRequires:  pkgconfig(zlib)
 # No pkgconfig(Qt5Bluetooth) - confirmed by a real build attempt against
 # this target (zypper found no provider by name or capability) that
 # Sailfish OS's Qt5 distribution doesn't include QtConnectivity/QtBluetooth

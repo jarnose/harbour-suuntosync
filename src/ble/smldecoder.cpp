@@ -100,7 +100,8 @@ void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callb
     // differential field accumulates against.
     std::unordered_map<uint16_t, double> running;
 
-    for (const Sbem::Chunk &chunk : chunks) {
+    for (size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+        const Sbem::Chunk &chunk = chunks[chunkIndex];
         const Descriptor *group = SbemDescriptors::find(chunk.id);
         if (!group || group->childCount == 0)
             continue;
@@ -122,7 +123,28 @@ void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callb
 
             double raw = 0;
             if (!readRaw(chunk.value.data() + offset, field->format, &raw)) {
-                offset += size; // e.g. utf8: consumed, but nothing numeric to report
+                // utf8 is the only non-numeric format in the table. Report
+                // it as text rather than dropping it: the JSON the cloud
+                // wants carries these verbatim.
+                if (field->format == Format::Utf8) {
+                    Reading reading;
+                    reading.descriptorId = field->id;
+                    reading.descriptor = field;
+                    reading.chunkIndex = chunkIndex;
+                    reading.isText = true;
+                    const char *begin = reinterpret_cast<const char *>(
+                            chunk.value.data() + offset);
+                    // size includes the NUL when one was found.
+                    size_t textLen = size;
+                    while (textLen > 0 && begin[textLen - 1] == '\0')
+                        --textLen;
+                    reading.text.assign(begin, textLen);
+                    const auto textClock = running.find(kTimeDescriptor);
+                    reading.timeMs = textClock == running.end()
+                            ? 0 : static_cast<int64_t>(textClock->second);
+                    callback(reading);
+                }
+                offset += size;
                 continue;
             }
             offset += size;
@@ -155,6 +177,7 @@ void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callb
             Reading reading;
             reading.descriptorId = target->id;
             reading.descriptor = target;
+            reading.chunkIndex = chunkIndex;
             reading.value = raw * target->scale + target->offset;
             const auto clock = running.find(kTimeDescriptor);
             reading.timeMs = clock == running.end() ? 0 : static_cast<int64_t>(clock->second);

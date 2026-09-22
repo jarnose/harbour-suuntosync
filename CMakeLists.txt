@@ -80,6 +80,8 @@ add_executable(harbour-suuntosync
     src/cloud/suuntoauth.cpp
     src/cloud/polyline.cpp
     src/cloud/iso8601.cpp
+    src/cloud/smljson.cpp
+    src/cloud/zipwriter.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/model/workoutlistmodel.cpp
@@ -96,7 +98,13 @@ target_include_directories(harbour-suuntosync PRIVATE
     ${SAILFISHSECRETS_INCLUDE_DIRS}
 >)
 
+# zlib: raw deflate for the sml.zip upload part (src/cloud/zipwriter.cpp).
+# Already a dependency of Qt itself, so this adds nothing to the image - it
+# just needs naming so the linker sees it.
+find_package(ZLIB REQUIRED)
+
 target_link_libraries(harbour-suuntosync
+    ZLIB::ZLIB
     Qt5::Quick
     Qt5::Sql
     Qt5::Concurrent

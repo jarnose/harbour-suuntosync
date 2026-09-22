@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 #include <vector>
 
 // A generic, descriptor-driven decoder for SBEM payloads - the way the
@@ -42,6 +43,16 @@ struct Reading
     uint16_t descriptorId = 0;
     const SbemDescriptors::Descriptor *descriptor = nullptr;
     double value = 0;
+    // Which chunk this came from. Consumers that only want values ignore
+    // it; the SML JSON writer needs it because the cloud's format is one
+    // JSON sample per chunk (see src/cloud/smljson.h).
+    size_t chunkIndex = 0;
+    // Set for utf8 fields, where `value` is meaningless. The only ones seen
+    // so far are Sample.Events.Array.Activity.CustomModeId and the header's
+    // free-text fields, but they have to survive the trip to reproduce what
+    // the app uploads.
+    bool isText = false;
+    std::string text;
     // Milliseconds since the epoch, UTC, tracked through the payload's time
     // base (chunk 0x01) and the int16 deltas every group carries. 0 until
     // the first time reference appears.

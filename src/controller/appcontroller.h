@@ -167,6 +167,12 @@ public:
     // workout, and for a workout with nothing worth charting.
     Q_INVOKABLE QVariantList workoutSeries(const QString &key) const;
 
+    // A BLE-synced workout's laps: { number, type, durationSeconds,
+    // distanceMeters }, where type is the watch's own reason for the marker
+    // (manual, auto-lap by distance, interval...). Empty when the workout
+    // has no lap markers, which is the common case for a plain outing.
+    Q_INVOKABLE QVariantList workoutLaps(const QString &key) const;
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();

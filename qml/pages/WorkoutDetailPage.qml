@@ -47,6 +47,7 @@ Page {
     // Per-sample curves, already reduced to a drawable number of points -
     // see AppController::workoutSeries().
     property var series: workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
+    property var laps: workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
     property bool detailsExpanded: false
 
     function formatDuration(seconds) {
@@ -201,6 +202,56 @@ Page {
                         Label {
                             text: modelData.value
                             font.pixelSize: Theme.fontSizeLarge
+                        }
+                    }
+                }
+            }
+
+            // Laps, when the workout has any - a plain outing with no
+            // auto-lap and no button presses has none, so this stays out of
+            // the way rather than showing a one-row table of the whole
+            // workout.
+            Column {
+                width: parent.width
+                visible: page.laps.length > 1
+                topPadding: Theme.paddingLarge
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    text: qsTr("Laps")
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                }
+
+                Repeater {
+                    model: page.laps
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        width: page.width - 2 * x
+                        spacing: Theme.paddingMedium
+
+                        Label {
+                            width: parent.width * 0.12
+                            text: modelData.number
+                            color: Theme.secondaryColor
+                        }
+                        Label {
+                            width: parent.width * 0.3
+                            text: page.formatDuration(modelData.durationSeconds)
+                        }
+                        Label {
+                            width: parent.width * 0.28
+                            text: modelData.distanceMeters > 0
+                                  ? qsTr("%1 km").arg((modelData.distanceMeters / 1000).toFixed(2))
+                                  : ""
+                        }
+                        Label {
+                            width: parent.width * 0.3 - 3 * Theme.paddingMedium
+                            text: modelData.type
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            truncationMode: TruncationMode.Fade
                         }
                     }
                 }

@@ -1868,3 +1868,42 @@ canonical units converted for display (hertz to bpm, kelvin to Celsius,
 joules to kcal) and unrecorded zero-valued fields filtered out. The dozen
 fields worth leading with keep their own columns and their place in the
 stats grid.
+
+## What the decoded data became
+
+With the generic decoder in place, the remaining work was presentation
+rather than reverse engineering.
+
+**Cloud workouts got most of it for free.** The `/v1/workouts` list response
+has always carried a `polyline`, a `tss` object and `recoveryTime`, and this
+client parsed thirteen fields and ignored those. Reading them properly -
+same request, no new endpoint - gives a cloud workout a route (Google's
+encoded-polyline format, decoded by `src/cloud/polyline.cpp`, stored in the
+same packed form a BLE route uses so the drawing code doesn't care where it
+came from), a training stress score, and a recovery time. The cloud's TSS is
+kept separate from the watch's `Header.TraingingLoadPeak` rather than folded
+into it: different source, different scale, and making one stand in for the
+other would be a guess.
+
+**Charts** come from the per-sample series, reduced during sync to 200
+averaged buckets per series and stored as JSON. Averaging rather than
+sampling keeps a spike visible as a bump; the true min and max travel
+alongside so the axis labels stay honest where the line has been smoothed.
+Six series are charted - heart rate, altitude, speed, cadence, power,
+temperature - and a series that never varies is dropped. The rest of the
+recorded fields are monotonic, diagnostic or one-off events, which a line
+graph can't say anything useful about, so they stay in the "all recorded
+fields" list instead.
+
+**Laps** come from the Lap event chunk. A marker is a point in time and a
+lap is the stretch between two of them, so each entry carries the split
+duration and distance (`Sample.Distance` is cumulative, which makes the
+distance split a subtraction) along with the watch's own reason for the
+marker - manual, auto-lap by distance, interval. Most outings have none,
+and the section stays hidden rather than showing a one-row table of the
+whole workout.
+
+Each of these lives in its own small table keyed by workout, for the same
+reason the route does: the workout list has no use for any of it, and
+widening the `workouts` row for every newly decoded field would be the
+wrong trade.

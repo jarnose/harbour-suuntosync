@@ -218,6 +218,87 @@ QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
     return series.isEmpty() ? QByteArray() : QJsonDocument(series).toJson(QJsonDocument::Compact);
 }
 
+// Lap markers, from the Lap event chunk. The schema's own enum, so a
+// manual lap and an auto-lap read differently rather than all showing up
+// as "lap".
+QString lapTypeName(int type)
+{
+    switch (type) {
+    case 0: return QStringLiteral("Start");
+    case 1: return QStringLiteral("Stop");
+    case 2: return QStringLiteral("Distance");
+    case 3: return QStringLiteral("Manual");
+    case 4: return QStringLiteral("Interval");
+    case 5: return QStringLiteral("High interval");
+    case 6: return QStringLiteral("Low interval");
+    default: return QString::number(type);
+    }
+}
+
+// Turns the lap markers in a /Data payload into laps: a marker is a point
+// in time, a lap is the stretch between two of them, so each entry carries
+// the split duration and distance as well as the marker that ended it.
+// Sample.Distance is cumulative, which is what makes the distance split
+// just a subtraction.
+QByteArray buildLapsJson(const std::vector<uint8_t> &compressed)
+{
+    struct Marker { int type; int64_t timeMs; double distance; };
+    std::vector<Marker> markers;
+    double distance = 0;
+    int64_t firstTimeMs = 0;
+    int64_t lastTimeMs = 0;
+
+    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
+                [&](const Sml::Reading &reading) {
+        const QLatin1String name(reading.descriptor->name);
+        if (reading.timeMs > 0) {
+            if (firstTimeMs == 0)
+                firstTimeMs = reading.timeMs;
+            lastTimeMs = reading.timeMs;
+        }
+        if (name == QLatin1String("Sample.Distance"))
+            distance = reading.value;
+        else if (name == QLatin1String("Sample.Events.Array.Lap.Type"))
+            markers.push_back({ static_cast<int>(reading.value), reading.timeMs, distance });
+    });
+
+    if (markers.empty())
+        return QByteArray();
+
+    QJsonArray laps;
+    int64_t fromTime = firstTimeMs;
+    double fromDistance = 0;
+    for (const Marker &marker : markers) {
+        // A Start marker opens the workout rather than closing a lap.
+        if (marker.type == 0 && laps.isEmpty() && marker.timeMs <= fromTime) {
+            fromTime = marker.timeMs;
+            fromDistance = marker.distance;
+            continue;
+        }
+        QJsonObject lap;
+        lap.insert(QStringLiteral("number"), laps.size() + 1);
+        lap.insert(QStringLiteral("type"), lapTypeName(marker.type));
+        lap.insert(QStringLiteral("durationSeconds"), (marker.timeMs - fromTime) / 1000.0);
+        lap.insert(QStringLiteral("distanceMeters"), marker.distance - fromDistance);
+        laps.append(lap);
+        fromTime = marker.timeMs;
+        fromDistance = marker.distance;
+    }
+
+    // Whatever came after the last marker is a lap too, unless the last
+    // marker was the workout stopping.
+    if (!markers.empty() && markers.back().type != 1 && lastTimeMs > fromTime) {
+        QJsonObject lap;
+        lap.insert(QStringLiteral("number"), laps.size() + 1);
+        lap.insert(QStringLiteral("type"), QStringLiteral("End"));
+        lap.insert(QStringLiteral("durationSeconds"), (lastTimeMs - fromTime) / 1000.0);
+        lap.insert(QStringLiteral("distanceMeters"), distance - fromDistance);
+        laps.append(lap);
+    }
+
+    return laps.isEmpty() ? QByteArray() : QJsonDocument(laps).toJson(QJsonDocument::Compact);
+}
+
 // Overlays the watch's own computed totals onto a workout decoded from
 // /Data. Everything here is exact where Logbook::decode() could only
 // approximate (see summarydecoder.h), so it wins outright; heart rate is
@@ -690,6 +771,24 @@ QVariantList AppController::workoutDetails(const QString &key) const
     return out;
 }
 
+QVariantList AppController::workoutLaps(const QString &key) const
+{
+    const QJsonArray laps = QJsonDocument::fromJson(m_workoutStore->loadLaps(key)).array();
+    QVariantList out;
+    for (const QJsonValue &value : laps) {
+        const QJsonObject lap = value.toObject();
+        QVariantMap row;
+        row.insert(QStringLiteral("number"), lap.value(QStringLiteral("number")).toInt());
+        row.insert(QStringLiteral("type"), lap.value(QStringLiteral("type")).toString());
+        row.insert(QStringLiteral("durationSeconds"),
+                    lap.value(QStringLiteral("durationSeconds")).toDouble());
+        row.insert(QStringLiteral("distanceMeters"),
+                    lap.value(QStringLiteral("distanceMeters")).toDouble());
+        out.append(row);
+    }
+    return out;
+}
+
 QVariantList AppController::workoutSeries(const QString &key) const
 {
     const QJsonArray series =
@@ -859,6 +958,9 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 const QByteArray seriesJson = buildSeriesJson(data);
                 if (!seriesJson.isEmpty())
                     m_workoutStore->saveSeries(w.key, seriesJson, nullptr);
+                const QByteArray lapsJson = buildLapsJson(data);
+                if (!lapsJson.isEmpty())
+                    m_workoutStore->saveLaps(w.key, lapsJson, nullptr);
             } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             }

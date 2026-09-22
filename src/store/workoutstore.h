@@ -46,6 +46,11 @@ public:
     bool saveSeries(const QString &key, const QByteArray &json, QString *error);
     QByteArray loadSeries(const QString &key) const;
 
+    // A workout's lap markers with their splits, as JSON. Same pattern
+    // again: a variable-length list that the workout list has no use for.
+    bool saveLaps(const QString &key, const QByteArray &json, QString *error);
+    QByteArray loadLaps(const QString &key) const;
+
 private:
     QString m_dbPath;
     QString m_connectionName;

@@ -1907,3 +1907,39 @@ Each of these lives in its own small table keyed by workout, for the same
 reason the route does: the workout list has no use for any of it, and
 widening the `workouts` row for every newly decoded field would be the
 wrong trade.
+
+## What the cloud's workout extensions actually contain
+
+`GET /v1/workouts/{key}` returns the list entry plus an `extensions` array,
+which is where the cloud keeps everything the list doesn't carry. Since no
+captured example existed, the fetch was written shape-agnostically -
+flatten whatever numbers arrive into dotted names under each extension's
+own `type` - and then a real response was read back off the phone's
+database. It contains, for a cloud workout:
+
+| extension | fields |
+|---|---|
+| `SummaryExtension` | `peakEpoc`, `pte`, `recoveryTime`, `ascent`/`descent` and their times, `avgSpeed`, min/avg/max temperature, `heartRateRecovery.drop` |
+| `HeartRateExtension` | `avgHeartRate`, `peakHeartRate` |
+| `FitnessExtension` | `maxHeartRate` (the athlete's, not the workout's) |
+| `IntensityExtension` | heart-rate and power zone limits and durations |
+| `WeatherExtension` | temperature, humidity, wind speed and direction |
+
+So EPOC, peak training effect and recovery time *are* available for cloud
+workouts - they were simply never being fetched. Those three are promoted
+into the same `Workout` columns the watch's own figures use (the units
+agree: ml/kg, 1-5, seconds), so they show as proper stats rather than only
+as rows in the field table.
+
+Units differ from the watch's schema and are left mostly alone: the cloud
+reports heart rate in bpm where the watch's SML uses hertz, so the SML unit
+mapping doesn't apply here. Only the two unambiguous conversions are made -
+temperature from kelvin, and `*Time` fields labelled as seconds. The rest
+keep their raw value and no label, which beats labelling one wrongly.
+
+Still not fetched: `GET /v1/workouts/{key}/sml`, the full sample data.
+Despite the path it returns JSON rather than binary SBEM (~5 MB per
+workout), so the existing binary decoder doesn't apply directly - but the
+field names are the same `Header.*`/`Sample.*` paths, because the app
+produces it from the same data. That would give cloud workouts charts and
+laps too, and belongs behind an explicit action rather than a sync.

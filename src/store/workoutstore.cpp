@@ -184,6 +184,27 @@ QByteArray WorkoutStore::loadSeries(const QString &key) const
     return q.value(0).toString().toUtf8();
 }
 
+bool WorkoutStore::updateTrainingMetrics(const QString &key, double epoc,
+                                          double peakTrainingEffect, double recoveryTime,
+                                          QString *error)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+            "UPDATE workouts SET epoc = ?, peak_training_effect = ?, recovery_time = ? "
+            "WHERE key = ?"));
+    q.addBindValue(epoc);
+    q.addBindValue(peakTrainingEffect);
+    q.addBindValue(recoveryTime);
+    q.addBindValue(key);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
 bool WorkoutStore::saveDetails(const QString &key, const QByteArray &json, QString *error)
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);

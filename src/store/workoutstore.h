@@ -35,6 +35,13 @@ public:
     // table every time another field gets decoded. Empty for a cloud
     // workout. Its own table for the same reason as the route: the list
     // view has no use for it.
+    // Fills in the three training metrics that only arrive later, from a
+    // cloud workout's extensions (see AppController::loadCloudDetails()) -
+    // a targeted update rather than a full upsert, since everything else
+    // about the row is already correct.
+    bool updateTrainingMetrics(const QString &key, double epoc, double peakTrainingEffect,
+                                double recoveryTime, QString *error);
+
     bool saveDetails(const QString &key, const QByteArray &json, QString *error);
     QByteArray loadDetails(const QString &key) const;
 

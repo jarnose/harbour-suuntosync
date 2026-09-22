@@ -315,9 +315,23 @@ void flattenJson(const QJsonObject &object, const QString &prefix, QJsonObject *
         if (value.isObject()) {
             flattenJson(value.toObject(), name, out);
         } else if (value.isDouble() || value.isBool()) {
+            double number = value.isBool() ? (value.toBool() ? 1 : 0) : value.toDouble();
+            QString unit;
+            // The cloud names these fields differently from the watch's own
+            // schema, so toDisplayUnits() (which is tuned to SML paths)
+            // doesn't apply. Only the two conversions that are unambiguous
+            // here are made; the rest keep their raw value and no label,
+            // which beats guessing a unit wrong.
+            if (name.contains(QStringLiteral("emperature"))) {
+                number -= 273.15;
+                unit = QStringLiteral("\u00b0C");
+            } else if (name.endsWith(QStringLiteral("Time"))) {
+                unit = QStringLiteral("s");
+            }
             QJsonObject entry;
-            entry.insert(QStringLiteral("value"),
-                          value.isBool() ? (value.toBool() ? 1 : 0) : value.toDouble());
+            entry.insert(QStringLiteral("value"), number);
+            if (!unit.isEmpty())
+                entry.insert(QStringLiteral("unit"), unit);
             out->insert(name, entry);
         }
     }
@@ -813,6 +827,24 @@ void AppController::loadCloudDetails(const QString &key)
             if (json.isEmpty())
                 return;
             m_workoutStore->saveDetails(key, json, nullptr);
+
+            // Promote the three the watch also reports, so a cloud workout
+            // shows them as proper stats rather than only as rows in the
+            // field table. The cloud's units match the watch's here
+            // (ml/kg, 1-5, seconds), so no conversion.
+            const QJsonObject fields = QJsonDocument::fromJson(json).object();
+            auto number = [&fields](const char *name) {
+                return fields.value(QLatin1String(name)).toObject()
+                        .value(QStringLiteral("value")).toDouble();
+            };
+            const double epoc = number("SummaryExtension.peakEpoc");
+            const double pte = number("SummaryExtension.pte");
+            const double recovery = number("SummaryExtension.recoveryTime");
+            if (epoc > 0 || pte > 0 || recovery > 0) {
+                m_workoutStore->updateTrainingMetrics(key, epoc, pte, recovery, nullptr);
+                loadCachedWorkouts();
+            }
+
             emit workoutDetailsChanged(key);
         });
     });

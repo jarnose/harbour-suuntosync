@@ -48,6 +48,21 @@ Page {
 
     function reloadDetails() {
         details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+
+        // A cloud workout's training metrics arrive with the extensions,
+        // after this page is already up. The store is updated too, but
+        // filling them in here means they appear now rather than on the
+        // next open. Only when empty, so a watch workout's own figures are
+        // never overwritten.
+        for (var i = 0; i < details.length; ++i) {
+            var f = details[i]
+            if (epoc === 0 && f.name === "SummaryExtension.peakEpoc")
+                epoc = f.value
+            else if (peakTrainingEffect === 0 && f.name === "SummaryExtension.pte")
+                peakTrainingEffect = f.value
+            else if (recoveryTime === 0 && f.name === "SummaryExtension.recoveryTime")
+                recoveryTime = f.value
+        }
     }
 
     Component.onCompleted: {

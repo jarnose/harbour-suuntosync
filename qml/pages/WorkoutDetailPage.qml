@@ -211,10 +211,14 @@ Page {
             // auto-lap and no button presses has none, so this stays out of
             // the way rather than showing a one-row table of the whole
             // workout.
+            Item {
+                width: 1
+                height: page.laps.length > 1 ? Theme.paddingLarge : 0
+            }
+
             Column {
                 width: parent.width
                 visible: page.laps.length > 1
-                topPadding: Theme.paddingLarge
 
                 Label {
                     x: Theme.horizontalPageMargin
@@ -266,7 +270,8 @@ Page {
                 Column {
                     width: page.width
                     spacing: Theme.paddingSmall
-                    topPadding: Theme.paddingLarge
+
+                    Item { width: 1; height: Theme.paddingLarge }
 
                     Label {
                         x: Theme.horizontalPageMargin
@@ -284,7 +289,7 @@ Page {
                     Item {
                         x: Theme.horizontalPageMargin
                         width: page.width - 2 * x
-                        height: Theme.itemSizeLarge
+                        height: Theme.itemSizeMedium * 1.5
 
                         Canvas {
                             id: seriesCanvas
@@ -335,14 +340,14 @@ Page {
                             text: modelData.max.toFixed(modelData.max < 10 ? 1 : 0)
                                   + " " + modelData.unit
                             color: Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeTiny
+                            font.pixelSize: Theme.fontSizeExtraSmall
                         }
                         Label {
                             anchors { left: parent.left; bottom: parent.bottom }
                             text: modelData.min.toFixed(modelData.min < 10 ? 1 : 0)
                                   + " " + modelData.unit
                             color: Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeTiny
+                            font.pixelSize: Theme.fontSizeExtraSmall
                         }
                     }
                 }
@@ -355,7 +360,10 @@ Page {
 
             Button {
                 visible: page.details.length > 0
-                anchors.horizontalCenter: parent.horizontalCenter
+                // Not anchors.horizontalCenter: a Column positions its
+                // children and ignores their anchors (with a warning). It
+                // leaves x alone, though.
+                x: (parent.width - width) / 2
                 text: page.detailsExpanded
                       ? qsTr("Hide all recorded fields")
                       : qsTr("All recorded fields (%1)").arg(page.details.length)

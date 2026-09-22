@@ -496,11 +496,18 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
 
     const QString logbookId = logbookIds.at(index);
     const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
+    // Capturing "failures" (a const QStringList& parameter) by value would
+    // capture it as a *const* QStringList regardless of "mutable" - the
+    // const comes from the parameter's own reference type, not from the
+    // lambda's default constness, so "mutable" can't strip it. An explicit
+    // local copy sidesteps that: capturing a plain (non-reference,
+    // non-const) QStringList by value gives an ordinary appendable member.
+    QStringList failuresCopy = failures;
     m_whiteboardClient->fetchLogbookData(path,
-            [this, logbookIds, index, succeeded, failures, logbookId]
+            [this, logbookIds, index, succeeded, failuresCopy, logbookId]
             (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
         if (!ok) {
-            failures.append(tr("%1: %2").arg(logbookId, error));
+            failuresCopy.append(tr("%1: %2").arg(logbookId, error));
         } else {
             try {
                 const Logbook::DecodedWorkout decoded = Logbook::decode(data);
@@ -509,12 +516,12 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 if (m_workoutStore->upsert(w, &storeError))
                     ++succeeded;
                 else
-                    failures.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
+                    failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             } catch (const std::exception &e) {
-                failures.append(tr("%1: decode failed (%2)")
-                                         .arg(logbookId, QString::fromUtf8(e.what())));
+                failuresCopy.append(tr("%1: decode failed (%2)")
+                                             .arg(logbookId, QString::fromUtf8(e.what())));
             }
         }
-        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failures);
+        fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
     });
 }

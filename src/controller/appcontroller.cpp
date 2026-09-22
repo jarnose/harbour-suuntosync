@@ -263,11 +263,13 @@ QByteArray buildCloudSeriesJson(const QByteArray &body)
     collectSmlLeaves(doc.isArray() ? QJsonValue(doc.array()) : QJsonValue(doc.object()), &samples);
 
     // The watch's own SML stores heart rate and cadence in hertz, and this
-    // project's unit mapping assumes that. Whether the cloud's JSON keeps
-    // that convention or converts to bpm hasn't been established, so decide
-    // by magnitude: a maximum under 10 can only be hertz, and a resting
-    // heart rate of 3 bpm isn't a thing. Replace this with a plain
-    // assertion once a real response has been looked at.
+    // project's unit mapping assumes that. Which convention the cloud's
+    // JSON uses is still unknown - and deliberately doesn't need to be,
+    // because this check is safe either way round: 10 Hz would be 600 bpm
+    // and 10 bpm would be a corpse, so neither convention can land on the
+    // wrong side of the threshold. Confirmed against a real response
+    // (88-161 bpm, 0-9.5 m/s, 101-141 m), which read correctly without
+    // establishing which branch it took - as designed.
     for (const char *name : { "Sample.HR", "Sample.Cadence" }) {
         auto it = samples.find(QString::fromLatin1(name));
         if (it == samples.end() || it->second.empty())

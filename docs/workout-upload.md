@@ -143,6 +143,35 @@ via `StatisticsSerializer.b`, and a `LegacyHeartRateData` via
 `HeartRateDataSerializer.b`. Every one of those is readable the same way;
 none of it has been transcribed field by field yet.
 
+## What a third reverse-engineering adds: `x-totp`
+
+`Marius-Ar/suunto-api-wrapper` (TypeScript, no license file) targets this
+same private API. It does **not** implement the workout upload - it covers
+reads plus the social and SuuntoPlus surfaces - but two things in it are
+worth having:
+
+- Its TOTP key material (`PART1`, and the XOR key
+  `Bh8nsTyCeC0Ql2drMen78awk84AE3ZxW`) matches `suuntoauth.cpp`'s constants
+  byte for byte. Those were ported from `tajchert/suuntool`'s Go, so this is
+  an independent third party arriving at the same bytes - a real
+  cross-check on the one piece of this project's auth that came from someone
+  else's work.
+- Its `AuthSession` sends **`x-totp`** on *every* request, not just at
+  login. The APK corroborates that the header exists: `WorkoutRestApi`
+  declares it as an explicit `@Header("x-totp")` on
+  `fetchCompetitionWorkoutResult`.
+
+Reads demonstrably work without it (everything this project does today), so
+it is not a fix for anything broken. It is groundwork: if the upload turns
+out to require it, the alternative is debugging a 401 with no idea which of
+several unknowns caused it. `SuuntoCloudClient::authorizedRequest()` now
+sends it whenever the account email is known.
+
+Also noted for later, not acted on: that wrapper fetches a workout via
+`GET /apiserver/v2/workouts/{username}/{workoutKey}/combined` with
+`extensions` and `additionalData` query parameters, which would collapse
+this project's separate detail and extensions calls into one.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

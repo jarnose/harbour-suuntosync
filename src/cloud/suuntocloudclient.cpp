@@ -40,6 +40,23 @@ SuuntoCloudClient::SuuntoCloudClient(QObject *parent)
 {
 }
 
+QNetworkRequest SuuntoCloudClient::authorizedRequest(const QString &url,
+                                                       const QString &sessionKey) const
+{
+    QNetworkRequest request((QUrl(url)));
+    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
+    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
+    request.setRawHeader("Accept-Language", "en");
+    if (!m_accountEmail.isEmpty()) {
+        // Same derivation /login2 already uses, just keyed by the email and
+        // sent as a header rather than a form field - see the header comment.
+        const std::string code = SuuntoAuth::generateTotp(
+                m_accountEmail.toStdString(), QDateTime::currentMSecsSinceEpoch());
+        request.setRawHeader("x-totp", QByteArray::fromStdString(code));
+    }
+    return request;
+}
+
 void SuuntoCloudClient::login(const QString &email, const QString &password,
                                LoginCallback callback)
 {
@@ -119,11 +136,9 @@ void SuuntoCloudClient::login(const QString &email, const QString &password,
 void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
                                           RawBodyCallback callback)
 {
-    QNetworkRequest request(QUrl(kBaseUrl + QStringLiteral("workouts/") + workoutKey
-                                  + QStringLiteral("/sml")));
-    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
-    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
-    request.setRawHeader("Accept-Language", "en");
+    const QNetworkRequest request = authorizedRequest(
+            kBaseUrl + QStringLiteral("workouts/") + workoutKey + QStringLiteral("/sml"),
+            sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
@@ -140,10 +155,8 @@ void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
                                             const QString &workoutKey,
                                             WorkoutDetailCallback callback)
 {
-    QNetworkRequest request(QUrl(kBaseUrl + QStringLiteral("workouts/") + workoutKey));
-    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
-    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
-    request.setRawHeader("Accept-Language", "en");
+    const QNetworkRequest request = authorizedRequest(
+            kBaseUrl + QStringLiteral("workouts/") + workoutKey, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
@@ -178,10 +191,7 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
                                       WorkoutListCallback callback)
 {
     const QString path = QStringLiteral("workouts?since=0&limit=%1&offset=0").arg(limit);
-    QNetworkRequest request(QUrl(kBaseUrl + path));
-    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
-    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
-    request.setRawHeader("Accept-Language", "en");
+    const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [reply, callback]() {

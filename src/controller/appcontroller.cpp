@@ -476,6 +476,11 @@ AppController::AppController(QObject *parent)
         m_cloudAccount = m_cloudAccountStore->load(&error);
         if (!error.isEmpty())
             emit errorOccurred(tr("Failed to load account: %1").arg(error));
+        // Keeps the client's x-totp header keyed to the right account - see
+        // SuuntoCloudClient::authorizedRequest(). Set in all three places
+        // m_cloudAccount changes rather than derived from a signal, since
+        // this one (startup load) deliberately doesn't emit one.
+        m_cloudClient->setAccountEmail(m_cloudAccount.email);
     }
 
     if (!m_workoutStore->open(&error))
@@ -781,6 +786,7 @@ void AppController::loginToCloud(const QString &email, const QString &password)
             return;
         }
         m_cloudAccount = account;
+        m_cloudClient->setAccountEmail(m_cloudAccount.email);
         emit cloudAccountChanged();
     });
 }
@@ -792,6 +798,7 @@ void AppController::logoutFromCloud()
         emit errorOccurred(tr("Failed to clear account: %1").arg(error));
     m_tokenVault->deleteSecret(CloudAccountStore::TokenSecretName, [](bool, const QString &) {});
     m_cloudAccount = CloudAccount();
+    m_cloudClient->setAccountEmail(QString());
     emit cloudAccountChanged();
 }
 

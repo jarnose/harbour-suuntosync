@@ -21,6 +21,11 @@ Page {
     property int stepCount: 0
     property double avgHeartRate: 0
     property double maxHeartRate: 0
+    property double epoc: 0
+    property double peakTrainingEffect: 0
+    property double recoveryTime: 0
+    property double maxVo2: 0
+    property double trainingLoad: 0
 
     function formatDuration(seconds) {
         var h = Math.floor(seconds / 3600)
@@ -36,13 +41,12 @@ Page {
             { label: qsTr("Distance"), value: qsTr("%1 km").arg((totalDistance / 1000).toFixed(2)) },
             { label: qsTr("Duration"), value: formatDuration(totalTime) },
         ]
-        // Unlike a cloud workout (where the API always reports these, 0
-        // included for a genuinely flat session), a BLE-synced one never
-        // has ascent/descent at all - not found anywhere in the watch's own
-        // /Data resource despite an extensive search, see
-        // docs/logbook-data-format.md - so Logbook::decode() leaves them at
-        // 0 the same "0 = absent" way maxSpeed/energyConsumption/stepCount
-        // below already do, rather than lying with a false "0 m".
+        // Everything below is optional, 0 meaning absent rather than a
+        // genuine zero - which is also exactly how the watch's own schema
+        // marks these fields (nillable=0). A BLE workout gets ascent and
+        // descent from the watch's /Summary when that fetch succeeded, and
+        // from its own altitude series otherwise; the training metrics come
+        // only from /Summary, so a cloud workout never has them.
         if (totalAscent > 0)
             entries.push({ label: qsTr("Ascent"), value: qsTr("%1 m").arg(totalAscent.toFixed(0)) })
         if (totalDescent > 0)
@@ -57,6 +61,16 @@ Page {
             entries.push({ label: qsTr("Energy"), value: qsTr("%1 kcal").arg(energyConsumption.toFixed(0)) })
         if (stepCount > 0)
             entries.push({ label: qsTr("Steps"), value: stepCount.toString() })
+        if (peakTrainingEffect > 0)
+            entries.push({ label: qsTr("Peak training effect"), value: peakTrainingEffect.toFixed(1) })
+        if (epoc > 0)
+            entries.push({ label: qsTr("EPOC"), value: qsTr("%1 ml/kg").arg(epoc.toFixed(1)) })
+        if (trainingLoad > 0)
+            entries.push({ label: qsTr("Training load"), value: trainingLoad.toFixed(0) })
+        if (maxVo2 > 0)
+            entries.push({ label: qsTr("Estimated VO2max"), value: qsTr("%1 ml/kg/min").arg(maxVo2.toFixed(1)) })
+        if (recoveryTime > 0)
+            entries.push({ label: qsTr("Recovery time"), value: formatDuration(recoveryTime) })
         return entries
     }
 

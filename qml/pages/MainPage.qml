@@ -151,6 +151,11 @@ Page {
                 stepCount: model.stepCount,
                 avgHeartRate: model.avgHeartRate,
                 maxHeartRate: model.maxHeartRate,
+                epoc: model.epoc,
+                peakTrainingEffect: model.peakTrainingEffect,
+                recoveryTime: model.recoveryTime,
+                maxVo2: model.maxVo2,
+                trainingLoad: model.trainingLoad,
             })
         }
 

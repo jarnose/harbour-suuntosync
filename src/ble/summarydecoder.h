@@ -51,6 +51,24 @@ struct DecodedSummary
 
     bool hasEnergy = false;
     double energyKcal = 0;      // Header.Energy is joules; converted here
+
+    // Training metrics, the same ones the official app's workout view shows.
+    // Each is marked nillable=0 in the schema, i.e. the watch writes 0 when
+    // it didn't compute one (VO2max and training load are absent from the
+    // one real capture available here - evidently not produced for every
+    // workout - so their decoding is offset-verified but not value-verified).
+    bool hasEpoc = false;
+    double epoc = 0;                  // ml/kg
+    bool hasPeakTrainingEffect = false;
+    double peakTrainingEffect = 0;    // 1.0-5.0
+    bool hasRecoveryTime = false;
+    double recoveryTimeSeconds = 0;
+    bool hasMaxVo2 = false;
+    double maxVo2 = 0;                // ml/kg/min
+    bool hasTrainingLoad = false;
+    // Header.TraingingLoadPeak - Suunto's own spelling, typo included. This
+    // is the figure the app labels as training load / TSS.
+    double trainingLoad = 0;
 };
 
 DecodedSummary decode(const std::vector<uint8_t> &payload);

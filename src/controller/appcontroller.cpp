@@ -77,6 +77,16 @@ void applySummary(Workout *w, const Summary::DecodedSummary &s)
     }
     if (s.hasEnergy)
         w->energyConsumption = s.energyKcal;
+    if (s.hasEpoc)
+        w->epoc = s.epoc;
+    if (s.hasPeakTrainingEffect)
+        w->peakTrainingEffect = s.peakTrainingEffect;
+    if (s.hasRecoveryTime)
+        w->recoveryTime = s.recoveryTimeSeconds;
+    if (s.hasMaxVo2)
+        w->maxVo2 = s.maxVo2;
+    if (s.hasTrainingLoad)
+        w->trainingLoad = s.trainingLoad;
 }
 
 } // namespace

@@ -33,4 +33,14 @@ struct Workout
     int stepCount = 0;
     double avgHeartRate = 0; // bpm (hrdata.avg)
     double maxHeartRate = 0; // bpm (hrdata.max)
+
+    // Training metrics. Only a BLE sync fills these, from the watch's own
+    // /Summary header (see src/ble/summarydecoder.h) - the cloud workout
+    // list doesn't carry them. Same "0 means absent" convention as above,
+    // which matches the watch's own schema marking every one nillable=0.
+    double epoc = 0;              // ml/kg
+    double peakTrainingEffect = 0; // 1.0-5.0
+    double recoveryTime = 0;      // seconds
+    double maxVo2 = 0;            // ml/kg/min
+    double trainingLoad = 0;      // Suunto's Header.TraingingLoadPeak
 };

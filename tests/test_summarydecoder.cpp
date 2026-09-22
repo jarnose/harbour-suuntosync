@@ -75,6 +75,20 @@ void testCyclingSummary()
     checkInt(s.hasEnergy ? 1 : 0, 1, "hasEnergy");
     checkDouble(s.energyKcal, 651466.125 / 4184.0, 0.01, "energyKcal");
 
+    // Training metrics. This workout has EPOC, peak training effect and a
+    // recovery time, but the watch left VO2max and training load at their
+    // nillable-0 "not computed" value - so those two exercise the absent
+    // path here, and their offsets are verified against the descriptor map
+    // rather than against a non-zero reading.
+    checkInt(s.hasEpoc ? 1 : 0, 1, "hasEpoc");
+    checkDouble(s.epoc, 3.1, 0.001, "epoc");
+    checkInt(s.hasPeakTrainingEffect ? 1 : 0, 1, "hasPeakTrainingEffect");
+    checkDouble(s.peakTrainingEffect, 1.2, 0.001, "peakTrainingEffect");
+    checkInt(s.hasRecoveryTime ? 1 : 0, 1, "hasRecoveryTime");
+    checkDouble(s.recoveryTimeSeconds, 180, 0.5, "recoveryTimeSeconds");
+    checkInt(s.hasMaxVo2 ? 1 : 0, 0, "hasMaxVo2 (not computed for this workout)");
+    checkInt(s.hasTrainingLoad ? 1 : 0, 0, "hasTrainingLoad (not computed for this workout)");
+
     // Cross-checks against reality and against the /Data decoder, which is
     // the real point of this fixture:
     //

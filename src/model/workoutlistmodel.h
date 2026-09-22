@@ -27,6 +27,14 @@ public:
         StepCountRole,         // 0 = absent
         AvgHeartRateRole,      // bpm, 0 = absent
         MaxHeartRateRole,      // bpm, 0 = absent
+        // Training metrics, BLE sync only (the cloud list doesn't carry
+        // them) - same 0 = absent convention, which is also how the watch's
+        // own schema marks them. See src/ble/summarydecoder.h.
+        EpocRole,               // ml/kg
+        PeakTrainingEffectRole, // 1.0-5.0
+        RecoveryTimeRole,       // seconds
+        MaxVo2Role,             // ml/kg/min
+        TrainingLoadRole,
     };
     Q_ENUM(Roles)
 

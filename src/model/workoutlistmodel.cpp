@@ -45,6 +45,16 @@ QVariant WorkoutListModel::data(const QModelIndex &index, int role) const
         return w.avgHeartRate;
     case MaxHeartRateRole:
         return w.maxHeartRate;
+    case EpocRole:
+        return w.epoc;
+    case PeakTrainingEffectRole:
+        return w.peakTrainingEffect;
+    case RecoveryTimeRole:
+        return w.recoveryTime;
+    case MaxVo2Role:
+        return w.maxVo2;
+    case TrainingLoadRole:
+        return w.trainingLoad;
     default:
         return QVariant();
     }
@@ -66,6 +76,11 @@ QHash<int, QByteArray> WorkoutListModel::roleNames() const
         { StepCountRole, "stepCount" },
         { AvgHeartRateRole, "avgHeartRate" },
         { MaxHeartRateRole, "maxHeartRate" },
+        { EpocRole, "epoc" },
+        { PeakTrainingEffectRole, "peakTrainingEffect" },
+        { RecoveryTimeRole, "recoveryTime" },
+        { MaxVo2Role, "maxVo2" },
+        { TrainingLoadRole, "trainingLoad" },
     };
 }
 

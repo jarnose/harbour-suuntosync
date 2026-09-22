@@ -24,10 +24,16 @@ constexpr size_t kOffsetDescent = 48;       // float32, metres
 constexpr size_t kOffsetAltitudeMax = 60;   // float32, metres
 constexpr size_t kOffsetAltitudeMin = 64;   // float32, metres
 constexpr size_t kOffsetEnergy = 68;        // float32, joules
+constexpr size_t kOffsetEpoc = 72;          // float32, ml/kg
+constexpr size_t kOffsetPeakTrainingEffect = 76; // float32, 1.0-5.0
+constexpr size_t kOffsetRecoveryTime = 80;  // uint32, seconds
+constexpr size_t kOffsetMaxVo2 = 84;        // float32, ml/kg/min
+constexpr size_t kOffsetTrainingLoad = 90;  // float32 (after two 1-byte
+                                            // fitness-age fields at 88/89)
 
-// Everything this decoder reads sits within the first 72 bytes; refuse a
+// Everything this decoder reads sits within the first 94 bytes; refuse a
 // chunk too short to hold them rather than reading past the end.
-constexpr size_t kMinHeaderSize = kOffsetEnergy + sizeof(float);
+constexpr size_t kMinHeaderSize = kOffsetTrainingLoad + sizeof(float);
 
 // 1 kcal = 4184 J (thermochemical), the same constant the cloud API's
 // energyConsumption figures line up with.
@@ -85,6 +91,32 @@ DecodedSummary decode(const std::vector<uint8_t> &payload)
         if (energy != kAbsent) {
             result.hasEnergy = true;
             result.energyKcal = energy / kJoulesPerKcal;
+        }
+
+        const float epoc = readAt<float>(v, kOffsetEpoc);
+        if (epoc != kAbsent) {
+            result.hasEpoc = true;
+            result.epoc = epoc;
+        }
+        const float pte = readAt<float>(v, kOffsetPeakTrainingEffect);
+        if (pte != kAbsent) {
+            result.hasPeakTrainingEffect = true;
+            result.peakTrainingEffect = pte;
+        }
+        const uint32_t recovery = readAt<uint32_t>(v, kOffsetRecoveryTime);
+        if (recovery != 0) {
+            result.hasRecoveryTime = true;
+            result.recoveryTimeSeconds = recovery;
+        }
+        const float vo2 = readAt<float>(v, kOffsetMaxVo2);
+        if (vo2 != kAbsent) {
+            result.hasMaxVo2 = true;
+            result.maxVo2 = vo2;
+        }
+        const float load = readAt<float>(v, kOffsetTrainingLoad);
+        if (load != kAbsent) {
+            result.hasTrainingLoad = true;
+            result.trainingLoad = load;
         }
         break;
     }

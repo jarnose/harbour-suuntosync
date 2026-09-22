@@ -114,6 +114,20 @@ bool WorkoutStore::open(QString *error)
         return false;
     }
 
+    // The upload payload plus its outcome. uploaded_key stays NULL until
+    // the cloud has taken it; see WorkoutStore::saveSml().
+    QSqlQuery sml(db);
+    if (!sml.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS workout_sml ("
+            "  key TEXT PRIMARY KEY,"
+            "  zip BLOB NOT NULL,"
+            "  uploaded_key TEXT"
+            ")"))) {
+        if (error)
+            *error = sml.lastError().text();
+        return false;
+    }
+
     QSqlQuery details(db);
     if (!details.exec(QStringLiteral(
             "CREATE TABLE IF NOT EXISTS workout_details ("
@@ -353,4 +367,55 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
         return false;
     }
     return true;
+}
+
+bool WorkoutStore::saveSml(const QString &key, const QByteArray &zip, QString *error)
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    // Deliberately not INSERT OR REPLACE: that would drop uploaded_key and
+    // let a re-sync offer an already-uploaded workout for upload again.
+    q.prepare(QStringLiteral(
+            "INSERT INTO workout_sml (key, zip) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET zip = excluded.zip"));
+    q.addBindValue(key);
+    q.addBindValue(zip);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QByteArray WorkoutStore::loadSml(const QString &key) const
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral("SELECT zip FROM workout_sml WHERE key = ?"));
+    q.addBindValue(key);
+    if (!q.exec() || !q.next())
+        return QByteArray();
+    return q.value(0).toByteArray();
+}
+
+bool WorkoutStore::markSmlUploaded(const QString &key, const QString &cloudKey, QString *error)
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral("UPDATE workout_sml SET uploaded_key = ? WHERE key = ?"));
+    q.addBindValue(cloudKey);
+    q.addBindValue(key);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+bool WorkoutStore::isSmlUploaded(const QString &key) const
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral(
+            "SELECT uploaded_key FROM workout_sml WHERE key = ? AND uploaded_key IS NOT NULL"));
+    q.addBindValue(key);
+    return q.exec() && q.next();
 }

@@ -97,6 +97,23 @@ public:
     // `sinceMs` is passed through to the server's own filter; 0 fetches
     // everything the account has, which for a long-standing account is
     // years of history.
+    // POST /apiserver/v1/workout - uploads a watch-recorded workout.
+    //
+    // Multipart with exactly two parts, which is what a real capture of the
+    // official app syncing from the watch contains (docs/workout-upload.md):
+    // `workoutExtensions` (the JSON "[]") and `sml` (a zip of samples.json
+    // and summary.json). Notably there is NO `workoutBinary` part - that is
+    // what a phone-recorded workout sends instead; the two are
+    // alternatives, and a watch upload carrying only SML was accepted with
+    // 200. Authentication is the plain session key, no signature.
+    //
+    // On success the payload is the created workout, whose "key" is the
+    // cloud's own id for it.
+    using UploadCallback = std::function<void(bool ok, const QString &workoutKey,
+                                                const QString &error)>;
+    void uploadWorkout(const QString &sessionKey, const QByteArray &smlZip,
+                        UploadCallback callback);
+
     using HealthCallback = std::function<void(bool ok, const QVector<HealthEntry> &entries,
                                                 const QString &error)>;
     void fetchHealthEntries(const QString &sessionKey, const QString &kind, qint64 sinceMs,

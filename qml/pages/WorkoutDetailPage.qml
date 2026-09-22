@@ -46,9 +46,14 @@ Page {
     // after the page is already up, so this is reloaded when they land.
     property var details: []
 
+    // Whether this workout can still be pushed to the cloud. Not a binding:
+    // it depends on stored state that only changes when we change it.
+    property bool canUpload: false
+
     function reloadDetails() {
         details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
         series = workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
+        canUpload = workoutKey.length > 0 && AppController.canUploadWorkout(workoutKey)
 
         // A cloud workout's training metrics arrive with the extensions,
         // after this page is already up. The store is updated too, but
@@ -88,6 +93,12 @@ Page {
             }
         }
         onErrorOccurred: page.lastError = message
+        onWorkoutUploaded: {
+            if (key !== page.workoutKey)
+                return
+            page.lastError = message
+            page.canUpload = AppController.canUploadWorkout(page.workoutKey)
+        }
     }
 
     // Per-sample curves, already reduced to a drawable number of points -
@@ -160,6 +171,15 @@ Page {
             // The download is several megabytes, which is exactly why this
             // is a deliberate tap rather than something the page does on
             // its own when opened.
+            MenuItem {
+                // Only for a watch-synced workout the cloud hasn't taken
+                // yet. Deliberately a separate tap rather than part of the
+                // sync: putting a workout on someone's public-ish account
+                // is their decision.
+                text: qsTr("Upload to Suunto")
+                visible: page.canUpload
+                onClicked: AppController.uploadWorkoutToCloud(page.workoutKey)
+            }
             MenuItem {
                 text: qsTr("Download sample data")
                 visible: page.source !== "ble" && page.series.length === 0

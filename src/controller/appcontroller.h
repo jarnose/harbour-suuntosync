@@ -215,6 +215,18 @@ public:
     // timestamp and how many are stored. Empty map for a kind with none.
     Q_INVOKABLE QVariantMap healthOverview(const QString &kind) const;
 
+    // Uploads a watch-synced workout to the Suunto cloud (item 2 of the
+    // 2026-09-22 list). The payload was built at sync time and stored (see
+    // WorkoutStore::saveSml()), so this is just the POST.
+    //
+    // Nothing about this is automatic: a watch sync stores the payload but
+    // does not send it, because publishing a workout to an account is the
+    // user's call, not a side effect of looking at it.
+    Q_INVOKABLE void uploadWorkoutToCloud(const QString &key);
+    // Whether the action is worth offering: a stored payload exists, the
+    // cloud hasn't already taken it, and we're signed in.
+    Q_INVOKABLE bool canUploadWorkout(const QString &key) const;
+
     // A BLE-synced workout's laps: { number, type, durationSeconds,
     // distanceMeters }, where type is the watch's own reason for the marker
     // (manual, auto-lap by distance, interval...). Empty when the workout
@@ -235,6 +247,7 @@ signals:
     void cloudSamplesInProgressChanged();
     void healthSyncInProgressChanged();
     void healthDataChanged();
+    void workoutUploaded(const QString &key, bool ok, const QString &message);
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
@@ -286,6 +299,10 @@ private:
     WorkoutListModel *m_workoutModel;
     bool m_workoutSyncInProgress = false;
     bool m_cloudSamplesInProgress = false;
+
+    // Guards against a second tap while a POST is in flight - the server
+    // has no idempotency key, so a double send would create two workouts.
+    bool m_uploadInProgress = false;
 
     HealthStore *m_healthStore;
     bool m_healthSyncInProgress = false;

@@ -5,6 +5,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QHttpMultiPart>
+#include <QHttpPart>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -145,6 +147,65 @@ void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString
             return;
         }
         callback(true, reply->readAll(), QString());
+    });
+}
+
+void SuuntoCloudClient::uploadWorkout(const QString &sessionKey, const QByteArray &smlZip,
+                                       UploadCallback callback)
+{
+    // Part names, filenames and content types are copied from the captured
+    // request rather than chosen - the server matches on them.
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart extensions;
+    extensions.setHeader(QNetworkRequest::ContentDispositionHeader,
+                          QVariant(QStringLiteral(
+                                  "form-data; name=\"workoutExtensions\"; filename=\"extension\"")));
+    extensions.setHeader(QNetworkRequest::ContentTypeHeader,
+                          QVariant(QStringLiteral("application/json;charset=UTF-8")));
+    extensions.setBody(QByteArrayLiteral("[]"));
+    multiPart->append(extensions);
+
+    QHttpPart sml;
+    sml.setHeader(QNetworkRequest::ContentDispositionHeader,
+                   QVariant(QStringLiteral(
+                           "form-data; name=\"sml\"; filename=\"sml.zip\"")));
+    sml.setHeader(QNetworkRequest::ContentTypeHeader,
+                   QVariant(QStringLiteral("application/zip")));
+    sml.setBody(smlZip);
+    multiPart->append(sml);
+
+    const QNetworkRequest request = authorizedRequest(
+            kBaseUrl + QStringLiteral("workout"), sessionKey);
+
+    QNetworkReply *reply = m_network->post(request, multiPart);
+    multiPart->setParent(reply); // freed with the reply
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            // The body often says more than the status line does.
+            const QByteArray body = reply->readAll();
+            callback(false, QString(),
+                     body.isEmpty() ? reply->errorString()
+                                     : QStringLiteral("%1: %2").arg(reply->errorString(),
+                                                                      QString::fromUtf8(body.left(300))));
+            return;
+        }
+
+        const QJsonObject envelope = QJsonDocument::fromJson(reply->readAll()).object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            callback(false, QString(),
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+        callback(true,
+                 envelope.value(QStringLiteral("payload")).toObject()
+                         .value(QStringLiteral("key")).toString(),
+                 QString());
     });
 }
 

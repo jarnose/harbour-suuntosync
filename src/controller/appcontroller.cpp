@@ -13,6 +13,8 @@
 #include "../ble/summarydecoder.h"
 #include "../ble/smldecoder.h"
 #include "../cloud/polyline.h"
+#include "../cloud/smljson.h"
+#include "../cloud/zipwriter.h"
 
 #include <QStandardPaths>
 #include <QtMath>
@@ -282,6 +284,54 @@ QByteArray buildCloudSeriesJson(const QByteArray &body)
         }
     }
     return seriesJsonFromSamples(samples);
+}
+
+// Builds the sml.zip the cloud wants from the two payloads a watch sync
+// already has in hand: /Data (still Heatshrink-compressed) and /Summary.
+// Returns {} if neither produced anything worth sending.
+//
+// The offset is the phone's own UTC offset *at the time of the workout*,
+// not right now, so a workout recorded before a DST change is stamped the
+// way it was recorded. The watch's local64 carries its own offset, but
+// Sbem::decodeLocal64 folds it into UTC and doesn't hand it back; using the
+// phone's zone gets the common case right and is wrong only for a workout
+// recorded in another timezone.
+QByteArray buildSmlZip(const std::vector<uint8_t> &compressedData,
+                        const std::vector<uint8_t> &summaryPayload,
+                        const QString &source, qint64 startTimeMs)
+{
+    const int offsetMinutes =
+            QDateTime::fromMSecsSinceEpoch(startTimeMs).offsetFromUtc() / 60;
+    const std::string src = source.toStdString();
+
+    const std::string samples = SmlJson::buildDocument(
+            Sbem::parseContainer(Sbem::heatshrinkDecompress(compressedData)),
+            src, offsetMinutes);
+    const std::string summary = summaryPayload.empty()
+            ? std::string()
+            : SmlJson::buildDocument(Sbem::parseContainer(summaryPayload), src, offsetMinutes);
+
+    std::vector<ZipWriter::Entry> entries;
+    if (!samples.empty())
+        entries.push_back({ "samples.json", samples });
+    if (!summary.empty())
+        entries.push_back({ "summary.json", summary });
+    if (entries.empty())
+        return QByteArray();
+
+    const std::vector<uint8_t> zip = ZipWriter::build(entries);
+    return QByteArray(reinterpret_cast<const char *>(zip.data()),
+                       static_cast<int>(zip.size()));
+}
+
+// The watch's own identifier as the cloud spells it: "suunto-" plus the
+// serial, which is the last word of the BlueZ device name ("Suunto Race
+// 2352D0000247" -> "suunto-2352D0000247"). Matches a captured upload.
+QString smlSourceFor(const QString &watchName)
+{
+    const QString serial = watchName.section(QLatin1Char(' '), -1).trimmed();
+    return serial.isEmpty() ? QStringLiteral("suunto-unknown")
+                             : QStringLiteral("suunto-") + serial;
 }
 
 // Lap markers, from the Lap event chunk. The schema's own enum, so a
@@ -876,6 +926,54 @@ void AppController::fetchHealthKindAt(int index, int fetched, const QStringList 
     });
 }
 
+bool AppController::canUploadWorkout(const QString &key) const
+{
+    return m_cloudAccount.isSignedIn()
+            && !m_workoutStore->loadSml(key).isEmpty()
+            && !m_workoutStore->isSmlUploaded(key);
+}
+
+void AppController::uploadWorkoutToCloud(const QString &key)
+{
+    if (m_uploadInProgress)
+        return;
+    const QByteArray zip = m_workoutStore->loadSml(key);
+    if (zip.isEmpty()) {
+        emit workoutUploaded(key, false,
+                              tr("Nothing to upload - this workout was not synced from the watch."));
+        return;
+    }
+    if (m_workoutStore->isSmlUploaded(key)) {
+        emit workoutUploaded(key, false, tr("Already uploaded."));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit workoutUploaded(key, false, tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    m_uploadInProgress = true;
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, key, zip](bool ok, const QByteArray &data, const QString &vaultError) {
+        if (!ok) {
+            m_uploadInProgress = false;
+            emit workoutUploaded(key, false,
+                                  tr("Could not read the stored session: %1").arg(vaultError));
+            return;
+        }
+        m_cloudClient->uploadWorkout(QString::fromUtf8(data), zip,
+                [this, key](bool uploadOk, const QString &cloudKey, const QString &error) {
+            m_uploadInProgress = false;
+            if (!uploadOk) {
+                emit workoutUploaded(key, false, error);
+                return;
+            }
+            m_workoutStore->markSmlUploaded(key, cloudKey, nullptr);
+            emit workoutUploaded(key, true, tr("Uploaded to Suunto"));
+        });
+    });
+}
+
 QVariantList AppController::healthEntries(const QString &kind, int limit) const
 {
     QVariantList out;
@@ -1298,6 +1396,16 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 const QByteArray lapsJson = buildLapsJson(data);
                 if (!lapsJson.isEmpty())
                     m_workoutStore->saveLaps(w.key, lapsJson, nullptr);
+
+                // Build the cloud upload payload now, while both raw
+                // payloads are in hand - rebuilding it later would mean
+                // going back to the watch. Storing it is not sending it;
+                // see uploadWorkoutToCloud().
+                const QByteArray zip = buildSmlZip(
+                        data, summaryOk ? payload : std::vector<uint8_t>(),
+                        smlSourceFor(m_pairedWatch.name), w.startTime);
+                if (!zip.isEmpty())
+                    m_workoutStore->saveSml(w.key, zip, nullptr);
             } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             }

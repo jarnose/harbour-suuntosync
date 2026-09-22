@@ -16,6 +16,7 @@
 #include <QStandardPaths>
 #include <QtMath>
 #include <QVariantMap>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
@@ -23,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <cstring>
 #include <stdexcept>
 
@@ -139,6 +141,81 @@ QByteArray summaryDetailsJson(const std::vector<uint8_t> &payload)
         fields.insert(name, entry);
     });
     return QJsonDocument(fields).toJson(QJsonDocument::Compact);
+}
+
+// The series worth charting. Everything else the watch records is either
+// monotonic (distance), a diagnostic (battery, satellite count) or a one-off
+// event, none of which a line graph tells you anything about - they're all
+// still in the "all recorded fields" list.
+const char *const kChartedSeries[] = {
+    "Sample.HR", "Sample.Altitude", "Sample.Speed",
+    "Sample.Cadence", "Sample.Power", "Sample.Temperature",
+};
+
+// A chart on a phone screen is a few hundred pixels wide, and a workout can
+// carry several thousand samples per series, so reduce to this many buckets
+// and average within each. Averaging rather than sampling means a spike
+// shows up as a bump instead of being missed entirely, and the true min and
+// max are carried alongside so the axis labels stay honest even where the
+// drawn line has been smoothed.
+constexpr int kSeriesPoints = 200;
+constexpr int kMinSamplesToChart = 20;
+
+// Reduces each charted series from a /Data payload to a fixed-size curve.
+// Returns {} if nothing chartable was found, which is normal - a workout
+// with no GPS and no heart-rate strap has very little to draw.
+QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
+{
+    std::map<std::string, std::vector<double>> samples;
+    for (const char *name : kChartedSeries)
+        samples[name] = {};
+
+    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
+                [&samples](const Sml::Reading &reading) {
+        auto it = samples.find(reading.descriptor->name);
+        if (it != samples.end())
+            it->second.push_back(reading.value);
+    });
+
+    QJsonArray series;
+    for (const char *name : kChartedSeries) {
+        const std::vector<double> &values = samples[name];
+        if (static_cast<int>(values.size()) < kMinSamplesToChart)
+            continue;
+
+        const auto range = std::minmax_element(values.begin(), values.end());
+        const QString qname = QString::fromLatin1(name);
+        const DisplayValue low = toDisplayUnits(qname, *range.first);
+        const DisplayValue high = toDisplayUnits(qname, *range.second);
+        if (qFuzzyCompare(low.value, high.value))
+            continue; // a flat line says nothing
+
+        QJsonArray points;
+        for (int bucket = 0; bucket < kSeriesPoints; ++bucket) {
+            const size_t from = values.size() * bucket / kSeriesPoints;
+            size_t to = values.size() * (bucket + 1) / kSeriesPoints;
+            if (to <= from)
+                to = from + 1;
+            double sum = 0;
+            size_t count = 0;
+            for (size_t i = from; i < to && i < values.size(); ++i, ++count)
+                sum += values[i];
+            if (count == 0)
+                continue;
+            points.append(toDisplayUnits(qname, sum / count).value);
+        }
+        if (points.isEmpty())
+            continue;
+
+        QJsonObject entry;
+        entry.insert(QStringLiteral("name"), qname);
+        entry.insert(QStringLiteral("unit"), low.unit);
+        entry.insert(QStringLiteral("min"), low.value);
+        entry.insert(QStringLiteral("max"), high.value);
+        entry.insert(QStringLiteral("points"), points);
+        series.append(entry);
+    }
+    return series.isEmpty() ? QByteArray() : QJsonDocument(series).toJson(QJsonDocument::Compact);
 }
 
 // Overlays the watch's own computed totals onto a workout decoded from
@@ -613,6 +690,29 @@ QVariantList AppController::workoutDetails(const QString &key) const
     return out;
 }
 
+QVariantList AppController::workoutSeries(const QString &key) const
+{
+    const QJsonArray series =
+            QJsonDocument::fromJson(m_workoutStore->loadSeries(key)).array();
+
+    QVariantList out;
+    for (const QJsonValue &value : series) {
+        const QJsonObject entry = value.toObject();
+        QVariantList points;
+        for (const QJsonValue &point : entry.value(QStringLiteral("points")).toArray())
+            points.append(point.toDouble());
+
+        QVariantMap row;
+        row.insert(QStringLiteral("name"), entry.value(QStringLiteral("name")).toString());
+        row.insert(QStringLiteral("unit"), entry.value(QStringLiteral("unit")).toString());
+        row.insert(QStringLiteral("min"), entry.value(QStringLiteral("min")).toDouble());
+        row.insert(QStringLiteral("max"), entry.value(QStringLiteral("max")).toDouble());
+        row.insert(QStringLiteral("points"), points);
+        out.append(row);
+    }
+    return out;
+}
+
 QVariantList AppController::workoutRoute(const QString &key) const
 {
     const QByteArray packed = m_workoutStore->loadRoute(key);
@@ -744,7 +844,7 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         // figures are still worth saving, so this never fails the entry.
         const QString summaryPath = QStringLiteral("/Logbook/byId/%1/Summary").arg(logbookId);
         m_whiteboardClient->fetchSummary(summaryPath,
-                [this, logbookIds, index, succeeded, failuresCopy, logbookId, w, track]
+                [this, logbookIds, index, succeeded, failuresCopy, logbookId, w, track, data]
                 (bool summaryOk, const std::vector<uint8_t> &payload, const QString &) mutable {
             if (summaryOk)
                 applySummary(&w, Summary::decode(payload));
@@ -756,6 +856,9 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                     m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
                 if (summaryOk)
                     m_workoutStore->saveDetails(w.key, summaryDetailsJson(payload), nullptr);
+                const QByteArray seriesJson = buildSeriesJson(data);
+                if (!seriesJson.isEmpty())
+                    m_workoutStore->saveSeries(w.key, seriesJson, nullptr);
             } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             }

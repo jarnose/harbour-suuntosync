@@ -92,6 +92,17 @@ bool WorkoutStore::open(QString *error)
         return false;
     }
 
+    QSqlQuery series(db);
+    if (!series.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS workout_series ("
+            "  key TEXT PRIMARY KEY,"
+            "  series TEXT NOT NULL"
+            ")"))) {
+        if (error)
+            *error = series.lastError().text();
+        return false;
+    }
+
     QSqlQuery details(db);
     if (!details.exec(QStringLiteral(
             "CREATE TABLE IF NOT EXISTS workout_details ("
@@ -104,6 +115,34 @@ bool WorkoutStore::open(QString *error)
     }
 
     return true;
+}
+
+bool WorkoutStore::saveSeries(const QString &key, const QByteArray &json, QString *error)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+            "INSERT INTO workout_series (key, series) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET series = excluded.series"));
+    q.addBindValue(key);
+    q.addBindValue(QString::fromUtf8(json));
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QByteArray WorkoutStore::loadSeries(const QString &key) const
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral("SELECT series FROM workout_series WHERE key = ?"));
+    q.addBindValue(key);
+    if (!q.exec() || !q.next())
+        return QByteArray();
+    return q.value(0).toString().toUtf8();
 }
 
 bool WorkoutStore::saveDetails(const QString &key, const QByteArray &json, QString *error)

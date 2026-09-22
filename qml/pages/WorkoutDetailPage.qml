@@ -43,6 +43,10 @@ Page {
     // wants, but throwing the rest away after going to the trouble of
     // decoding it would be silly.
     property var details: workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+
+    // Per-sample curves, already reduced to a drawable number of points -
+    // see AppController::workoutSeries().
+    property var series: workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
     property bool detailsExpanded: false
 
     function formatDuration(seconds) {
@@ -197,6 +201,97 @@ Page {
                         Label {
                             text: modelData.value
                             font.pixelSize: Theme.fontSizeLarge
+                        }
+                    }
+                }
+            }
+
+            // Heart rate, altitude and whatever else the workout recorded
+            // often enough to be worth a line. Same deal as the route: a
+            // plain Canvas, no charting library, no network.
+            Repeater {
+                model: page.series
+
+                Column {
+                    width: page.width
+                    spacing: Theme.paddingSmall
+                    topPadding: Theme.paddingLarge
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        text: {
+                            // The watch's own field names, tidied: strip the
+                            // "Sample." prefix and split the camel case.
+                            var n = modelData.name.replace("Sample.", "")
+                            n = n.replace(/([a-z])([A-Z])/g, "$1 $2")
+                            return n
+                        }
+                        color: Theme.secondaryColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                    }
+
+                    Item {
+                        x: Theme.horizontalPageMargin
+                        width: page.width - 2 * x
+                        height: Theme.itemSizeLarge
+
+                        Canvas {
+                            id: seriesCanvas
+                            anchors.fill: parent
+                            renderStrategy: Canvas.Cooperative
+
+                            Connections {
+                                target: page
+                                onSeriesChanged: seriesCanvas.requestPaint()
+                            }
+
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                var pts = modelData.points
+                                if (!pts || pts.length < 2)
+                                    return
+
+                                var lo = modelData.min
+                                var hi = modelData.max
+                                var span = hi - lo
+                                if (span <= 0)
+                                    return
+
+                                var pad = 2
+                                var h = height - 2 * pad
+                                ctx.lineWidth = 2
+                                ctx.lineJoin = "round"
+                                ctx.strokeStyle = Theme.highlightColor
+                                ctx.beginPath()
+                                for (var i = 0; i < pts.length; ++i) {
+                                    var x = width * i / (pts.length - 1)
+                                    var y = pad + h * (1 - (pts[i] - lo) / span)
+                                    if (i === 0)
+                                        ctx.moveTo(x, y)
+                                    else
+                                        ctx.lineTo(x, y)
+                                }
+                                ctx.stroke()
+                            }
+                        }
+
+                        // Axis extremes rather than a full axis: with 200
+                        // averaged buckets the line is indicative, so a
+                        // precise grid would overstate what it shows.
+                        Label {
+                            anchors { left: parent.left; top: parent.top }
+                            text: modelData.max.toFixed(modelData.max < 10 ? 1 : 0)
+                                  + " " + modelData.unit
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeTiny
+                        }
+                        Label {
+                            anchors { left: parent.left; bottom: parent.bottom }
+                            text: modelData.min.toFixed(modelData.min < 10 ? 1 : 0)
+                                  + " " + modelData.unit
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeTiny
                         }
                     }
                 }

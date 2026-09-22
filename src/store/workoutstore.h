@@ -38,6 +38,14 @@ public:
     bool saveDetails(const QString &key, const QByteArray &json, QString *error);
     QByteArray loadDetails(const QString &key) const;
 
+    // Per-sample series for a workout's graphs - heart rate, altitude and
+    // the rest - already reduced to a fixed number of points per series
+    // (see AppController::buildSeriesJson()), since the raw form runs to
+    // thousands of samples and a phone-sized chart can't show them. JSON,
+    // its own table, same reasoning as the two above.
+    bool saveSeries(const QString &key, const QByteArray &json, QString *error);
+    QByteArray loadSeries(const QString &key) const;
+
 private:
     QString m_dbPath;
     QString m_connectionName;

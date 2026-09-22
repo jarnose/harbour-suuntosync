@@ -161,6 +161,12 @@ public:
     // workout or one synced before this existed.
     Q_INVOKABLE QVariantList workoutDetails(const QString &key) const;
 
+    // Chartable per-sample series for a BLE-synced workout: a list of
+    // { name, unit, min, max, points }, where points is already reduced to
+    // a fixed number of averaged buckets ready to draw. Empty for a cloud
+    // workout, and for a workout with nothing worth charting.
+    Q_INVOKABLE QVariantList workoutSeries(const QString &key) const;
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();

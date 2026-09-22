@@ -172,6 +172,50 @@ Also noted for later, not acted on: that wrapper fetches a workout via
 `extensions` and `additionalData` query parameters, which would collapse
 this project's separate detail and extensions calls into one.
 
+## Confirmed by a real capture (2026-09-22)
+
+Captured off a rooted LineageOS 21 device running the same APK version
+(6.7.12), mitmproxy's CA bind-mounted over the Conscrypt APEX store. Two
+workouts created **on the phone** - one added by hand, one recorded with the
+app's own tracker - both accepted with 200.
+
+What the real requests settle:
+
+- **There are only two parts, not three.** Neither upload carried an `sml`
+  part at all, and both succeeded. So the minimum accepted body is
+  `workoutBinary` + `workoutExtensions`, and `[]` is a valid extensions
+  value (the tracked workout sent one `WeatherExtension`). This confirms
+  the reading of the `"Has SML:"` log line: SML is optional, and a
+  phone-recorded workout has none to send. A watch-synced upload should
+  add it as the third part; that case is still uncaptured.
+- **The headers are exactly the four this project already sends**:
+  `sttauthorization`, `user-agent`, `accept-language`, plus the multipart
+  `content-type`. No signature, no timestamp, no salt - the session key
+  alone authenticates a write.
+- **No `x-totp`.** See below.
+- **`workoutBinary` is small**: 672 bytes for the manual workout, 880 for
+  the tracked one. Both are checked in as
+  `tests/fixtures/workout_binary_manual.bin` and
+  `..._tracked.bin` - the golden vectors this format was missing.
+
+A first pass over the manual one against `HeaderSerializer.c`'s field order
+lands its three strings exactly where the bytecode says they should be:
+offset 28 `"testi"` (the description typed in), 49 `"jarnoselnp"`
+(username), 61 `"9/22/26 9:28 PM"` (workout name). The order read out of the
+bytecode is therefore right; the remaining scalar fields just need
+transcribing, now against bytes that can prove it.
+
+### The x-totp correction
+
+This project briefly sent `x-totp` on every authenticated request, on the
+strength of `Marius-Ar/suunto-api-wrapper` doing so. The capture measured
+it: the real app sends it on **2 of 122** requests - a user email-status
+check and a settings POST - and not on the workout upload nor on any read
+this project makes. That change has been reverted;
+`SuuntoAuth::generateTotp()` stays for whichever endpoint eventually wants
+it. A third-party client's habit is not the app's behaviour, and only the
+capture could tell them apart.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`
@@ -180,17 +224,11 @@ this project's separate detail and extensions calls into one.
    bytes, or Suunto's XML/JSON SML? The cloud's *download* side
    (`GET workouts/{key}/sml`, which this project now parses) returns JSON,
    which is suggestive but not proof that the upload side matches.
-3. **Whether the SML part may be omitted**, as the "Has SML:" log line
-   hints, and whether a data-free `workoutBinary` is accepted.
+3. ~~Whether the SML part may be omitted~~ - **answered: yes**, see above.
+   What an SML part looks like when present is still uncaptured, since that
+   needs a watch-synced workout.
 
-**There is no golden vector for any of this.** Every other binary format in
-this project was validated against real captured bytes before it went
-near hardware; here there is no captured upload at all, so a serializer
-written from the bytecode could only be checked for self-consistency
-(round-tripping against a reader written from the same bytecode), never
-against the real thing, until the server either accepts or rejects it.
-
-One HTTPS capture of the official app syncing a single workout would supply
-exactly that - a real `workoutBinary`, a real `sml.zip`, and the answer to
-all three questions above - and would turn this from a transcription
-exercise into the usual validated one.
+~~There is no golden vector for any of this.~~ **There are two now** - see
+the capture section above. What is still missing is a *watch-synced*
+upload, which is the only way to see an `sml` part; the two captured here
+were both recorded on the phone.

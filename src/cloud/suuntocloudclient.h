@@ -50,10 +50,9 @@ public:
 
     explicit SuuntoCloudClient(QObject *parent = nullptr);
 
-    // The signed-in account's email, used to derive the per-request x-totp
-    // header (see authorizedRequest()). Safe to leave unset - the header is
-    // then simply omitted, which is how every read this project makes has
-    // worked so far.
+    // The signed-in account's email. Currently unused for request building
+    // - see authorizedRequest() for the x-totp story - but kept because the
+    // two endpoints that do want it are keyed by it.
     void setAccountEmail(const QString &email) { m_accountEmail = email; }
 
     // POSTs to /login2 with the signed+TOTP'd form body SuuntoAuth builds.
@@ -86,19 +85,18 @@ public:
                           RawBodyCallback callback);
 
 private:
-    // Every authenticated call sends the same four headers, and since
-    // 2026-09-22 a fifth: x-totp, a 6-digit RFC 6238 code derived from the
-    // account email via SuuntoAuth::generateTotp().
+    // Every authenticated call sends the same four headers - and
+    // deliberately NOT x-totp.
     //
-    // Why it is here at all: the official app declares x-totp as an explicit
-    // @Header on at least one endpoint (confirmed in the APK, see
-    // docs/workout-upload.md), and Marius-Ar/suunto-api-wrapper - an
-    // independent reverse-engineering of this same private API - sends it on
-    // every request. That project's TOTP key material matches this one's
-    // byte for byte, which is a third-party confirmation of
-    // suuntoauth.cpp's own constants. Reads demonstrably work without it, so
-    // this is groundwork for the write endpoints (docs/workout-upload.md),
-    // not a fix for anything currently broken.
+    // This briefly did send it, on the strength of
+    // Marius-Ar/suunto-api-wrapper putting it on every request. A real
+    // capture of the official app (2026-09-22, see docs/workout-upload.md)
+    // settled it: the app sends x-totp on 2 of 122 requests - a user
+    // email-status check and a settings POST - and not on the workout
+    // upload or on any read this project makes. Sending it everywhere
+    // imitates a third-party client rather than the app, so it is gone.
+    // SuuntoAuth::generateTotp() stays, for whichever endpoint eventually
+    // needs it.
     QNetworkRequest authorizedRequest(const QString &url, const QString &sessionKey) const;
 
     QNetworkAccessManager *m_network;

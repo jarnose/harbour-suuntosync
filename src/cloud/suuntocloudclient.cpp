@@ -47,13 +47,6 @@ QNetworkRequest SuuntoCloudClient::authorizedRequest(const QString &url,
     request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
     request.setRawHeader("User-Agent", kUserAgent.toUtf8());
     request.setRawHeader("Accept-Language", "en");
-    if (!m_accountEmail.isEmpty()) {
-        // Same derivation /login2 already uses, just keyed by the email and
-        // sent as a header rather than a form field - see the header comment.
-        const std::string code = SuuntoAuth::generateTotp(
-                m_accountEmail.toStdString(), QDateTime::currentMSecsSinceEpoch());
-        request.setRawHeader("x-totp", QByteArray::fromStdString(code));
-    }
     return request;
 }
 

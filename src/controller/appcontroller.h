@@ -76,18 +76,23 @@ public:
     // stored yet (that's LogbookSync, once this plumbing is proven).
     Q_INVOKABLE void testWhiteboard();
 
-    // Phase 6, next validation probe: fetches and fully decodes one real
-    // workout directly from the watch by its logbook id (the numeric
-    // suffix of /Logbook/byId/<id>/Data - which is itself that workout's
-    // Unix start timestamp in seconds, confirmed in
-    // docs/logbook-data-format.md, so any id already seen via cloud sync or
-    // testWhiteboard()'s /Entries probe works here). Exercises the whole
-    // new pipeline end to end - MdsWhiteboardClient::fetchLogbookData()'s
-    // still-experimental bulk-transfer trigger (see its doc comment) and
-    // Logbook::decode() - and reports either a human-readable field summary
-    // or the failure, via logbookTestResult(). Nothing is stored in
-    // WorkoutStore yet; that's this probe's own follow-up once it's proven
-    // on real hardware.
+    // Phase 6: fetches and fully decodes one real workout directly from the
+    // watch by its logbook id (the numeric suffix of
+    // /Logbook/byId/<id>/Data - which is itself that workout's Unix start
+    // timestamp in seconds, confirmed in docs/logbook-data-format.md, so
+    // any id already seen via cloud sync or testWhiteboard()'s /Entries
+    // probe works here), and - on success - saves it into WorkoutStore
+    // (key "ble_<id>", source "ble", distinct from any cloud-synced record
+    // of the same real workout - see workoutFromDecoded()'s comment in the
+    // .cpp for why they're not merged) and refreshes workoutModel so it
+    // shows up on MainPage immediately. Exercises the whole pipeline end to
+    // end - MdsWhiteboardClient::fetchLogbookData()'s still-experimental
+    // bulk-transfer trigger (see its doc comment) and Logbook::decode() -
+    // and reports either a human-readable field summary or the failure via
+    // logbookTestResult(). Still named/kept as "test..." since manual id
+    // entry (no on-device /Entries listing UI yet) makes this a developer
+    // probe more than a real end-user sync action for now, even though it
+    // does persist.
     Q_INVOKABLE void testLogbookFetch(const QString &logbookId);
 
     // Signs in to the Suunto cloud account. Progress/result surface via

@@ -88,7 +88,7 @@ Page {
                     id: testLogbookButton
                     anchors.verticalCenter: logbookIdField.verticalCenter
                     enabled: logbookIdField.text.length > 0
-                    text: qsTr("Test fetch")
+                    text: qsTr("Fetch and save")
                     onClicked: AppController.testLogbookFetch(logbookIdField.text)
                 }
             }

@@ -35,9 +35,18 @@ Page {
         var entries = [
             { label: qsTr("Distance"), value: qsTr("%1 km").arg((totalDistance / 1000).toFixed(2)) },
             { label: qsTr("Duration"), value: formatDuration(totalTime) },
-            { label: qsTr("Ascent"), value: qsTr("%1 m").arg(totalAscent.toFixed(0)) },
-            { label: qsTr("Descent"), value: qsTr("%1 m").arg(totalDescent.toFixed(0)) },
         ]
+        // Unlike a cloud workout (where the API always reports these, 0
+        // included for a genuinely flat session), a BLE-synced one never
+        // has ascent/descent at all - not found anywhere in the watch's own
+        // /Data resource despite an extensive search, see
+        // docs/logbook-data-format.md - so Logbook::decode() leaves them at
+        // 0 the same "0 = absent" way maxSpeed/energyConsumption/stepCount
+        // below already do, rather than lying with a false "0 m".
+        if (totalAscent > 0)
+            entries.push({ label: qsTr("Ascent"), value: qsTr("%1 m").arg(totalAscent.toFixed(0)) })
+        if (totalDescent > 0)
+            entries.push({ label: qsTr("Descent"), value: qsTr("%1 m").arg(totalDescent.toFixed(0)) })
         if (avgHeartRate > 0)
             entries.push({ label: qsTr("Avg heart rate"), value: qsTr("%1 bpm").arg(avgHeartRate.toFixed(0)) })
         if (maxHeartRate > 0)

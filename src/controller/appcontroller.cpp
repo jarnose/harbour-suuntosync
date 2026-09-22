@@ -6,6 +6,7 @@
 #include "../ble/mdswhiteboardclient.h"
 #include "../cloud/suuntocloudclient.h"
 #include "../store/workoutstore.h"
+#include "../store/workout.h"
 #include "../model/workoutlistmodel.h"
 #include "../ble/logbookdecoder.h"
 
@@ -21,6 +22,32 @@ QString dbPath()
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     return QDir(dir).filePath(QStringLiteral("suuntosync.sqlite"));
+}
+
+// "ble_" prefix keeps this in its own key namespace, separate from cloud
+// workouts' own "wk_..." keys - deliberately not attempting to merge a
+// BLE-synced and cloud-synced record of the same real workout into one row
+// (no reliable cross-reference beyond timestamp proximity, which isn't
+// solid enough to upsert-collide on automatically); they'll just show up
+// as two entries in the list for now. See docs/logbook-data-format.md for
+// which Workout fields Logbook::decode() can and can't populate -
+// totalAscent/totalDescent/energyConsumption stay at 0 (absent) here for
+// the same "not found in this resource" reasons documented there.
+Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorkout &decoded)
+{
+    Workout w;
+    w.key = QStringLiteral("ble_%1").arg(logbookId);
+    w.source = QStringLiteral("ble");
+    w.activityId = decoded.activityId;
+    w.startTime = static_cast<qint64>(decoded.startTimeMs);
+    w.stopTime = static_cast<qint64>(decoded.stopTimeMs);
+    w.totalTime = decoded.totalTimeSeconds;
+    w.totalDistance = decoded.totalDistanceMeters;
+    w.maxSpeed = decoded.maxSpeedMs;
+    w.avgHeartRate = decoded.avgHeartRateBpm;
+    w.maxHeartRate = decoded.maxHeartRateBpm;
+    w.stepCount = decoded.stepCount;
+    return w;
 }
 
 } // namespace
@@ -229,7 +256,7 @@ void AppController::testLogbookFetch(const QString &logbookId)
     m_logbookTestInFlight = true;
     const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
     m_whiteboardClient->fetchLogbookData(path,
-            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+            [this, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
         m_logbookTestInFlight = false;
         if (!ok) {
             emit logbookTestResult(tr("Fetch failed: %1").arg(error));
@@ -237,18 +264,27 @@ void AppController::testLogbookFetch(const QString &logbookId)
         }
 
         try {
-            const Logbook::DecodedWorkout w = Logbook::decode(data);
+            const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+            const Workout w = workoutFromDecoded(logbookId, decoded);
+
+            QString storeError;
+            if (!m_workoutStore->upsert(w, &storeError)) {
+                emit logbookTestResult(tr("Decoded OK but failed to save: %1").arg(storeError));
+                return;
+            }
+            loadCachedWorkouts();
+
             emit logbookTestResult(
-                    tr("OK - %1 bytes compressed, activity=%2 duration=%3s "
+                    tr("OK - saved. %1 bytes compressed, activity=%2 duration=%3s "
                        "distance=%4m maxSpeed=%5m/s avgHR=%6 maxHR=%7 steps=%8")
                             .arg(data.size())
-                            .arg(w.activityId)
-                            .arg(w.totalTimeSeconds, 0, 'f', 0)
-                            .arg(w.totalDistanceMeters, 0, 'f', 0)
-                            .arg(w.maxSpeedMs, 0, 'f', 1)
-                            .arg(w.avgHeartRateBpm, 0, 'f', 0)
-                            .arg(w.maxHeartRateBpm, 0, 'f', 0)
-                            .arg(w.stepCount));
+                            .arg(decoded.activityId)
+                            .arg(decoded.totalTimeSeconds, 0, 'f', 0)
+                            .arg(decoded.totalDistanceMeters, 0, 'f', 0)
+                            .arg(decoded.maxSpeedMs, 0, 'f', 1)
+                            .arg(decoded.avgHeartRateBpm, 0, 'f', 0)
+                            .arg(decoded.maxHeartRateBpm, 0, 'f', 0)
+                            .arg(decoded.stepCount));
         } catch (const std::exception &e) {
             emit logbookTestResult(tr("Fetched %1 bytes but decoding failed: %2")
                                             .arg(data.size())

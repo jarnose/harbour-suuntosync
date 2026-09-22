@@ -800,5 +800,46 @@ fix changes that fixture's already-passing expected values at all.
 **What this leaves open**: whether the skipped handle-walk is ever
 *required* for some other logbook entry or watch state that happens to
 differ from the one tested here is still unconfirmed - one successful
-fetch is strong evidence, not proof for every case. Still not wired
-into `WorkoutStore`/the UI.
+fetch is strong evidence, not proof for every case.
+
+## Wired into `WorkoutStore` and the UI
+
+`AppController::testLogbookFetch()` now saves a successful fetch, not
+just reports it: `workoutFromDecoded()` (`appcontroller.cpp`) maps
+`Logbook::DecodedWorkout` onto the project's own `Workout` struct - key
+`"ble_<logbookId>"` (its own namespace, deliberately not merged with a
+cloud-synced record of the same real workout - no cross-reference
+solid enough to upsert-collide on automatically beyond timestamp
+proximity), source `"ble"`, `totalAscent`/`totalDescent`/
+`energyConsumption` left at `0` (absent) since none of those were found
+in this resource - and upserts it, then refreshes `workoutModel` so it
+shows up on `MainPage` immediately. Still `Q_INVOKABLE testLogbookFetch`
+rather than a dedicated "sync" action, since manual logbook-id entry
+(no on-device `/Entries` listing UI yet - that resource needs the same
+handle-walk-or-shortcut question this whole document has been chasing
+for `/Data`, not yet attempted for it) makes this a developer probe more
+than an end-user feature for now, even though it persists for real.
+
+**A real display bug this caught**: `MainPage.qml`'s `activityName()`
+table (`1=Running, 2=Cycling, 11=Hiking, 22=Trail running`) is the
+*cloud* API's activity-id vocabulary (from `suuntool`'s example output) -
+a BLE-decoded workout's `activityId` comes from the watch's own SML
+`ActivityType` instead, a **different numbering**: confirmed `4` for
+cycling and `12` for walking against Jarno's real workouts, not `2`.
+Using the cloud table for a BLE workout would have shown "Activity 4"
+instead of "Cycling". Fixed by giving `activityName()` a `source`
+parameter that picks between the existing cloud table and a new,
+separately-maintained `bleActivityName()` (currently just the two ids
+confirmed above, same graceful numeric fallback for anything else).
+
+**A related display fix**: `WorkoutDetailPage.qml` used to show
+Ascent/Descent unconditionally, which is fine for cloud workouts (the
+API always reports them, `0` included for a genuinely flat session) but
+would show a false "0 m" for every BLE workout, since `Logbook::decode()`
+leaves those fields at `0` to mean *absent*, not *zero* - the same
+convention `Workout`'s own header comment already documents for
+`maxSpeed`/`energyConsumption`/`stepCount`. Made Ascent/Descent
+conditional (`> 0`) the same way those already are, rather than passing
+`source` through to gate them more precisely - accepting the same
+small, already-accepted tradeoff (a genuinely-zero cloud value would
+also be hidden) the existing fields already live with.

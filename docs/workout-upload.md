@@ -90,20 +90,78 @@ FIT file - see `jmallach/suunto-garmin-sync`, whose own docstring marks
 several of its paths as unconfirmed). Everything here rides on the session
 key this app already has.
 
+## `workoutBinary`: Sports Tracker's legacy container
+
+Traced on the same day. The write path is
+`FsBinaryFileRepository.n(Workout)` -> `.m()` ->
+`WorkoutBinaryController.e()` -> `.d()`, and `.d()` writes three sections
+back to back into one `DataOutputStream` - so the whole file is Java's
+`DataOutput` encoding: big-endian, and `writeUTF` is modified UTF-8 with a
+two-byte length prefix.
+
+```
+workoutBinary := HeaderSerializer.c(out, LegacyHeader, appVersion)
+                 ServiceHeaderSerializer.b(out, LegacyServiceHeader)
+                 LegacyWorkoutSerializer.c(out, LegacyWorkout)
+```
+
+The read side (`WorkoutBinaryController.b()`) consumes the same three in the
+same order, and the original method name survives as a Kotlin null-check
+message: `readLegacyWorkoutBinary`.
+
+**`LegacyWorkoutSerializer.c` is simple** - eight blocks, three of which are
+hardcoded zeroes:
+
+| # | content |
+|---|---|
+| 1 | `writeInt(n)` + n x `EventSerializer.b` |
+| 2 | `writeInt(n)` + n x `LocationEventSerializer.c` (delta-coded: each call gets the previous event) |
+| 3 | `writeInt(0)` - constant |
+| 4 | `writeInt(0)` - constant |
+| 5 | `writeInt(n)` + n x `HeartrateEventSerializer.b` |
+| 6 | `writeInt(n)` + n x `LocationEventSerializer.e` |
+| 7 | `writeInt(n)` + n x `MediaEventSerializer.b` |
+| 8 | `writeInt(0)` - constant |
+
+With every list empty that section is 32 zero bytes. The reader's count
+validation (`b()`) accepts 0 and rejects negatives or anything above
+2,000,000, so an empty section is legal by its own rules.
+
+That matters because of how a **manually added** workout is stored:
+`FsBinaryFileRepository$create$2` builds its `WorkoutData` from
+`emptyList()` throughout and logs "Unable to store binary file for manually
+added workout %d" on failure. So the app itself writes binaries with no
+track, no heart rate and no events - which is the shape a watch-synced
+upload could plausibly use, letting the SML part carry the actual data.
+**Plausibly** - this has not been tested against the server.
+
+**`HeaderSerializer.c` is the bulk of the work**: roughly forty scalar
+fields (`writeInt`/`writeShort`/`writeByte`/`writeDouble`/`writeUTF`, with
+the name truncated to 256 chars and two other strings to 32), then two
+`WorkoutGeoPoint`s via `CoordinatesSerializer.e`, five `Statistics` blocks
+via `StatisticsSerializer.b`, and a `LegacyHeartRateData` via
+`HeartRateDataSerializer.b`. Every one of those is readable the same way;
+none of it has been transcribed field by field yet.
+
 ## Still open
 
-Three things, and the first is the real blocker:
-
-1. **`workoutBinary`'s format is unknown.** It is produced by
-   `BinaryFileRepository`, it is not SBEM, and it appears to be mandatory.
-   This is Sports Tracker's own container and nothing in this project decodes
-   or produces it yet. Next step: decompile `BinaryFileRepository` and
-   whatever writes the file.
-2. **`sml.zip`'s contents are unverified.** A zip, but of what - the watch's
-   raw SBEM bytes, or Suunto's XML/JSON SML? The cloud's *download* side
+1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`
+   and the four sub-serializers.** Readable, not yet read.
+2. **`sml.zip`'s contents.** A zip, but of what - the watch's raw SBEM
+   bytes, or Suunto's XML/JSON SML? The cloud's *download* side
    (`GET workouts/{key}/sml`, which this project now parses) returns JSON,
    which is suggestive but not proof that the upload side matches.
-3. **Whether the SML part may be omitted**, as the log line hints.
+3. **Whether the SML part may be omitted**, as the "Has SML:" log line
+   hints, and whether a data-free `workoutBinary` is accepted.
 
-Until (1) is answered, the upload cannot be built - knowing the endpoint is
-not the same as being able to fill it.
+**There is no golden vector for any of this.** Every other binary format in
+this project was validated against real captured bytes before it went
+near hardware; here there is no captured upload at all, so a serializer
+written from the bytecode could only be checked for self-consistency
+(round-tripping against a reader written from the same bytecode), never
+against the real thing, until the server either accepts or rejects it.
+
+One HTTPS capture of the official app syncing a single workout would supply
+exactly that - a real `workoutBinary`, a real `sml.zip`, and the answer to
+all three questions above - and would turn this from a transcription
+exercise into the usual validated one.

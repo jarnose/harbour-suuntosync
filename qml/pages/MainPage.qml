@@ -129,6 +129,18 @@ Page {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         anchors.verticalCenter: parent.verticalCenter
                     }
+                    // A workout synced from the watch and the cloud's copy of
+                    // the same ride are separate rows (different key spaces,
+                    // see workoutFromDecoded()) and only the watch one has
+                    // the training metrics and the route - so say which is
+                    // which rather than leaving them indistinguishable.
+                    Label {
+                        visible: model.source === "ble"
+                        text: qsTr("watch")
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
                 Label {
                     text: qsTr("%1 km · %2")
@@ -157,6 +169,7 @@ Page {
                 maxVo2: model.maxVo2,
                 trainingLoad: model.trainingLoad,
                 workoutKey: model.key,
+                source: model.source,
             })
         }
 

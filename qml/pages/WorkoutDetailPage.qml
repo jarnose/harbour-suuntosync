@@ -29,6 +29,7 @@ Page {
     // WorkoutStore key, so the route can be looked up. Empty for a workout
     // opened from somewhere that doesn't know it.
     property string workoutKey: ""
+    property string source: ""
 
     // [{x, y}] in 0..1, already aspect-corrected and fitted - see
     // AppController::workoutRoute(). Empty unless this is a BLE workout
@@ -92,7 +93,14 @@ Page {
 
             PageHeader {
                 title: page.activityName
-                description: Qt.formatDateTime(new Date(page.startTime), "d.M.yyyy HH:mm")
+                description: {
+                    var when = Qt.formatDateTime(new Date(page.startTime), "d.M.yyyy HH:mm")
+                    if (page.source === "ble")
+                        return qsTr("%1 · from watch").arg(when)
+                    if (page.source.length > 0)
+                        return qsTr("%1 · from Suunto cloud").arg(when)
+                    return when
+                }
             }
 
             // The recorded GPS track, drawn as a plain polyline. Deliberately
@@ -110,6 +118,13 @@ Page {
                     id: routeCanvas
                     anchors.fill: parent
                     renderStrategy: Canvas.Cooperative
+
+                    // A Canvas only repaints when asked - it has no idea
+                    // page.route is something onPaint reads.
+                    Connections {
+                        target: page
+                        onRouteChanged: routeCanvas.requestPaint()
+                    }
 
                     onPaint: {
                         var ctx = getContext("2d")

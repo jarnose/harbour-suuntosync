@@ -39,6 +39,7 @@ class AppController : public QObject
     Q_PROPERTY(bool cloudLoginInProgress READ isCloudLoginInProgress NOTIFY cloudLoginInProgressChanged)
     Q_PROPERTY(QObject *workoutModel READ workoutModelObject CONSTANT)
     Q_PROPERTY(bool workoutSyncInProgress READ isWorkoutSyncInProgress NOTIFY workoutSyncInProgressChanged)
+    Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -51,6 +52,7 @@ public:
     // Defined in the .cpp - see deviceModelObject()'s comment, same reason.
     QObject *workoutModelObject() const;
     bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
+    bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
 
     // Defined in the .cpp file, not inline here: DeviceListModel is only
     // forward-declared in this header, so the implicit DeviceListModel* ->
@@ -174,6 +176,20 @@ public:
     // workout, and for a workout with nothing worth charting.
     Q_INVOKABLE QVariantList workoutSeries(const QString &key) const;
 
+    // Fetches a cloud workout's sample data (GET /v1/workouts/{key}/sml) and
+    // turns it into the same stored series a BLE workout gets. Unlike
+    // loadCloudDetails() this is *not* automatic: the response runs to
+    // several megabytes, so it hangs off an explicit menu action and
+    // cloudSamplesInProgress drives the page's busy state.
+    //
+    // The response's shape hasn't been captured, so the parser recognises
+    // the schema's leaf names wherever they turn up rather than assuming a
+    // nesting. If it finds nothing, the raw body is written to
+    // <cache>/sml-<key>.json and errorOccurred() names the file, so it can
+    // be pulled off the phone and the parser corrected against the real
+    // thing instead of another guess.
+    Q_INVOKABLE void loadCloudSamples(const QString &key);
+
     // A BLE-synced workout's laps: { number, type, durationSeconds,
     // distanceMeters }, where type is the watch's own reason for the marker
     // (manual, auto-lap by distance, interval...). Empty when the workout
@@ -191,6 +207,7 @@ signals:
     void logbookTestResult(const QString &summary);
     void workoutSyncInProgressChanged();
     void workoutDetailsChanged(const QString &key);
+    void cloudSamplesInProgressChanged();
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
@@ -241,4 +258,5 @@ private:
     WorkoutStore *m_workoutStore;
     WorkoutListModel *m_workoutModel;
     bool m_workoutSyncInProgress = false;
+    bool m_cloudSamplesInProgress = false;
 };

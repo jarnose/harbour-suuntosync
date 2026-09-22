@@ -116,6 +116,26 @@ void SuuntoCloudClient::login(const QString &email, const QString &password,
     });
 }
 
+void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
+                                          RawBodyCallback callback)
+{
+    QNetworkRequest request(QUrl(kBaseUrl + QStringLiteral("workouts/") + workoutKey
+                                  + QStringLiteral("/sml")));
+    request.setRawHeader("STTAuthorization", sessionKey.toUtf8());
+    request.setRawHeader("User-Agent", kUserAgent.toUtf8());
+    request.setRawHeader("Accept-Language", "en");
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QByteArray(), reply->errorString());
+            return;
+        }
+        callback(true, reply->readAll(), QString());
+    });
+}
+
 void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
                                             const QString &workoutKey,
                                             WorkoutDetailCallback callback)

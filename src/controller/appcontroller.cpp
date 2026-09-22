@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDir>
+#include <QFile>
 #include <QDateTime>
 
 #include <algorithm>
@@ -163,30 +164,20 @@ const char *const kChartedSeries[] = {
 constexpr int kSeriesPoints = 200;
 constexpr int kMinSamplesToChart = 20;
 
-// Reduces each charted series from a /Data payload to a fixed-size curve.
-// Returns {} if nothing chartable was found, which is normal - a workout
-// with no GPS and no heart-rate strap has very little to draw.
-QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
+// Turns collected samples into the stored curve format. Shared by the BLE
+// and cloud paths: both end up with values in the schema's canonical units
+// keyed by SML-style name, they just get there differently.
+QByteArray seriesJsonFromSamples(const std::map<QString, std::vector<double>> &samples)
 {
-    std::map<std::string, std::vector<double>> samples;
-    for (const char *name : kChartedSeries)
-        samples[name] = {};
-
-    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
-                [&samples](const Sml::Reading &reading) {
-        auto it = samples.find(reading.descriptor->name);
-        if (it != samples.end())
-            it->second.push_back(reading.value);
-    });
-
     QJsonArray series;
     for (const char *name : kChartedSeries) {
-        const std::vector<double> &values = samples[name];
-        if (static_cast<int>(values.size()) < kMinSamplesToChart)
+        const QString qname = QString::fromLatin1(name);
+        const auto it = samples.find(qname);
+        if (it == samples.end() || static_cast<int>(it->second.size()) < kMinSamplesToChart)
             continue;
+        const std::vector<double> &values = it->second;
 
         const auto range = std::minmax_element(values.begin(), values.end());
-        const QString qname = QString::fromLatin1(name);
         const DisplayValue low = toDisplayUnits(qname, *range.first);
         const DisplayValue high = toDisplayUnits(qname, *range.second);
         if (qFuzzyCompare(low.value, high.value))
@@ -218,6 +209,76 @@ QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
         series.append(entry);
     }
     return series.isEmpty() ? QByteArray() : QJsonDocument(series).toJson(QJsonDocument::Compact);
+}
+
+// Reduces each charted series from a /Data payload to a fixed-size curve.
+// Returns {} if nothing chartable was found, which is normal - a workout
+// with no GPS and no heart-rate strap has very little to draw.
+QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
+{
+    std::map<QString, std::vector<double>> samples;
+    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
+                [&samples](const Sml::Reading &reading) {
+        samples[QString::fromLatin1(reading.descriptor->name)].push_back(reading.value);
+    });
+    return seriesJsonFromSamples(samples);
+}
+
+// Walks the cloud's /sml JSON collecting the leaves worth charting. Written
+// shape-agnostically on purpose: the response hasn't been captured, so
+// rather than assuming a nesting this looks for the leaf names the schema
+// uses ("HR", "Altitude", ...) wherever they appear, in document order.
+void collectSmlLeaves(const QJsonValue &value, std::map<QString, std::vector<double>> *samples)
+{
+    if (value.isArray()) {
+        for (const QJsonValue &item : value.toArray())
+            collectSmlLeaves(item, samples);
+        return;
+    }
+    if (!value.isObject())
+        return;
+    const QJsonObject object = value.toObject();
+    for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
+        if (it.value().isDouble()) {
+            const QString name = QStringLiteral("Sample.") + it.key();
+            for (const char *charted : kChartedSeries) {
+                if (name == QLatin1String(charted)) {
+                    (*samples)[name].push_back(it.value().toDouble());
+                    break;
+                }
+            }
+        } else {
+            collectSmlLeaves(it.value(), samples);
+        }
+    }
+}
+
+QByteArray buildCloudSeriesJson(const QByteArray &body)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(body);
+    if (doc.isNull())
+        return QByteArray();
+
+    std::map<QString, std::vector<double>> samples;
+    collectSmlLeaves(doc.isArray() ? QJsonValue(doc.array()) : QJsonValue(doc.object()), &samples);
+
+    // The watch's own SML stores heart rate and cadence in hertz, and this
+    // project's unit mapping assumes that. Whether the cloud's JSON keeps
+    // that convention or converts to bpm hasn't been established, so decide
+    // by magnitude: a maximum under 10 can only be hertz, and a resting
+    // heart rate of 3 bpm isn't a thing. Replace this with a plain
+    // assertion once a real response has been looked at.
+    for (const char *name : { "Sample.HR", "Sample.Cadence" }) {
+        auto it = samples.find(QString::fromLatin1(name));
+        if (it == samples.end() || it->second.empty())
+            continue;
+        const double max = *std::max_element(it->second.begin(), it->second.end());
+        if (max >= 10) {
+            for (double &v : it->second)
+                v /= 60.0; // already bpm/rpm; bring it back to the canonical unit
+        }
+    }
+    return seriesJsonFromSamples(samples);
 }
 
 // Lap markers, from the Lap event chunk. The schema's own enum, so a
@@ -846,6 +907,70 @@ void AppController::loadCloudDetails(const QString &key)
             }
 
             emit workoutDetailsChanged(key);
+        });
+    });
+}
+
+void AppController::loadCloudSamples(const QString &key)
+{
+    if (m_cloudSamplesInProgress)
+        return;
+    if (!m_cloudAccount.isSignedIn() || key.startsWith(QStringLiteral("ble_"))) {
+        emit errorOccurred(tr("Sample data is only available for cloud workouts."));
+        return;
+    }
+
+    m_cloudSamplesInProgress = true;
+    emit cloudSamplesInProgressChanged();
+
+    // Unlike loadCloudDetails() this reports its failures: the user asked
+    // for this one, so silence would just look broken.
+    auto finish = [this, key](const QString &error) {
+        m_cloudSamplesInProgress = false;
+        emit cloudSamplesInProgressChanged();
+        if (!error.isEmpty())
+            emit errorOccurred(error);
+        else
+            emit workoutDetailsChanged(key);
+    };
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, key, finish](bool ok, const QByteArray &data, const QString &error) {
+        if (!ok) {
+            finish(tr("Could not read the stored session: %1").arg(error));
+            return;
+        }
+        m_cloudClient->fetchWorkoutSml(QString::fromUtf8(data), key,
+                [this, key, finish](bool smlOk, const QByteArray &body, const QString &smlError) {
+            if (!smlOk) {
+                finish(tr("Could not download sample data: %1").arg(smlError));
+                return;
+            }
+
+            const QByteArray series = buildCloudSeriesJson(body);
+            if (series.isEmpty()) {
+                // Nothing recognised. Keep the body rather than throwing it
+                // away - this is the only copy of the shape this parser was
+                // written blind against. See loadCloudSamples()'s header
+                // comment.
+                const QString dir =
+                        QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+                QDir().mkpath(dir);
+                const QString path = dir + QStringLiteral("/sml-") + key + QStringLiteral(".json");
+                QFile file(path);
+                if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                    file.write(body);
+                    file.close();
+                    finish(tr("No charts found in %1 kB of sample data. Raw response saved to %2.")
+                           .arg(body.size() / 1024).arg(path));
+                } else {
+                    finish(tr("No charts found in the sample data, and it could not be saved."));
+                }
+                return;
+            }
+
+            m_workoutStore->saveSeries(key, series, nullptr);
+            finish(QString());
         });
     });
 }

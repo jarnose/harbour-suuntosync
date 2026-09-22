@@ -48,6 +48,7 @@ Page {
 
     function reloadDetails() {
         details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
+        series = workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
 
         // A cloud workout's training metrics arrive with the extensions,
         // after this page is already up. The store is updated too, but
@@ -72,17 +73,28 @@ Page {
         AppController.loadCloudDetails(workoutKey)
     }
 
+    // The sample-data download is the one thing on this page that can fail
+    // in a way worth telling the user about, and it's a deliberate action
+    // with no other feedback, so its error gets a persistent banner rather
+    // than a toast - same reasoning as PairingPage.qml's.
+    property string lastError: ""
+
     Connections {
         target: AppController
         onWorkoutDetailsChanged: {
-            if (key === page.workoutKey)
+            if (key === page.workoutKey) {
+                page.lastError = ""
                 page.reloadDetails()
+            }
         }
+        onErrorOccurred: page.lastError = message
     }
 
     // Per-sample curves, already reduced to a drawable number of points -
-    // see AppController::workoutSeries().
-    property var series: workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
+    // see AppController::workoutSeries(). Not a binding, for the same
+    // reason details isn't: a cloud workout's curves only exist after the
+    // pull-down fetch below has run.
+    property var series: []
     property var laps: workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
     property bool detailsExpanded: false
 
@@ -139,6 +151,23 @@ Page {
         anchors.fill: parent
         contentHeight: column.height
 
+        PullDownMenu {
+            busy: AppController.cloudSamplesInProgress
+
+            // Only offered where it can actually do something: a watch
+            // workout already arrives with its curves, and once a cloud
+            // workout's have been downloaded there's nothing to repeat.
+            // The download is several megabytes, which is exactly why this
+            // is a deliberate tap rather than something the page does on
+            // its own when opened.
+            MenuItem {
+                text: qsTr("Download sample data")
+                visible: page.source !== "ble" && page.series.length === 0
+                         && page.workoutKey.length > 0
+                onClicked: AppController.loadCloudSamples(page.workoutKey)
+            }
+        }
+
         Column {
             id: column
             width: parent.width
@@ -153,6 +182,16 @@ Page {
                         return qsTr("%1 · from Suunto cloud").arg(when)
                     return when
                 }
+            }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: page.lastError.length > 0
+                text: page.lastError
+                wrapMode: Text.Wrap
+                color: Theme.highlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
             }
 
             // The recorded GPS track, drawn as a plain polyline. Deliberately

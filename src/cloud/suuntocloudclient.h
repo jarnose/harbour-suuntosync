@@ -68,6 +68,16 @@ public:
     void fetchWorkoutDetail(const QString &sessionKey, const QString &workoutKey,
                              WorkoutDetailCallback callback);
 
+    // GET /v1/workouts/{key}/sml - the workout's full sample data. Despite
+    // the path it is JSON rather than the binary SBEM the watch serves, and
+    // it runs to several megabytes per workout, so this is only ever called
+    // from an explicit user action. Handed back as the raw body: the shape
+    // hasn't been captured yet, so the caller does the interpreting.
+    using RawBodyCallback = std::function<void(bool ok, const QByteArray &body,
+                                                 const QString &error)>;
+    void fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
+                          RawBodyCallback callback);
+
 private:
     QNetworkAccessManager *m_network;
 };

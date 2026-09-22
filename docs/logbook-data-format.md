@@ -931,6 +931,106 @@ sidesteps `/Entries` for the common case - e.g. a workout already visible
 via cloud sync already carries its own start time, which *is* the BLE
 logbook id (confirmed earlier in this document), so "fetch richer BLE
 detail for an already-cloud-known workout" doesn't need `/Entries` at
-all, only a *watch-only, never-cloud-synced* workout would. Which of
-these is worth pursuing next is an open decision, not a technical
-dead end.
+all, only a *watch-only, never-cloud-synced* workout would. Jarno chose
+(a) - see below for how far that got.
+
+## Decompiling `protocol_v9` itself with Ghidra
+
+Jarno asked whether a Java runtime was needed to decompile the APK
+properly. Not for the APK/DEX side (`androguard`, already Python-based,
+no JVM needed) - but for *this* problem specifically, disassembly alone
+(the `objdump` work earlier in this document) wasn't going to be enough:
+reading raw AArch64 assembly by hand doesn't scale to understanding a
+whole recursive parser's control flow. A real decompiler does, and
+Ghidra (NSA, free) is one - and yes, it's Java-based.
+
+**Getting a JRE and Ghidra running without root, for the record** (this
+environment has no passwordless sudo): `apt-get download` fetches a
+`.deb` without installing it, and `dpkg -x <deb> <dir>` unpacks it into
+an arbitrary directory - no privilege needed for either. Used this for
+`openjdk-21-jdk-headless` (+ `ca-certificates-java`/`java-common`) and
+separately for `binutils-aarch64-linux-gnu` (a working `objdump`/
+`readelf`/`nm` for AArch64 binaries, needed earlier in this document
+too - the system's native `objdump` only understands x86-64). Two real
+snags, both fixable: the extracted JDK's `conf/security/*` files are
+symlinks to absolute `/etc/...` paths that don't exist outside a real
+install - copied the real files (also present in the extracted tree,
+just under `etc/`) over the dangling symlinks; and Ghidra's headless
+launcher insists on a full JDK (`javac` etc.), not just a JRE, for
+reasons unrelated to analysis itself. `ghidra_<version>_PUBLIC.zip` from
+the project's GitHub releases needs no further installation - unzip and
+run `support/analyzeHeadless`.
+
+**What Ghidra's decompiler actually showed**, from the same real
+`libmds.so`, now as readable pseudo-C instead of raw disassembly:
+
+- **`SDS::Logbook::parsePath()`** - purely local, no wire I/O: splits the
+  input path string and matches segments against literal resource names
+  (`"byId"`, `"Data"`, `"Entries"`, `"Summary"`, `"Synced"`/`"synced"`-
+  looking segments, etc. - compared as packed 4-8 byte integer
+  comparisons rather than string calls, the compiler's own
+  optimization) to populate a `LogbookResource` enum. Confirms the
+  resource names this document already knew about; doesn't touch the
+  wire protocol.
+- **`whiteboard::protocol_v9::Deserializer::deserializeValue()`** - the
+  actual per-value wire format, now concrete rather than inferred: every
+  value starts with a **2-byte type tag + 1 flag byte**, then its data.
+  Length is determined per type-tag: most scalar types use a fixed
+  per-type byte count (via a lookup table the decompiler couldn't fully
+  resolve the contents of - see below); type tag `0xc` is a
+  **NUL-terminated string** (walks byte-by-byte for the terminator, no
+  separate length prefix); type tag `0xd` needs a fixed 8+ bytes (very
+  likely a 64-bit scalar - `int64`/`double`/a timestamp); any tag above
+  `0xe` is treated as `0xf` and decoded as a **structure/array with a
+  9-bit length prefix** (`& 0x1ff`, i.e. up to 511) packed into the next
+  2 bytes alongside more flag bits.
+- **`whiteboard::protocol_v9::UnknownStructureDeserializerImplementation::
+  deserialize()`/`deserializeProperty()`** - the actual handle-walk
+  engine: a **recursive, metadata-driven structure walker**. Each
+  property carries a **nullable/optional bit** - a presence byte is read
+  first (0 = absent, calls the visitor with a null marker and moves on
+  without recursing; non-zero = present, recurse via `deserialize()`
+  for that property's own sub-structure/value) - and dispatches to a
+  **virtual "visitor" callback** (an interface pointer stored in the
+  deserializer object, called through its vtable) for every
+  value/structure encountered, rather than building a fixed in-memory
+  tree directly. This is precisely the general shape this document's
+  earlier "handle-walk" tracing (the `0x0b`/`0x0d`/`0x03`/`0x05`
+  exchanges) was circling without being able to name: a real,
+  general-purpose, **self-describing recursive binary structure
+  format**, metadata-typed the same way this project's own
+  `docs/sml-schema-descriptors.md` `<PTH>`/`<FRM>`/`<GRP>` catalog is
+  metadata for the *SBEM* side of things - same idea, different (and
+  separate) type system for the *Whiteboard RPC* side.
+
+**What this doesn't yet give**: a working generic decoder. Three real
+gaps stand between "the algorithm's shape is understood" and "this can
+parse a real `/Entries` response":
+1. The scalar-size lookup table's actual per-type byte counts weren't
+   recovered - the symbol Ghidra named it after turned out to be a
+   *pointer* to the table (dumping its bytes gave what looks like
+   another pointer, not a small byte-per-type array), not the table
+   itself; would need another decompile pass tracing where that pointer
+   is initialized.
+2. The exact C++ layout of `whiteboard::metadata::DataType`/`Property`
+   (the structures the walker reads its own instructions from) wasn't
+   extracted - needed to know, for a given resource, exactly what
+   sequence of typed properties to expect.
+3. Most importantly: **where do those `DataType`/`Property` metadata
+   tables themselves come from for a specific resource like
+   `/Entries`**? Baked into the app at compile time (in which case
+   they're extractable from `libmds.so`'s own data sections, a further
+   Ghidra pass), fetched from the watch dynamically (in which case
+   they'd be the `Descriptors` mechanism this project already partly
+   understands from `docs/sml-schema-descriptors.md`), or some
+   combination - not established either way.
+
+**Honest scope assessment**: this is real, substantial, concrete
+progress - going from "an opaque byte sequence" to "a specific, named,
+partially-decompiled recursive binary RPC protocol with a documented
+value-encoding scheme" is not nothing. But turning it into working code
+that can parse a live `/Entries` (or generic handle-walk) response is
+its own multi-step engineering task from here (the three gaps above),
+not a quick follow-on. Worth picking up in a dedicated future session
+with this document as the starting point, rather than assuming it's
+close to done.

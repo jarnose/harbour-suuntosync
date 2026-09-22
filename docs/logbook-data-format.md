@@ -1094,27 +1094,105 @@ function behind `/Data`) and `SDS::Logbook::getEntries` (behind
   fetch is reached through an unresolved vtable dispatch, not a direct,
   named call the way `getDataBinaryFromDevice`'s two attempts are.
 
-**Working hypothesis this suggests**: `/Entries` is architecturally
-different from `/Data`, not just "the same mechanism with different
-handle values" - it may go through Whiteboard's persistent
-**subscribe/notify** path only (matching the "0x0A=register a path"
-semantics zappctl documented) rather than ever falling back to a
-one-shot `getStream` bulk trigger at all, which would cleanly explain
-why this project's already-proven `/Data` stream-shortcut times out
-specifically for `/Entries` on real hardware: it isn't that the
-handle-walk primes some cache the shortcut skips, it's that streaming
-is plausibly the wrong verb for a resource that's semantically a live,
-growing list rather than a fixed blob. This is a reasoned inference
-from the decompiled control flow, not a directly observed fact - it
-hasn't been confirmed against a real capture of a *successful* official
-`/Entries` fetch (only the failed BLE shortcut attempt and the original
-handle-walk trace exist so far).
+**Correction, same pass, a few minutes later**: the "maybe `/Entries`
+needs a `subscribe`/notify verb instead of `getStream`" idea above was
+wrong - it came from grepping `getEntries`'s decompiled body for the
+literal names `subscribe`/`getStream`/`getDescriptors` and finding
+none, without also checking for `Sync`/`op`. It does call those -
+`WB::Sync<SDS::JsonBody>::op(&local_200, &local_110, 1, pbVar12,
+&local_250, 10000, 1, 1)`, twice (once per candidate path string,
+retrying the second, longer path if the first fails). Reading `op`
+itself (`SDS::WB::Sync<SDS::JsonBody>::op`, a separate ~90-line
+decompiled function, address `0x009f84f0`) confirms its real signature:
+`op(wbclient::Operation verb, string uri, string contract, unsigned
+long timeoutMs, bool, bool)` - `getEntries` passes verb `1` for both
+attempts, timeout `10000`. **Verb `1` is the same numeric value this
+project's own hand-rolled `encodeGetRequest()` already uses for its
+`[0x01 verb]` body byte** - i.e. `/Entries` is fetched with an ordinary
+GET, exactly like `/Data`, not some other verb. `op()`'s own body is
+generic plumbing (builds a callback closure, calls `SyncBase<JsonBody>
+::waitFor(...)` with a 5000ms timeout, invokes it) - it doesn't reveal
+resource-specific behaviour, it's the same call machinery presumably
+used for every Whiteboard resource fetched as JSON.
 
-**Concrete next step if this is picked back up**: implement
-`Mds::Whiteboard`'s *subscribe* verb (the `0x0A`-register-then-notify
-flow zappctl documents, distinct from the `0x10`-stream-trigger flow
-already implemented) and try it against `/Entries` on real hardware -
-a smaller, more targeted piece of new code than either fully solving
-gap 2 (the `DataType`/`Property` struct layout) or gap 3 in general,
-and testable the same low-risk way every other step in this project has
-been (a wrong guess just times out safely).
+**What this actually establishes**: the fork between `/Data` and
+`/Entries` isn't in which verb is sent - both start with the same GET.
+It's in what happens with the *response*. `/Data`'s payload is an
+opaque binary blob, so once the watch acks the GET, a direct stream-
+start trigger derived from that ack is sufficient to make it start flowing
+(this project's proven shortcut). `/Entries`'s payload is a *structured*
+list of `LogEntry` records, which - per everything this document and
+`docs/sml-schema-descriptors.md` have found about `protocol_v9` -
+gets pulled apart field-by-field over the wire via the handle-based
+walk (`0x0b`/`0x0d`/`0x03`/`0x05`), because that walk *is* the
+mechanism by which a self-describing structure gets transmitted at all,
+not an optional priming step. There is no equivalent one-shot shortcut
+to skip it for a structured resource - that was a real, freestanding
+hope, and it doesn't survive this closer look.
+
+**Honest conclusion**: solving `/Entries` for real requires either (a)
+fully implementing the generic handle-walk (tracking a handle from each
+response, issuing the next `0x0b`/`0x0d` request referencing it - gaps
+2/3 above, the `DataType`/`Property` struct layout and where the
+per-resource metadata comes from), or (b) a narrower, hand-crafted
+walker built by re-tracing the original capture's exact `/Entries`
+handle sequence step-by-step (skipping full `protocol_v9` generality,
+the same way `Logbook::decode()` hand-crafts known SBEM chunk semantics
+instead of implementing a generic SBEM/SML interpreter) - a real,
+multi-step task either way, not a small follow-on.
+
+## Cleanly re-decoded `/Entries` handle-walk trace, and a first real wire-level pattern
+
+Picked option (b) up directly: re-ran the original capture's `wb_traffic.tsv`
+through a small Python re-implementation of `Mds::Decoder` (same
+SLIP-unescape-with-escape-state-tracking logic, not naive splitting -
+several of these frames span 2-3 BLE PDUs, e.g. the initial `/Entries`
+ack's 52-byte response) and reassembled every WRITE and NOTIFY frame
+for the whole `/Logbook/Entries` exchange (frames 6644-6700,
+reqid `0x04af`-`0x04bd`, 15 request/response pairs) cleanly, for the
+first time - this is genuinely new derived data, not previously
+captured this legibly anywhere in this project's docs or scratch files.
+
+**A first real structural pattern, confirmed against 2+ examples, not
+guessed:**
+- Every `0x0d` request body and its matching `0x05` response body
+  share the same first 3 bytes: `f0` (the fixed sub-request marker,
+  matching zappctl's documented framing) followed by a 2-byte value -
+  e.g. request/response pair for reqid `0x04b0` both start
+  `f0 00 03 ...`, pair `0x04b7` both start `f0 00 0c ...`. This 2-byte
+  value functions like a structure/property id the request is asking
+  about and the response is confirming it answered.
+- **That 2-byte id is not invented by the client - it's read out of a
+  specific byte offset in an *earlier* response**, the same kind of
+  handle-propagation this document already found for `/Data`'s
+  simplified trigger. Confirmed concretely: request `0x04b2`'s id bytes
+  (`84 01`) appear at byte offset 14-15 of the *previous* response
+  (`0x04b1`, right after that response's own `34 8e 3f` sub-field) -
+  not at the tail, which is why a naive "does the request's suffix
+  appear anywhere in the previous response" scan missed it at first
+  pass. A working generic (or hand-crafted) walker needs to know which
+  offset in a given response shape yields the next id - this differs
+  by what kind of structure is being walked (a fixed few bytes into a
+  property-list response vs. a fixed few bytes into a value response),
+  and figuring out that offset rule for every response shape in this
+  trace is the remaining work, not yet done.
+- Real field/type names recovered directly from the response bodies'
+  embedded ASCII, in walk order: `StartAfterId` (0x04b7), then
+  `IncludeSummaryOnly` (0x04b8) - these two are the `/Entries` request's
+  own *parameters* (a `LogEntries` GET can apparently be filtered
+  incrementally by log id and take a summary-only flag) - followed by
+  `LogEntries` (0x04ba, the response structure's own type name) and
+  `elements` (0x04bc, its array field). This matches the parameter
+  names already known from the original capture's earliest inspection
+  (see this document's much earlier "Post-probe finding" section) but
+  now with the exact surrounding bytes attached, not just the strings
+  in isolation.
+
+**Not yet done, and why this is a real stopping point to check in on**:
+turning "the pattern is visible and one offset-propagation instance is
+confirmed" into "a working decoder" needs the *rule* for every step's
+offset, derived from a single historical capture with no way to
+cross-check a wrong guess except a real-hardware timeout (same
+low-risk-to-try, high-cost-to-fully-verify shape as everything else in
+this project) - genuinely more hours of the same careful byte-tracing
+that solved `/Data`'s trigger, not a quick finish from here.

@@ -1499,3 +1499,146 @@ collected bytes to the caller - deliberately ignoring whether the watch
 acked the stop, since a failed teardown shouldn't discard data that
 already arrived. The reconnect-per-entry workaround is reverted
 entirely.
+
+## The APK had the whole field map, and the altitude was there all along
+
+Jarno asked for one more systematic pass over the APK, looking for anything
+usable for BLE, sync or field parsing. It turned out to contain the complete,
+authoritative answer to the single biggest open question in this document.
+
+### What was found
+
+`nm -C -D libmds.so` shows the app carries a whole SBEM/SML codec under a
+`BSML::` namespace (source paths in the binary point at `src/libsbem/`):
+`SmlParser`, `SmlDescriptor`, `DecoderBase`, `SmlStreamParser`,
+`JsonDecoder`, `TimelineJsonDecoder` and friends - with exactly the methods
+this project had been re-deriving by hand: `handleChunk`, `handleGroupChunk`,
+`getFormatSize`, `getValueFromChunk`, `applyDifferential`, `applyModifier`,
+`applyPrecision`, `parseDescriptor`, `parseFormat`, `parseGroup`.
+
+Two of those, decompiled, unlocked everything else:
+
+**1. `SmlStreamParser::parseChunkHeader` - the real chunk header.** This
+document had it as `[id:1][len:1]` with `len==0xFF` meaning a 4-byte extended
+length. That was incomplete; the actual rule is symmetric:
+
+```
+id  = u8;  if (id  == 0xFF) id  = u16 LE      <-- this half was missing
+len = u8;  if (len == 0xFF) len = u32 LE
+```
+
+**2. `DecoderBase::handleGroupChunk` - how `<GRP>` really works.** A group
+descriptor's payload is simply its children's values concatenated in the
+listed order, with **no per-child chunk headers**, each child looked up by a
+2-byte descriptor id. That is the mechanism `sml-schema-descriptors.md` could
+only partially infer.
+
+### The descriptor table parses, and its ids *are* the chunk ids
+
+With the corrected header rule, the captured `/Logbook/byId/<id>/Descriptors`
+response (85 `TYPE=0x05` responses, a fixed 19-byte per-response header, the
+payloads concatenated) parses cleanly as an `SBEM0103` stream in which
+**descriptor definitions are chunks with id 0**, whose value is
+`[descriptor id: u16 LE][descriptor text, NUL-terminated]`. 359 definitions
+came out, ids 1-361.
+
+Then the decisive check - and it lands exactly:
+
+```
+chunk 0x0c (12) = <GRP>34,36,60,61,62,63
+        60: Sample.UTC        local64
+        61: Sample.Latitude   int32    MOD PI*x/(10^7*180)
+        62: Sample.Longitude  int32    MOD PI*x/(10^7*180)
+        63: Sample.GPSAltitude uint16,precision=2,nillable=65535  MOD x/5-1000
+chunk 0x12 (18) = <GRP>34,36,80
+        80: Sample.HR         uint8,precision=2   MOD x/60
+chunk 0x16 (22) = <GRP>34,36,106,103,...,92,...
+        92: Sample.Cadence    uint8,precision=3,nillable=255      MOD x/60
+```
+
+**The descriptor ids are the `/Data` chunk ids.** Every field this project
+decoded empirically is confirmed, in the right chunk, in the right order -
+including details it had worked out the hard way, like cadence's
+"255 means no reading" sentinel, which is literally `nillable=255` in the
+schema. Descriptor `34` (`<DELTAREF>33 <FRM>dint16`) leading every group is
+the "leading int16 delta" this document describes: a differential against the
+workout's base `TimeISO8601`, which chunk `1` carries once as `local64,baseonly`.
+
+The full map is now checked in: `sbem-descriptor-map.json` (the raw captured
+table) and `sbem-chunk-map.md` (resolved, readable).
+
+### `<MOD>` is the scale factor, `precision` is not
+
+`applyPrecision`, decompiled, turns out to feed an `ostream`'s `setprecision`
+- it is **output formatting only, never a scale**. The scaling lives in
+`<MOD>`, a `decode,encode` expression pair over the raw value `x`:
+
+| field | raw | `<MOD>` decode | unit |
+|---|---|---|---|
+| `Sample.Altitude` | uint16 | `x/5-1000` | m |
+| `Sample.GPSAltitude` | uint16 | `x/5-1000` | m |
+| `Sample.Speed` | uint16 | `x/50` | m/s |
+| `Sample.VerticalSpeed` | int16 | `x/50` | m/s |
+| `Sample.Temperature` | uint16 | `x/100` | K |
+| `Sample.SeaLevelPressure` | uint16 | `x+85000` | Pa |
+| `Sample.HR` | uint8 | `x/60` | Hz (so the raw byte is bpm) |
+| `Sample.Cadence` | uint8 | `x/60` | Hz (raw byte is rpm) |
+| `Sample.Latitude`/`Longitude` | int32 | `PI*x/(10^7*180)` | rad (raw is deg x 1e7) |
+
+`Sample.AbsPressure`, `Sample.Distance` and `Sample.Power` carry no `<MOD>` -
+raw Pa, m and W respectively.
+
+### The altitude: present, and previously searched for in the wrong shape
+
+`Sample.Altitude` is descriptor **87**. It appears as an absolute `uint16` in
+**chunk 0x15 (21)**, and as a `dint8` *delta* (descriptor 105) inside the very
+frequent **chunk 0x16 (22)**. In the real cycling fixture this project already
+ships, chunk 0x15 occurs 4 times and chunk 0x16 occurs 2288 times - so ~99.8%
+of the altitude signal is delta-encoded, seeded by a handful of absolute
+snapshots. That is why the earlier hunt, which looked for plausible absolute
+metre values chunk by chunk, found nothing: almost nothing absolute is there,
+and the few absolute values need `x/5-1000` before they look like metres at all.
+
+Decoding chunk 0x15 from `tests/fixtures/logbook_data_heatshrink_cycling.bin`
+with the map above (its 16 fields sum to exactly the observed 35-byte payload):
+
+```
+instance  Distance  AbsPressure  Speed   Temp     Altitude
+   0          6 m     100436 Pa    -     302.28 K  114.2 m
+   1       1807 m     100468 Pa  1.38    301.05 K  111.6 m
+   2       1958 m     100444 Pa  2.16    300.94 K  101.4 m
+   3       2838 m     100406 Pa  0.36    302.94 K  102.4 m
+```
+
+Every value is physically sensible, the distance climbs monotonically through
+a ride this project independently measured at 5394 m, and the altitudes are
+reasonable for the terrain. The whole `/Data` blob also re-parses cleanly with
+the corrected header rule: 11985 chunks, ending exactly on the last byte.
+
+**So the long-standing conclusion that ascent/descent/energy "are not in
+`/Data`" was right, but for the wrong reason.** `Header.Ascent` (140),
+`Header.Descent` (142) and `Header.Energy` (147) are children of **chunk
+0x1b (27)**, a 133-field header group - and that chunk does not appear in the
+`/Data` blob at all. It is almost certainly what
+`/Logbook/byId/<id>/Summary` returns, which the capture shows the app fetching
+immediately after every `/Data` and which this project has still never
+decoded. `Sample.Distance` and `Sample.Speed`, meanwhile, *are* recorded
+directly - this project derives both from GPS haversine instead, which is why
+those derived figures never matched exactly.
+
+### What this makes possible
+
+Not implemented yet - this pass was reconnaissance, and turning it into code
+is its own task:
+
+- Decode `Sample.Altitude` properly (absolute snapshots + delta chain) and
+  finally compute real ascent/descent, instead of omitting them.
+- Use the recorded `Sample.Distance`/`Sample.Speed` rather than deriving them.
+- Read the remaining sensor fields that are simply sitting there unused:
+  temperature, pressure, power, vertical speed, battery, GPS quality
+  (EHPE/EVPE/satellite count), and the running-dynamics group.
+- Fetch and decode `/Summary` for the header fields (ascent, descent, energy,
+  step count, durations) rather than reconstructing them.
+- Replace this project's hand-rolled per-chunk knowledge with a generic,
+  descriptor-driven decoder, the way the app itself works - the watch serves
+  its own schema over BLE, so it would adapt to other models for free.

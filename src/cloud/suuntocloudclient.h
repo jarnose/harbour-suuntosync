@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../store/workout.h"
+#include "../health/healthentry.h"
 
 #include <QJsonObject>
 #include <QNetworkRequest>
@@ -83,6 +84,23 @@ public:
                                                  const QString &error)>;
     void fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
                           RawBodyCallback callback);
+
+    // GET 247.sports-tracker.com/v1/<kind>/export?since=<ms> - the watch's
+    // round-the-clock data: "sleep", "sleepstages", "recovery", "activity".
+    //
+    // A different host and a different response convention from everything
+    // above: no ASKO envelope, just NDJSON (one {"timestamp","entryData"}
+    // object per line), and 204 for "nothing new" rather than an empty
+    // list. Authentication is the same session key. All confirmed against a
+    // real capture - see docs/workout-upload.md's health section.
+    //
+    // `sinceMs` is passed through to the server's own filter; 0 fetches
+    // everything the account has, which for a long-standing account is
+    // years of history.
+    using HealthCallback = std::function<void(bool ok, const QVector<HealthEntry> &entries,
+                                                const QString &error)>;
+    void fetchHealthEntries(const QString &sessionKey, const QString &kind, qint64 sinceMs,
+                             HealthCallback callback);
 
 private:
     // Every authenticated call sends the same four headers - and

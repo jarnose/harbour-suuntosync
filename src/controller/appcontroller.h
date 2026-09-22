@@ -18,6 +18,7 @@ class MdsWhiteboardClient;
 class SuuntoCloudClient;
 class WorkoutStore;
 class WorkoutListModel;
+class HealthStore;
 
 // QML-facing facade. Phase 6: once BluezAdapter reports a connected watch,
 // attaches MdsWhiteboardClient to it and can run real Whiteboard GET
@@ -40,6 +41,7 @@ class AppController : public QObject
     Q_PROPERTY(QObject *workoutModel READ workoutModelObject CONSTANT)
     Q_PROPERTY(bool workoutSyncInProgress READ isWorkoutSyncInProgress NOTIFY workoutSyncInProgressChanged)
     Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
+    Q_PROPERTY(bool healthSyncInProgress READ isHealthSyncInProgress NOTIFY healthSyncInProgressChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -53,6 +55,7 @@ public:
     QObject *workoutModelObject() const;
     bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
+    bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
 
     // Defined in the .cpp file, not inline here: DeviceListModel is only
     // forward-declared in this header, so the implicit DeviceListModel* ->
@@ -190,6 +193,28 @@ public:
     // thing instead of another guess.
     Q_INVOKABLE void loadCloudSamples(const QString &key);
 
+    // The watch's round-the-clock data from the cloud: sleep, sleep stages,
+    // recovery and activity (see SuuntoCloudClient::fetchHealthEntries()).
+    // Fetches all four, newest-first, asking only for what is newer than
+    // what's already stored - so the first sync on an old account pulls
+    // years and every one after it pulls a day.
+    //
+    // This reads what the *watch already uploaded*; it does not reach the
+    // watch itself. If a night is missing here it is missing in the cloud,
+    // which is exactly the case that prompted this: the sleep for
+    // 2026-09-21 only reached the cloud when the watch was finally synced.
+    Q_INVOKABLE void syncHealthData();
+
+    // Stored entries for one kind, newest first, as
+    // { timestamp, <the entryData fields, flattened> } - the payload's own
+    // field names are passed through untouched rather than mapped, since
+    // they are the watch's and this project has no better names for them.
+    Q_INVOKABLE QVariantList healthEntries(const QString &kind, int limit) const;
+
+    // One-line summary per kind for the page header: the newest entry's
+    // timestamp and how many are stored. Empty map for a kind with none.
+    Q_INVOKABLE QVariantMap healthOverview(const QString &kind) const;
+
     // A BLE-synced workout's laps: { number, type, durationSeconds,
     // distanceMeters }, where type is the watch's own reason for the marker
     // (manual, auto-lap by distance, interval...). Empty when the workout
@@ -208,6 +233,8 @@ signals:
     void workoutSyncInProgressChanged();
     void workoutDetailsChanged(const QString &key);
     void cloudSamplesInProgressChanged();
+    void healthSyncInProgressChanged();
+    void healthDataChanged();
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
@@ -259,4 +286,12 @@ private:
     WorkoutListModel *m_workoutModel;
     bool m_workoutSyncInProgress = false;
     bool m_cloudSamplesInProgress = false;
+
+    HealthStore *m_healthStore;
+    bool m_healthSyncInProgress = false;
+    // The sequential per-kind loop behind syncHealthData(), same shape as
+    // fetchWatchEntryAt(): four requests one after another rather than four
+    // at once, so a failure can name which kind failed and the tally stays
+    // simple.
+    void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
 };

@@ -1,5 +1,6 @@
 #include "suuntocloudclient.h"
 #include "suuntoauth.h"
+#include "iso8601.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -19,6 +20,9 @@ const QString kBaseUrl = QStringLiteral("https://api.sports-tracker.com/apiserve
 // Matches auth.UserAgent in tajchert/suuntool (PackageName + "/" + AppVersionCode)
 // - the same constants SuuntoAuth::deriveLoginSecret() uses, so this is kept
 // in lockstep with the APK version those constants were extracted from.
+// The round-the-clock timeline lives on its own host, with its own
+// conventions - see fetchHealthEntries().
+const QString kHealthBaseUrl = QStringLiteral("https://247.sports-tracker.com/v1/");
 const QString kUserAgent = QStringLiteral("com.stt.android.suunto/6008013");
 
 // Percent-encodes for application/x-www-form-urlencoded, then swaps %20 for
@@ -141,6 +145,73 @@ void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString
             return;
         }
         callback(true, reply->readAll(), QString());
+    });
+}
+
+void SuuntoCloudClient::fetchHealthEntries(const QString &sessionKey, const QString &kind,
+                                            qint64 sinceMs, HealthCallback callback)
+{
+    const QNetworkRequest request = authorizedRequest(
+            kHealthBaseUrl + kind + QStringLiteral("/export?since=")
+                    + QString::number(sinceMs),
+            sessionKey);
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, kind, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, {}, reply->errorString());
+            return;
+        }
+
+        // 204 means "nothing newer than `since`" - a success, not an error,
+        // and the body is empty rather than "[]".
+        const int status = reply->attribute(
+                QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status == 204) {
+            callback(true, {}, QString());
+            return;
+        }
+
+        QVector<HealthEntry> entries;
+        int malformed = 0;
+        const QList<QByteArray> lines = reply->readAll().split('\n');
+        for (const QByteArray &line : lines) {
+            const QByteArray trimmed = line.trimmed();
+            if (trimmed.isEmpty())
+                continue;
+            const QJsonObject obj = QJsonDocument::fromJson(trimmed).object();
+            const QString stamp = obj.value(QStringLiteral("timestamp")).toString();
+            const QJsonValue data = obj.value(QStringLiteral("entryData"));
+
+            // Skip rather than guess: an entry whose timestamp can't be read
+            // has no place to go in a table keyed by time, and silently
+            // filing it at the epoch would be worse than dropping it.
+            qint64 ms = 0;
+            int64_t parsed = 0;
+            if (stamp.isEmpty() || !data.isObject()
+                    || !Iso8601::parseToUnixMs(stamp.toStdString(), &parsed)) {
+                ++malformed;
+                continue;
+            }
+            ms = static_cast<qint64>(parsed);
+
+            HealthEntry entry;
+            entry.kind = kind;
+            entry.timestamp = ms;
+            entry.data = QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact);
+            entries.append(entry);
+        }
+
+        // Partial success is still success - one unreadable line shouldn't
+        // cost a night of sleep data - but it is worth saying out loud
+        // rather than hiding, since it would mean the format has moved.
+        if (malformed > 0 && entries.isEmpty()) {
+            callback(false, {}, tr("Could not read any %1 entries (%2 unparseable)")
+                                  .arg(kind).arg(malformed));
+            return;
+        }
+        callback(true, entries, QString());
     });
 }
 

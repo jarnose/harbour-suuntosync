@@ -79,9 +79,11 @@ add_executable(harbour-suuntosync
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/polyline.cpp
+    src/cloud/iso8601.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/model/workoutlistmodel.cpp
+    src/health/healthstore.cpp
 )
 
 target_compile_definitions(harbour-suuntosync PRIVATE
@@ -153,6 +155,7 @@ add_custom_target(distfiles
         qml/pages/PairingPage.qml
         qml/pages/LoginPage.qml
         qml/pages/WorkoutDetailPage.qml
+        qml/pages/HealthPage.qml
         rpm/harbour-suuntosync.spec
         ${TS_FILES})
 

@@ -8,6 +8,7 @@
 #include "../store/workoutstore.h"
 #include "../store/workout.h"
 #include "../model/workoutlistmodel.h"
+#include "../health/healthstore.h"
 #include "../ble/logbookdecoder.h"
 #include "../ble/summarydecoder.h"
 #include "../ble/smldecoder.h"
@@ -468,6 +469,7 @@ AppController::AppController(QObject *parent)
     , m_whiteboardClient(new MdsWhiteboardClient(this))
     , m_workoutStore(new WorkoutStore(dbPath()))
     , m_workoutModel(new WorkoutListModel(this))
+    , m_healthStore(new HealthStore(dbPath()))
 {
     QString error;
     if (!m_cloudAccountStore->open(&error)) {
@@ -484,6 +486,9 @@ AppController::AppController(QObject *parent)
     }
 
     if (!m_workoutStore->open(&error))
+        emit errorOccurred(tr("Failed to open database: %1").arg(error));
+
+    if (!m_healthStore->open(&error))
         emit errorOccurred(tr("Failed to open database: %1").arg(error));
 
     if (!m_pairedWatchStore->open(&error)) {
@@ -800,6 +805,102 @@ void AppController::logoutFromCloud()
     m_cloudAccount = CloudAccount();
     m_cloudClient->setAccountEmail(QString());
     emit cloudAccountChanged();
+}
+
+// The four timeline kinds, in the order the page shows them. Names are the
+// cloud's own path segments - see SuuntoCloudClient::fetchHealthEntries().
+static const char *const kHealthKinds[] = {
+    "sleep", "sleepstages", "recovery", "activity",
+};
+static const int kHealthKindCount = 4;
+
+void AppController::syncHealthData()
+{
+    if (m_healthSyncInProgress)
+        return;
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+    m_healthSyncInProgress = true;
+    emit healthSyncInProgressChanged();
+    fetchHealthKindAt(0, 0, QStringList());
+}
+
+void AppController::fetchHealthKindAt(int index, int fetched, const QStringList &failures)
+{
+    if (index >= kHealthKindCount) {
+        m_healthSyncInProgress = false;
+        emit healthSyncInProgressChanged();
+        emit healthDataChanged();
+        // Silent on full success, same as the workout syncs.
+        if (!failures.isEmpty()) {
+            emit errorOccurred(tr("Synced %1 health entries (%2)")
+                                  .arg(fetched).arg(failures.join(QStringLiteral("; "))));
+        }
+        return;
+    }
+
+    const QString kind = QString::fromLatin1(kHealthKinds[index]);
+    // Ask only for what we don't have. The server's filter is inclusive, so
+    // the newest stored entry comes back again and the (kind, timestamp)
+    // primary key absorbs it.
+    const qint64 since = m_healthStore->newestTimestamp(kind);
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, index, fetched, failures, kind, since](
+                    bool ok, const QByteArray &data, const QString &vaultError) {
+        if (!ok) {
+            QStringList next = failures;
+            next.append(tr("%1: %2").arg(kind, vaultError));
+            fetchHealthKindAt(index + 1, fetched, next);
+            return;
+        }
+        m_cloudClient->fetchHealthEntries(QString::fromUtf8(data), kind, since,
+                [this, index, fetched, failures, kind](
+                        bool fetchOk, const QVector<HealthEntry> &entries,
+                        const QString &fetchError) {
+            QStringList next = failures;
+            int total = fetched;
+            if (!fetchOk) {
+                next.append(tr("%1: %2").arg(kind, fetchError));
+            } else {
+                QString saveError;
+                if (!m_healthStore->upsert(entries, &saveError))
+                    next.append(tr("%1: %2").arg(kind, saveError));
+                else
+                    total += entries.size();
+            }
+            fetchHealthKindAt(index + 1, total, next);
+        });
+    });
+}
+
+QVariantList AppController::healthEntries(const QString &kind, int limit) const
+{
+    QVariantList out;
+    for (const HealthEntry &e : m_healthStore->load(kind, limit, nullptr)) {
+        QVariantMap row;
+        row.insert(QStringLiteral("timestamp"), e.timestamp);
+        // The payload's own field names, passed through. A sleep entry has
+        // eighteen and a recovery entry two; the page decides what to show.
+        const QJsonObject obj = QJsonDocument::fromJson(e.data).object();
+        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it)
+            row.insert(it.key(), it.value().toVariant());
+        out.append(row);
+    }
+    return out;
+}
+
+QVariantMap AppController::healthOverview(const QString &kind) const
+{
+    QVariantMap out;
+    const qint64 newest = m_healthStore->newestTimestamp(kind);
+    if (newest == 0)
+        return out;
+    out.insert(QStringLiteral("newest"), newest);
+    out.insert(QStringLiteral("count"), m_healthStore->load(kind, 0, nullptr).size());
+    return out;
 }
 
 void AppController::loadCachedWorkouts()

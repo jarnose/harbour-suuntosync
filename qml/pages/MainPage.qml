@@ -39,6 +39,13 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("PairingPage.qml"))
             }
             MenuItem {
+                // Sleep, recovery and daily activity, read from the cloud -
+                // see AppController::syncHealthData().
+                visible: AppController.cloudSignedIn
+                text: qsTr("Health")
+                onClicked: pageStack.push(Qt.resolvedUrl("HealthPage.qml"))
+            }
+            MenuItem {
                 text: AppController.cloudSignedIn ? qsTr("Sign out of Suunto") : qsTr("Sign in to Suunto")
                 onClicked: {
                     if (AppController.cloudSignedIn)

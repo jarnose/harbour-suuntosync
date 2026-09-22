@@ -1196,3 +1196,99 @@ cross-check a wrong guess except a real-hardware timeout (same
 low-risk-to-try, high-cost-to-fully-verify shape as everything else in
 this project) - genuinely more hours of the same careful byte-tracing
 that solved `/Data`'s trigger, not a quick finish from here.
+
+## Third decompilation pass: the real wire structure header and the real recursive walk algorithm
+
+Checked [`suunto-git`](https://github.com/orgs/suunto-git/repositories)
+(Suunto's own GitHub org, Jarno's suggestion) first - all 14 public
+repos are iOS app dependency mirrors for the Chinese market (WeChat,
+Douyin, Xiaohongshu, Alipay, Amap SDKs) plus an unrelated headset
+product line and a watch-payment feature; nothing BLE/Whiteboard/MDS-
+related. Not useful here, ruled out quickly.
+
+Back on the handle-walk: `nm -C -D` on `libmds.so` turned out to
+export **far more of `protocol_v9` than the original 32-function
+target list captured** - the whole class hierarchy is there with real
+names: `StructureDeserializer`, `StructureVisitorBase`,
+`UnknownStructureDeserializer`, `StructureSerializationLengthCalculator`,
+etc. Decompiled the most promising few
+(`StructureDeserializer::deserializeHeader`/`deserialize`,
+`StructureVisitorBase::process`) in a third pass (same Ghidra project,
+still no new import needed) and this is a real breakthrough - the
+actual wire-level structure header format and the actual recursive
+walk algorithm, from Suunto's own compiled code, not inferred from
+capture bytes alone:
+
+**The structure header (`StructureDeserializer::deserializeHeader`,
+2 bytes, confirmed against the decompiled logic, not the capture)**:
+- Byte 0: a value used later as a 9-bit validation/consistency check
+  against what the walk actually consumes (`deserialize`'s
+  `bVar2 = *(byte*)param_2` folded together with bit 0 of byte 1) -
+  not yet tied to a concrete field meaning, but clearly a checksum-like
+  guard, not real data.
+- Byte 1, bits 1-3 (3-bit field, value 1-7, 0 = "no alignment"):
+  selects an **alignment mask** from a small table
+  (`DAT_004c2610`, dumped directly from `libmds.so`'s own `.rodata`):
+  `{1, 3, 7, 15, 31, 63, 127}` for selector 1-7 - i.e. round the
+  payload start up to a 2/4/8/16/32/64/128-byte boundary. Byte 1 bits
+  4 and 5 are separately read out by `deserializeHeader` itself into
+  two output bools (purpose not yet determined - possibly
+  "hasOptionalFields"/"isPartial"-type flags, consistent with similar
+  bit-flag roles seen elsewhere in this protocol).
+- The actual structure **payload starts at `buffer + 2 + padding`**,
+  where `padding = alignmentMask & -(buffer + 2)` (the standard
+  round-up-to-alignment bit trick).
+
+**The recursive walk (`StructureVisitorBase::process`)**: given a
+`whiteboard::metadata::DataType` (fetched separately, see below - not
+part of the wire bytes) and a payload pointer, dispatches on the
+`DataType`'s own first byte (its "kind", a *different*, smaller enum
+than `deserializeValue`'s 0-15 wire value-type tag - only 0, 2, 3 seen
+here):
+- **kind 0 (leaf)**: a scalar or, if the `DataType`'s sub-field at
+  offset 2 equals `0xc`, a string - calls the visitor's `visitString`.
+- **kind 3 (structure)**: calls `visitSubStructure`, then asks the
+  metadata provider for the structure's **property-id list**
+  (`-1`-terminated), and for each property id looks up that property's
+  own metadata (a flags field controlling whether it's a pointer to
+  indirect through, whether it's optional/nullable, and its own
+  alignment/offset contribution) and recurses `process()` into it at
+  the computed offset - a genuine metadata-driven field-by-field walk.
+- **kind 2 (array)**: calls `visitArray` to get an element count and a
+  base offset, then recurses `process()` once per element at
+  `baseOffset + i * elementStride`.
+- Anything else: not handled (returns "no data").
+
+**This directly answers the most important part of gap 3**: the
+`DataType`/`Property` metadata is **not carried in the wire bytes at
+all** - `StructureDeserializer::deserialize`'s signature is literally
+`(unsigned short typeId, void const* buffer, bool, MetadataMap const&
+metadata)`, and it resolves the `DataType` via
+`IDataTypeMetadata::getBaseDataType(metadataMap, &typeId)` *before*
+touching the buffer. The wire-level header above only carries
+alignment/validation bits, never structure shape. Where the
+`MetadataMap` itself gets populated (baked into `libmds.so`'s own data
+for known resources vs. built from the watch's own `Descriptors`
+response) is still open, but the lookup *mechanism* - a small integer
+type-id resolved through a metadata map, independent of the connection
+- is now concretely known, which is real progress on gap 2 as well
+(the property list's per-property flags word, read as
+`*(ushort*)(propertyMeta+4)`, is exactly the `Property` struct's own
+layout gap 2 asked about - now narrowed to one specific field within
+one specific struct, not a complete unknown).
+
+**Where this leaves `/Entries` in practice**: enough of the real
+algorithm is now understood to write a decoder, but it needs a
+hand-written `DataType`/`Property` tree for `LogEntries`/`LogEntry`
+(matching the field names already recovered: `StartAfterId`,
+`IncludeSummaryOnly` as the request's own parameter structure;
+`LogEntries` → `elements` → presumably `Id`/`ModificationTimestamp` per
+entry) rather than a live `MetadataMap`, since building the general
+"fetch descriptors, populate a MetadataMap generically" machinery is
+substantially more work than this one resource needs. That hand-written
+tree, plus a small implementation of `deserializeHeader`/`process`'s
+logic above, is the concrete remaining task - scoped much more tightly
+now than "solve `protocol_v9` in general," but still a real
+implementation effort, not a one-line fix, and - like everything else
+in this project - only checkable against a real device, not from this
+sandbox.

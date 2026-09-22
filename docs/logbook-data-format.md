@@ -1004,18 +1004,15 @@ run `support/analyzeHeadless`.
   separate) type system for the *Whiteboard RPC* side.
 
 **What this doesn't yet give**: a working generic decoder. Three real
-gaps stand between "the algorithm's shape is understood" and "this can
-parse a real `/Entries` response":
-1. The scalar-size lookup table's actual per-type byte counts weren't
-   recovered - the symbol Ghidra named it after turned out to be a
-   *pointer* to the table (dumping its bytes gave what looks like
-   another pointer, not a small byte-per-type array), not the table
-   itself; would need another decompile pass tracing where that pointer
-   is initialized.
+gaps stood between "the algorithm's shape is understood" and "this can
+parse a real `/Entries` response" - see the follow-up section right
+below for how far these got resolved in a second decompilation pass:
+1. ~~The scalar-size lookup table's actual per-type byte counts weren't
+   recovered~~ **Resolved, see below.**
 2. The exact C++ layout of `whiteboard::metadata::DataType`/`Property`
    (the structures the walker reads its own instructions from) wasn't
    extracted - needed to know, for a given resource, exactly what
-   sequence of typed properties to expect.
+   sequence of typed properties to expect. **Still open.**
 3. Most importantly: **where do those `DataType`/`Property` metadata
    tables themselves come from for a specific resource like
    `/Entries`**? Baked into the app at compile time (in which case
@@ -1023,14 +1020,101 @@ parse a real `/Entries` response":
    Ghidra pass), fetched from the watch dynamically (in which case
    they'd be the `Descriptors` mechanism this project already partly
    understands from `docs/sml-schema-descriptors.md`), or some
-   combination - not established either way.
+   combination - not established either way. **Partial new evidence
+   below suggests `/Entries` may not even go through this mechanism at
+   all.**
 
 **Honest scope assessment**: this is real, substantial, concrete
 progress - going from "an opaque byte sequence" to "a specific, named,
 partially-decompiled recursive binary RPC protocol with a documented
 value-encoding scheme" is not nothing. But turning it into working code
 that can parse a live `/Entries` (or generic handle-walk) response is
-its own multi-step engineering task from here (the three gaps above),
-not a quick follow-on. Worth picking up in a dedicated future session
-with this document as the starting point, rather than assuming it's
-close to done.
+its own multi-step engineering task from here, not a quick follow-on.
+
+## Second decompilation pass: the scalar-size table, and `/Entries` may use a different mechanism than `/Data`
+
+Continuing directly from the three gaps above, using the same Ghidra
+project (no new import needed - `analyzeHeadless ... -process "libmds.so"
+-noanalysis` reuses the existing analysis in seconds).
+
+**Gap 1, resolved.** The earlier attempt to dump
+`whiteboard::SCALAR_VALUE_DATA_SIZE`'s bytes went through manual ELF
+virtual-address arithmetic and got the address wrong (this `.so` is a
+PIE and Ghidra loads it at image base `0x00100000`, not `0`, so a raw
+ELF-header vaddr and a Ghidra address are offset from each other) - the
+bytes it dumped were actually a `whiteboard::BufferPool::vtable`
+pointer from a nearby, unrelated location, not the table. Re-run
+properly, resolving the symbol's own address directly through Ghidra's
+API instead of hand-computed offsets, gives the real table cleanly:
+
+```
+whiteboard::SCALAR_VALUE_DATA_SIZE = { 0, 1, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8, 2, 0, 0, 3 }
+                              index:   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+```
+
+16 entries - consistent with a 4-bit type-tag nibble indexing straight
+into it. `deserializeValue`'s already-decompiled code special-cases
+`0xc` (NUL-terminated string), `0xd` (fixed ≥8 bytes, handled directly)
+and capped-`0xf` (9-bit length-prefixed structure/array) rather than
+consulting this table for those three tags - the values at those
+indices here (2, 0, 3) are consistent with being unused/overridden by
+that special-casing rather than real byte-counts. Indices 0-11 read as
+a plausible small-integer/float type enum (`0`=none, `1`=bool/int8 x3,
+`2`=int16 x2, `4`=int32/float x2, `8`=int64/double x2) - a reasonable,
+if not yet independently confirmed, guess at the concrete type-tag
+assignments.
+
+**Gap 3, partial but important new evidence.** Read the not-yet-examined
+decompiled bodies of `SDS::Logbook::getDataBinaryFromDevice` (the
+function behind `/Data`) and `SDS::Logbook::getEntries` (behind
+`/Entries`) side by side. They are **not** the same shape:
+
+- `getDataBinaryFromDevice` is short and calls two named,
+  already-understood methods directly: it first tries
+  `subscribe(this, "Data", logbookId, ...)`; if that doesn't return
+  `200`, it optionally calls `getDescriptors(...)` (gated by a bool
+  parameter) and then falls back to `getStream(this, "Data", logbookId,
+  ...)` - and a `getStream` success is treated the same as a direct
+  `subscribe` success. **This is exactly the mechanism this project's
+  own BLE shortcut (`Mds::encodeStreamStartTrigger`, the proven-working
+  `/Data` fetch) already implements** - independent confirmation, from
+  the real app's own code, that going straight to the stream-start
+  trigger without the full handle-walk is not a lucky guess, it is
+  what the official client itself falls back to.
+- `getEntries`, by contrast, is a large (~760-line decompiled),
+  JSON-heavy function (`wbjson::Json` in/out) that builds up a small
+  *list* of candidate path strings (at least two seen in the
+  disassembly: one ending in `...Entries`, a second, longer ~40-byte
+  one also ending in `...ries`, likely a differently-prefixed variant
+  such as a `Mem/`-qualified path) and works with `SDS::Status`/
+  `Header` objects - but **contains zero references to `subscribe`,
+  `getStream`, `getDescriptors`, or any `protocol_v9`/handle symbol by
+  name** anywhere in its body (confirmed by grepping the full
+  decompiled function text). Whatever it calls to actually perform the
+  fetch is reached through an unresolved vtable dispatch, not a direct,
+  named call the way `getDataBinaryFromDevice`'s two attempts are.
+
+**Working hypothesis this suggests**: `/Entries` is architecturally
+different from `/Data`, not just "the same mechanism with different
+handle values" - it may go through Whiteboard's persistent
+**subscribe/notify** path only (matching the "0x0A=register a path"
+semantics zappctl documented) rather than ever falling back to a
+one-shot `getStream` bulk trigger at all, which would cleanly explain
+why this project's already-proven `/Data` stream-shortcut times out
+specifically for `/Entries` on real hardware: it isn't that the
+handle-walk primes some cache the shortcut skips, it's that streaming
+is plausibly the wrong verb for a resource that's semantically a live,
+growing list rather than a fixed blob. This is a reasoned inference
+from the decompiled control flow, not a directly observed fact - it
+hasn't been confirmed against a real capture of a *successful* official
+`/Entries` fetch (only the failed BLE shortcut attempt and the original
+handle-walk trace exist so far).
+
+**Concrete next step if this is picked back up**: implement
+`Mds::Whiteboard`'s *subscribe* verb (the `0x0A`-register-then-notify
+flow zappctl documents, distinct from the `0x10`-stream-trigger flow
+already implemented) and try it against `/Entries` on real hardware -
+a smaller, more targeted piece of new code than either fully solving
+gap 2 (the `DataType`/`Property` struct layout) or gap 3 in general,
+and testable the same low-risk way every other step in this project has
+been (a wrong guess just times out safely).

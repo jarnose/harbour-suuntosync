@@ -119,6 +119,23 @@ public:
     void fetchHealthEntries(const QString &sessionKey, const QString &kind, qint64 sinceMs,
                              HealthCallback callback);
 
+    // POST 247.sports-tracker.com/v1/<kind> - pushes entries the watch gave
+    // us up to the cloud, so data read over BLE ends up where the official
+    // app would have put it.
+    //
+    // Body shape and headers copied from the capture, not chosen: a plain
+    // JSON array of {"timestamp": <ISO 8601>, "entryData": {...}} with
+    // content-type "application/json; charset=UTF-8" and the ordinary
+    // session key. No envelope, no signature. See
+    // docs/workout-upload.md's health section.
+    //
+    // `offsetMinutes` stamps the timestamps; the cloud's own entries carry
+    // a local offset rather than UTC.
+    using SimpleCallback = std::function<void(bool ok, const QString &error)>;
+    void uploadHealthEntries(const QString &sessionKey, const QString &kind,
+                              const QVector<HealthEntry> &entries, int offsetMinutes,
+                              SimpleCallback callback);
+
 private:
     // Every authenticated call sends the same four headers - and
     // deliberately NOT x-totp.

@@ -231,6 +231,14 @@ public:
     // is stored once rather than twice.
     Q_INVOKABLE void syncWatchHealth();
 
+    // Pushes what the watch gave us up to the Suunto cloud - the other
+    // direction from syncHealthData(). Only rows read over BLE are ever
+    // sent; anything that came from the cloud is already there.
+    Q_INVOKABLE void uploadHealthToCloud();
+    // How many rows are waiting, so the menu can say so rather than
+    // offering an action that would do nothing.
+    Q_INVOKABLE int pendingHealthUploads() const;
+
     // Stored entries for one kind, newest first, as
     // { timestamp, <the entryData fields, flattened> } - the payload's own
     // field names are passed through untouched rather than mapped, since
@@ -337,6 +345,7 @@ private:
     // at once, so a failure can name which kind failed and the tally stays
     // simple.
     void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
+    void uploadHealthKindAt(int index, int sent, const QStringList &failures);
     // Builds the sml.zip for one workout from its stored raw payloads.
     QByteArray buildUploadZip(const QString &key) const;
 };

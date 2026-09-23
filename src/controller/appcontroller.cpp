@@ -1200,12 +1200,97 @@ void AppController::syncWatchHealth()
         }
 
         QString storeError;
-        if (!m_healthStore->upsert(entries, &storeError)) {
+        // fromWatch: these rows are candidates for pushing to the cloud.
+        if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save sleep data: %1").arg(storeError));
             return;
         }
         emit healthDataChanged();
     });
+}
+
+void AppController::uploadHealthToCloud()
+{
+    if (m_healthSyncInProgress) {
+        emit errorOccurred(tr("A sync is already in progress."));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+    if (m_healthStore->pendingUploadCount() == 0) {
+        emit errorOccurred(tr("Nothing to upload - everything the watch gave us is already in the cloud."));
+        return;
+    }
+
+    m_healthSyncInProgress = true;
+    emit healthSyncInProgressChanged();
+    uploadHealthKindAt(0, 0, QStringList());
+}
+
+void AppController::uploadHealthKindAt(int index, int sent, const QStringList &failures)
+{
+    if (index >= kHealthKindCount) {
+        m_healthSyncInProgress = false;
+        emit healthSyncInProgressChanged();
+        emit healthDataChanged();
+        if (!failures.isEmpty()) {
+            emit errorOccurred(tr("Uploaded %1 entries (%2)")
+                                .arg(sent).arg(failures.join(QStringLiteral("; "))));
+        } else if (sent > 0) {
+            emit errorOccurred(tr("Uploaded %1 health entries to Suunto.").arg(sent));
+        }
+        return;
+    }
+
+    const QString kind = QString::fromLatin1(kHealthKinds[index]);
+    // A night is a handful of rows but sleep stages run to dozens per
+    // night, so this is capped per request rather than sending a year in
+    // one POST.
+    const QVector<HealthEntry> pending = m_healthStore->loadPendingUpload(kind, 200);
+    if (pending.isEmpty()) {
+        uploadHealthKindAt(index + 1, sent, failures);
+        return;
+    }
+
+    // Stamp with the offset in force when the entry was recorded, the same
+    // rule the workout upload uses.
+    const int offsetMinutes =
+            QDateTime::fromMSecsSinceEpoch(pending.first().timestamp).offsetFromUtc() / 60;
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, index, sent, failures, kind, pending, offsetMinutes]
+            (bool ok, const QByteArray &data, const QString &vaultError) {
+        if (!ok) {
+            QStringList next = failures;
+            next.append(tr("%1: %2").arg(kind, vaultError));
+            uploadHealthKindAt(index + 1, sent, next);
+            return;
+        }
+        m_cloudClient->uploadHealthEntries(QString::fromUtf8(data), kind, pending, offsetMinutes,
+                [this, index, sent, failures, kind, pending]
+                (bool uploadOk, const QString &error) {
+            QStringList next = failures;
+            int total = sent;
+            if (!uploadOk) {
+                next.append(tr("%1: %2").arg(kind, error));
+            } else {
+                QVector<qint64> stamps;
+                stamps.reserve(pending.size());
+                for (const HealthEntry &e : pending)
+                    stamps.append(e.timestamp);
+                m_healthStore->markUploaded(kind, stamps, nullptr);
+                total += pending.size();
+            }
+            uploadHealthKindAt(index + 1, total, next);
+        });
+    });
+}
+
+int AppController::pendingHealthUploads() const
+{
+    return m_healthStore->pendingUploadCount();
 }
 
 QVariantList AppController::healthEntries(const QString &kind, int limit) const

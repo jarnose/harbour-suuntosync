@@ -13,6 +13,8 @@ Page {
     property var activity: []
     property var stages: []
     property string lastError: ""
+    // Not a binding - it changes only when we change it.
+    property int pendingUploads: 0
 
     function reload() {
         // A night per row, so a dozen covers a fortnight. Recovery and
@@ -23,6 +25,7 @@ Page {
         stages = AppController.healthEntries("sleepstages", 60)
         recovery = AppController.healthEntries("recovery", 48)
         activity = AppController.healthEntries("activity", 144)
+        pendingUploads = AppController.pendingHealthUploads()
     }
 
     Component.onCompleted: reload()
@@ -88,6 +91,14 @@ Page {
                 visible: AppController.cloudSignedIn
                 text: qsTr("Sync health data")
                 onClicked: AppController.syncHealthData()
+            }
+            MenuItem {
+                // The other direction: push what came off the watch up to
+                // Suunto. Hidden when there is nothing waiting rather than
+                // offered as a no-op.
+                visible: AppController.cloudSignedIn && page.pendingUploads > 0
+                text: qsTr("Upload %1 entries to Suunto").arg(page.pendingUploads)
+                onClicked: AppController.uploadHealthToCloud()
             }
         }
 

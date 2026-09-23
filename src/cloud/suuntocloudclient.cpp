@@ -209,6 +209,51 @@ void SuuntoCloudClient::uploadWorkout(const QString &sessionKey, const QByteArra
     });
 }
 
+void SuuntoCloudClient::uploadHealthEntries(const QString &sessionKey, const QString &kind,
+                                             const QVector<HealthEntry> &entries,
+                                             int offsetMinutes, SimpleCallback callback)
+{
+    if (entries.isEmpty()) {
+        callback(true, QString());
+        return;
+    }
+
+    QJsonArray array;
+    for (const HealthEntry &entry : entries) {
+        const QJsonObject data = QJsonDocument::fromJson(entry.data).object();
+        if (data.isEmpty())
+            continue; // nothing worth sending, and an empty entryData would be rejected
+        QJsonObject wrapper;
+        wrapper.insert(QStringLiteral("timestamp"),
+                        QString::fromStdString(Iso8601::formatLocal(entry.timestamp,
+                                                                      offsetMinutes)));
+        wrapper.insert(QStringLiteral("entryData"), data);
+        array.append(wrapper);
+    }
+    if (array.isEmpty()) {
+        callback(true, QString());
+        return;
+    }
+
+    QNetworkRequest request = authorizedRequest(kHealthBaseUrl + kind, sessionKey);
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                       QStringLiteral("application/json; charset=UTF-8"));
+
+    QNetworkReply *reply = m_network->post(request, QJsonDocument(array).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [reply, kind, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            const QByteArray body = reply->readAll();
+            callback(false, body.isEmpty()
+                     ? reply->errorString()
+                     : QStringLiteral("%1: %2").arg(reply->errorString(),
+                                                      QString::fromUtf8(body.left(200))));
+            return;
+        }
+        callback(true, QString());
+    });
+}
+
 void SuuntoCloudClient::fetchHealthEntries(const QString &sessionKey, const QString &kind,
                                             qint64 sinceMs, HealthCallback callback)
 {

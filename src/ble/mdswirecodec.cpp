@@ -140,6 +140,45 @@ std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::ve
     return encodeFrame(kTypeHandleFetch, requestId, body);
 }
 
+std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
+                                                const std::vector<uint8_t> &ackBody,
+                                                const std::vector<FetchParameter> &parameters)
+{
+    if (ackBody.size() < 6)
+        throw std::invalid_argument("encodeParameterisedFetch: ackBody shorter than 6 bytes");
+    if (parameters.size() > 255)
+        throw std::invalid_argument("encodeParameterisedFetch: too many parameters");
+
+    std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
+    body.push_back(static_cast<uint8_t>(parameters.size()));
+    for (const FetchParameter &p : parameters) {
+        body.push_back(static_cast<uint8_t>(p.declaredLength & 0xFF));
+        body.push_back(static_cast<uint8_t>((p.declaredLength >> 8) & 0xFF));
+        body.insert(body.end(), p.bytes.begin(), p.bytes.end());
+    }
+    return encodeFrame(kTypeHandleFetch, requestId, body);
+}
+
+std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,
+                                               const std::vector<uint8_t> &ackBody,
+                                               int64_t newerThanMs,
+                                               const std::string &filename)
+{
+    std::vector<uint8_t> timestamp(8);
+    for (int i = 0; i < 8; ++i)
+        timestamp[i] = static_cast<uint8_t>((static_cast<uint64_t>(newerThanMs) >> (8 * i)) & 0xFF);
+
+    // NUL-terminated on the wire, but the declared length is two more than
+    // the text - see FetchParameter's comment. Copied from the capture
+    // rather than derived.
+    std::vector<uint8_t> name(filename.begin(), filename.end());
+    name.push_back(0x00);
+    const uint16_t declared = static_cast<uint16_t>(filename.size() + 2);
+
+    return encodeParameterisedFetch(requestId, ackBody,
+                                     { { 8, timestamp }, { declared, name } });
+}
+
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
                                               uint32_t offset)
 {

@@ -211,10 +211,51 @@ void testDecoderRejectsCorruptedCrc()
     expectEqU("decoder drops a frame with a corrupted CRC", frames.size(), 0);
 }
 
+// The sleep timeline fetch, byte-for-byte against the 2026-09-23 capture.
+// Frame reqid 0x0278 (632), built from the ack at reqid 631 to
+// GET /Daily/Sleep/Timeline/Data. CRC32 of the captured frame verified
+// independently before this test was written, so a match here means the
+// whole frame - header, body, checksum - reproduces what the official app
+// sent.
+void testTimelineFileFetchMatchesTheCapture()
+{
+    // The ack body: f0 46 16 01 80 00
+    const std::vector<uint8_t> ackBody = { 0xF0, 0x46, 0x16, 0x01, 0x80, 0x00 };
+    const std::vector<uint8_t> expected = {
+        0x7E,
+        0xA5, 0x0D, 0x1E, 0x00, 0x78, 0x02,
+        0xF0, 0x46, 0x16, 0x01, 0x80, 0x00,
+        0x02,
+        0x08, 0x00, 0x68, 0xF6, 0x32, 0xC7, 0xA0, 0x01, 0x00, 0x00,
+        0x0C, 0x00, 0x6D, 0x64, 0x73, 0x53, 0x6C, 0x70, 0x2E, 0x73, 0x62, 0x6D, 0x00,
+        0x27, 0x96, 0xE0, 0xC5,
+        0x7E,
+    };
+
+    const std::vector<uint8_t> got =
+            Mds::encodeTimelineFileFetch(0x0278, ackBody, 1790048401000LL, "mdsSlp.sbm");
+    expectEq("timeline fetch reproduces the captured frame", toHex(got), toHex(expected));
+}
+
+// /Entries is the same envelope with no parameters - confirming the two
+// encoders agree rather than being separate guesses.
+void testEntriesIsTheZeroParameterCase()
+{
+    const std::vector<uint8_t> ackBody = { 0xF0, 0x24, 0x00, 0x01, 0x80, 0x00 };
+    const std::vector<uint8_t> viaGeneral =
+            Mds::encodeParameterisedFetch(0x1234, ackBody, {});
+    const std::vector<uint8_t> viaEntries =
+            Mds::encodeEntriesFetchTrigger(0x1234, ackBody);
+    expectEq("/Entries is the zero-parameter case of the same envelope",
+              toHex(viaGeneral), toHex(viaEntries));
+}
+
 } // namespace
 
 int main()
 {
+    testTimelineFileFetchMatchesTheCapture();
+    testEntriesIsTheZeroParameterCase();
     testEncodeLogbookEntries();
     testEncodeSystemMode();
     testEncodeLogbookByIdData();

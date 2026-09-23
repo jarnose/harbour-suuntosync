@@ -180,6 +180,41 @@ std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::ve
 // Byte-for-byte confirmed against the real captured /Summary fetch (frames
 // with requestIds 0x0542/0x0543/0x0544, built from the GET ack at 0x0539).
 // Throws std::invalid_argument if ackBody is shorter than 6 bytes.
+// A handle fetch with parameters.
+//
+// encodeEntriesFetchTrigger()'s body turns out to be the general case with
+// none: [ackBody(6)][0x00]. The captured sleep fetch is the same envelope
+// with two - [ackBody(6)][0x02][len16][bytes][len16][bytes] - so /Entries
+// is just the zero-parameter spelling of this.
+//
+// declaredLength is passed separately from the payload because the capture
+// does not make them equal: the 8-byte timestamp declares 8, but the
+// 11-byte NUL-terminated "mdsSlp.sbm" declares 12. CRC32 verified, so the
+// frame is complete and that really is what the app sends. Rather than
+// guess a rule from one sample (strlen+2? a 16-bit-char allowance?), the
+// caller states both and encodeTimelineFileFetch() below hard-codes what
+// was observed.
+struct FetchParameter
+{
+    uint16_t declaredLength;
+    std::vector<uint8_t> bytes;
+};
+
+std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
+                                                const std::vector<uint8_t> &ackBody,
+                                                const std::vector<FetchParameter> &parameters);
+
+// The sleep/activity timeline fetch: asks the watch to render everything
+// newer than `newerThanMs` into `filename` on its own filesystem, which is
+// then read back through /Dev/FileSystem/Stream. See
+// docs/watch-push-resources.md - this is what /Daily/Sleep/Timeline/Data
+// does, and it is why the MDS-level "/Sleep/<serial>/Entries" path never
+// existed on the wire.
+std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,
+                                               const std::vector<uint8_t> &ackBody,
+                                               int64_t newerThanMs,
+                                               const std::string &filename);
+
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
                                               uint32_t offset);
 

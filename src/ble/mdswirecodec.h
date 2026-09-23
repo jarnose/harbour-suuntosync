@@ -187,18 +187,28 @@ std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::ve
 // with two - [ackBody(6)][0x02][len16][bytes][len16][bytes] - so /Entries
 // is just the zero-parameter spelling of this.
 //
-// declaredLength is passed separately from the payload because the capture
-// does not make them equal: the 8-byte timestamp declares 8, but the
-// 11-byte NUL-terminated "mdsSlp.sbm" declares 12. CRC32 verified, so the
-// frame is complete and that really is what the app sends. Rather than
-// guess a rule from one sample (strlen+2? a 16-bit-char allowance?), the
-// caller states both and encodeTimelineFileFetch() below hard-codes what
-// was observed.
+// The 16-bit field before each parameter is a TYPE code, not a length -
+// three captured parameters settle it, because no length rule fits all
+// three:
+//
+//   0x0008  8-byte timestamp   (NewerThan, ms since epoch)
+//   0x000C  11-byte string     ("mdsSlp.sbm" + NUL, length implied by the NUL)
+//   0x0006  4-byte integer     (byte offset into the file)
+//
+// So 6 = 32-bit int, 8 = 64-bit int, 12 = NUL-terminated string. That
+// matches protocol_v9 dispatching on a DataType kind rather than carrying
+// explicit lengths (docs/logbook-data-format.md). Only these three are
+// confirmed; anything else is a guess.
 struct FetchParameter
 {
-    uint16_t declaredLength;
+    uint16_t typeCode;
     std::vector<uint8_t> bytes;
 };
+
+// The three confirmed type codes.
+constexpr uint16_t kParamInt32 = 0x0006;
+constexpr uint16_t kParamInt64 = 0x0008;
+constexpr uint16_t kParamString = 0x000C;
 
 std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
                                                 const std::vector<uint8_t> &ackBody,
@@ -214,6 +224,16 @@ std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,
                                                const std::vector<uint8_t> &ackBody,
                                                int64_t newerThanMs,
                                                const std::string &filename);
+
+// Reads `filename` from the watch's filesystem at `offset`, through a
+// handle obtained by GET /Dev/FileSystem/Stream. The reply carries about
+// 450 bytes of file content after its own header; repeated reads at
+// increasing offsets walk the whole file. This is how the sleep timeline
+// comes back - see docs/watch-push-resources.md.
+std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
+                                             const std::vector<uint8_t> &ackBody,
+                                             const std::string &filename,
+                                             uint32_t offset);
 
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
                                               uint32_t offset);

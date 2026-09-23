@@ -237,6 +237,32 @@ void testTimelineFileFetchMatchesTheCapture()
     expectEq("timeline fetch reproduces the captured frame", toHex(got), toHex(expected));
 }
 
+// The file read, byte-for-byte against the capture: reqid 20, the first
+// read of mdsSlp.sbm at offset 0. Its reply began "SBEM0102".
+void testFileReadMatchesTheCapture()
+{
+    const std::vector<uint8_t> ackBody = { 0xF0, 0x23, 0x0A, 0x03, 0x80, 0x01 };
+    const std::vector<uint8_t> expectedBody = {
+        0xF0, 0x23, 0x0A, 0x03, 0x80, 0x01,
+        0x02,
+        0x0C, 0x00, 0x6D, 0x64, 0x73, 0x53, 0x6C, 0x70, 0x2E, 0x73, 0x62, 0x6D, 0x00,
+        0x06, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    const std::vector<uint8_t> frame =
+            Mds::encodeFileReadRequest(20, ackBody, "mdsSlp.sbm", 0);
+    // Compare the body, skipping the 0x7E + 6-byte header and the CRC+0x7E.
+    const std::vector<uint8_t> body(frame.begin() + 7, frame.end() - 5);
+    expectEq("file read at offset 0 matches the capture", toHex(body), toHex(expectedBody));
+
+    // And the third read, at offset 0x0386, confirms the offset encoding.
+    const std::vector<uint8_t> third =
+            Mds::encodeFileReadRequest(22, ackBody, "mdsSlp.sbm", 0x0386);
+    const std::vector<uint8_t> thirdBody(third.begin() + 7, third.end() - 5);
+    expectEq("file read offset is little-endian int32",
+              toHex(std::vector<uint8_t>(thirdBody.end() - 4, thirdBody.end())),
+              "86030000");
+}
+
 // /Entries is the same envelope with no parameters - confirming the two
 // encoders agree rather than being separate guesses.
 void testEntriesIsTheZeroParameterCase()
@@ -255,6 +281,7 @@ void testEntriesIsTheZeroParameterCase()
 int main()
 {
     testTimelineFileFetchMatchesTheCapture();
+    testFileReadMatchesTheCapture();
     testEntriesIsTheZeroParameterCase();
     testEncodeLogbookEntries();
     testEncodeSystemMode();

@@ -152,8 +152,8 @@ std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
     std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
     body.push_back(static_cast<uint8_t>(parameters.size()));
     for (const FetchParameter &p : parameters) {
-        body.push_back(static_cast<uint8_t>(p.declaredLength & 0xFF));
-        body.push_back(static_cast<uint8_t>((p.declaredLength >> 8) & 0xFF));
+        body.push_back(static_cast<uint8_t>(p.typeCode & 0xFF));
+        body.push_back(static_cast<uint8_t>((p.typeCode >> 8) & 0xFF));
         body.insert(body.end(), p.bytes.begin(), p.bytes.end());
     }
     return encodeFrame(kTypeHandleFetch, requestId, body);
@@ -168,15 +168,29 @@ std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,
     for (int i = 0; i < 8; ++i)
         timestamp[i] = static_cast<uint8_t>((static_cast<uint64_t>(newerThanMs) >> (8 * i)) & 0xFF);
 
-    // NUL-terminated on the wire, but the declared length is two more than
-    // the text - see FetchParameter's comment. Copied from the capture
-    // rather than derived.
     std::vector<uint8_t> name(filename.begin(), filename.end());
     name.push_back(0x00);
-    const uint16_t declared = static_cast<uint16_t>(filename.size() + 2);
 
     return encodeParameterisedFetch(requestId, ackBody,
-                                     { { 8, timestamp }, { declared, name } });
+                                     { { kParamInt64, timestamp },
+                                       { kParamString, name } });
+}
+
+std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
+                                             const std::vector<uint8_t> &ackBody,
+                                             const std::string &filename,
+                                             uint32_t offset)
+{
+    std::vector<uint8_t> name(filename.begin(), filename.end());
+    name.push_back(0x00);
+
+    std::vector<uint8_t> off(4);
+    for (int i = 0; i < 4; ++i)
+        off[i] = static_cast<uint8_t>((offset >> (8 * i)) & 0xFF);
+
+    return encodeParameterisedFetch(requestId, ackBody,
+                                     { { kParamString, name },
+                                       { kParamInt32, off } });
 }
 
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,

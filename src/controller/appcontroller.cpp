@@ -873,6 +873,18 @@ void AppController::testHealthResourceFetch(const QString &kind)
             return;
         }
 
+        // Keep the whole payload, not just the hex preview: 6 kB of
+        // SBEM0102 whose field meanings are unknown needs looking at
+        // offline, and retyping a hex dump is not that.
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(dir);
+        QFile dump(dir + QStringLiteral("/") + filename);
+        if (dump.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            dump.write(reinterpret_cast<const char *>(data.data()),
+                        static_cast<int>(data.size()));
+            dump.close();
+        }
+
         QString hex;
         for (size_t i = 0; i < data.size() && i < 32; ++i)
             hex += QStringLiteral("%1 ").arg(data[i], 2, 16, QLatin1Char('0'));

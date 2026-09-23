@@ -16,8 +16,27 @@ namespace {
 constexpr uint8_t kWindowSz2 = 7;
 constexpr uint8_t kLookaheadSz2 = 5;
 constexpr uint16_t kInputBufferSize = 256;
-constexpr char kMagic[] = "SBEM0103";
+// Two container versions are known. A workout's /Data and /Summary are
+// SBEM0103; the sleep and activity timeline files the watch renders are
+// SBEM0102 (confirmed 2026-09-23, docs/watch-push-resources.md). The TLV
+// framing is identical in both - id, length, value, with 0xFF escapes -
+// which is why one parser serves them. What differs is the meaning of the
+// ids: the descriptor table in sbemdescriptors.h describes 0103's workout
+// schema and says nothing about 0102's.
+constexpr char kMagicPrefix[] = "SBEM01";
+constexpr size_t kMagicPrefixLen = 6;
 constexpr size_t kMagicLen = 8;
+
+bool hasKnownMagic(const std::vector<uint8_t> &data)
+{
+    if (data.size() < kMagicLen)
+        return false;
+    if (std::memcmp(data.data(), kMagicPrefix, kMagicPrefixLen) != 0)
+        return false;
+    const char v0 = static_cast<char>(data[kMagicPrefixLen]);
+    const char v1 = static_cast<char>(data[kMagicPrefixLen + 1]);
+    return v0 == '0' && (v1 == '2' || v1 == '3');
+}
 }
 
 std::vector<uint8_t> heatshrinkDecompress(const std::vector<uint8_t> &compressed)
@@ -76,7 +95,7 @@ int64_t decodeLocal64(uint64_t raw)
 std::vector<Chunk> parseContainer(const std::vector<uint8_t> &decompressed)
 {
     std::vector<Chunk> chunks;
-    if (decompressed.size() < kMagicLen || std::memcmp(decompressed.data(), kMagic, kMagicLen) != 0)
+    if (!hasKnownMagic(decompressed))
         return chunks;
 
     size_t pos = kMagicLen;

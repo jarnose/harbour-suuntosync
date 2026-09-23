@@ -403,6 +403,31 @@ have revealed. The lesson that generalises: a golden vector proves the
 *structure* of what you build, and proves nothing about the environment
 you build it in.
 
+### Health upload works (2026-09-23)
+
+`POST 247.sports-tracker.com/v1/<kind>` accepted a watch-decoded sleep
+entry. One bug on the way, and the server named it exactly: *"'quality'
+with value 2.55 is outside of range 0.0...1.0"*. 2.55 is 255/100, and 0xFF
+is the sentinel for a byte field the watch didn't measure - three of
+twelve captured nights carry it. Those keys are now omitted rather than
+sent.
+
+A note on bookkeeping, because the first successful run reported only one
+entry and that looked wrong. It wasn't: a cloud sync had already brought
+those nights down, so they were demonstrably in the cloud and needed no
+upload. Only the newest night - on the watch but never synced by the
+official app - was actually pending. That is the case this whole path
+exists for.
+
+The conflict rule is now directional, which the first version got only
+half right:
+
+- from the **cloud**: clear the pending flag, even if a watch sync set it.
+  The row is up there.
+- from the **watch**: update the payload, leave the flag alone. A row the
+  cloud already gave us stays not-pending; a genuinely new one keeps the
+  `pending = 1` it was inserted with.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

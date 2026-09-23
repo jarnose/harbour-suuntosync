@@ -63,15 +63,34 @@ bool HealthStore::upsert(const QVector<HealthEntry> &entries, QString *error, bo
     // seconds on a phone's flash.
     db.transaction();
 
+    // The two directions need different conflict handling, and getting
+    // this wrong is silent either way:
+    //
+    //  - From the CLOUD: the row is demonstrably up there, so clear the
+    //    flag even if a watch sync had set it. Nothing to send.
+    //  - From the WATCH: update the payload but leave the flag alone. A row
+    //    the cloud already gave us stays not-pending (it is already there);
+    //    a genuinely new row gets pending = 1 from the INSERT.
+    //
+    // An earlier version used INSERT OR REPLACE for both, which meant a
+    // cloud sync after a watch sync reset every flag - harmless, because
+    // those entries really were in the cloud, but a watch sync after a
+    // cloud sync would have re-queued rows that did not need sending.
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-            "INSERT OR REPLACE INTO health_entries (kind, timestamp, data, pending_upload)"
-            " VALUES (?, ?, ?, ?)"));
+    q.prepare(fromWatch
+            ? QStringLiteral(
+                    "INSERT INTO health_entries (kind, timestamp, data, pending_upload)"
+                    " VALUES (?, ?, ?, 1)"
+                    " ON CONFLICT(kind, timestamp) DO UPDATE SET data = excluded.data")
+            : QStringLiteral(
+                    "INSERT INTO health_entries (kind, timestamp, data, pending_upload)"
+                    " VALUES (?, ?, ?, 0)"
+                    " ON CONFLICT(kind, timestamp) DO UPDATE SET data = excluded.data,"
+                    " pending_upload = 0"));
     for (const HealthEntry &e : entries) {
         q.addBindValue(e.kind);
         q.addBindValue(e.timestamp);
         q.addBindValue(QString::fromUtf8(e.data));
-        q.addBindValue(fromWatch ? 1 : 0);
         if (!q.exec()) {
             if (error)
                 *error = q.lastError().text();

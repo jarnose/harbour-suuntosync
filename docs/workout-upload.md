@@ -316,6 +316,36 @@ BLE is a separate matter: the resources exist (`/Sleep/<x>/Entries` and
 `/Activity/<x>/Entries` were both in the very first string dump) but
 neither has been fetched or decoded by this project.
 
+## First real upload attempt: two bugs (2026-09-23)
+
+The server answered `500` with
+`{"error":{"code":"523","description":"Workout could not be saved"}}`. That
+the multipart parsed and the session key was accepted at all is useful - it
+narrowed the problem to the content. Pulling the stored zip off the phone
+(`~/.local/share/io.github.jarnose/suuntosync/suuntosync.sqlite`, table
+`workout_sml`) showed both causes immediately, neither of them a guess:
+
+1. **The JSON was invalid.** Every double came out as `"HR":1,35`.
+   `snprintf`'s `%g` honours the C library's current locale, and the phone
+   runs a Finnish one. The tests here never saw it because they run under a
+   C locale - a class of bug that no golden vector catches, because the
+   vector and the test agree with each other. Fixed by normalising the
+   separator after formatting (not by touching the process locale, which
+   would be a thread-unsafe side effect in a Qt app), and
+   `tests/test_smljson.cpp` now runs the whole document build under `fi_FI`
+   and asserts no digit-comma-digit sequence survives.
+
+2. **`summary.json` was missing entirely** - the zip held only
+   samples.json. A `/Summary` payload has no clock chunk, so every entry in
+   it had `timeMs == 0` and the writer skipped them all. The captured
+   upload stamps summary.json's entries at the *end* of the workout, so
+   `buildDocument` gained a `fallbackTimeMs` and the caller passes the
+   workout's stop time.
+
+Worth recording: the earlier "known difference" about nil readings being
+omitted rather than written as `null` was **not** the cause, and remains
+untested either way.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

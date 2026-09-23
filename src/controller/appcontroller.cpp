@@ -298,7 +298,7 @@ QByteArray buildCloudSeriesJson(const QByteArray &body)
 // recorded in another timezone.
 QByteArray buildSmlZip(const std::vector<uint8_t> &compressedData,
                         const std::vector<uint8_t> &summaryPayload,
-                        const QString &source, qint64 startTimeMs)
+                        const QString &source, qint64 startTimeMs, qint64 stopTimeMs)
 {
     const int offsetMinutes =
             QDateTime::fromMSecsSinceEpoch(startTimeMs).offsetFromUtc() / 60;
@@ -307,9 +307,13 @@ QByteArray buildSmlZip(const std::vector<uint8_t> &compressedData,
     const std::string samples = SmlJson::buildDocument(
             Sbem::parseContainer(Sbem::heatshrinkDecompress(compressedData)),
             src, offsetMinutes);
+    // A /Summary payload has no clock chunk, so its entries need stamping
+    // from outside. The captured upload puts summary.json's entries at the
+    // end of the workout, so that is what goes in.
     const std::string summary = summaryPayload.empty()
             ? std::string()
-            : SmlJson::buildDocument(Sbem::parseContainer(summaryPayload), src, offsetMinutes);
+            : SmlJson::buildDocument(Sbem::parseContainer(summaryPayload), src, offsetMinutes,
+                                      stopTimeMs != 0 ? stopTimeMs : startTimeMs);
 
     std::vector<ZipWriter::Entry> entries;
     if (!samples.empty())
@@ -1403,7 +1407,7 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 // see uploadWorkoutToCloud().
                 const QByteArray zip = buildSmlZip(
                         data, summaryOk ? payload : std::vector<uint8_t>(),
-                        smlSourceFor(m_pairedWatch.name), w.startTime);
+                        smlSourceFor(m_pairedWatch.name), w.startTime, w.stopTime);
                 if (!zip.isEmpty())
                     m_workoutStore->saveSml(w.key, zip, nullptr);
             } else {

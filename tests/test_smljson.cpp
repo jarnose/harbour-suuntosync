@@ -14,8 +14,10 @@
 #include "../src/cloud/smljson.h"
 #include "../src/ble/sbemcontainer.h"
 
+#include <clocale>
 #include <cstdio>
 #include <fstream>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -91,6 +93,44 @@ std::string buildFromFixture(const std::string &path)
     return SmlJson::buildDocument(chunks, "suunto-2352D0000247", 180);
 }
 
+// The bug that got to the server: snprintf's %g honours the C locale, so on
+// a Finnish phone every double came out as "1,35" and the whole document
+// was invalid JSON. The tests here never saw it because they ran under the
+// C locale. This asserts it directly, under a locale that uses a comma.
+void testDecimalSeparatorSurvivesACommaLocale()
+{
+    const char *applied = std::setlocale(LC_NUMERIC, "fi_FI");
+    if (!applied)
+        applied = std::setlocale(LC_NUMERIC, "de_DE.utf8");
+    if (!applied) {
+        std::printf("note: no comma-decimal locale available, skipping "
+                     "(install fi_FI or de_DE to cover this)\n");
+        return;
+    }
+    // Sanity: confirm the locale really does use a comma, so a passing
+    // assertion below means something.
+    char probe[32];
+    std::snprintf(probe, sizeof(probe), "%.2f", 1.35);
+    check(std::string(probe).find(',') != std::string::npos,
+           std::string("locale ") + applied + " really formats 1.35 as " + probe);
+
+    const std::string doc = buildFromFixture("fixtures/logbook_data_heatshrink.bin");
+    std::setlocale(LC_NUMERIC, "C");
+
+    check(!doc.empty(), "a document was produced under a comma locale");
+    // The only commas in valid output separate JSON values, never digits.
+    bool digitComma = false;
+    for (size_t i = 1; i + 1 < doc.size(); ++i) {
+        if (doc[i] == ',' && std::isdigit(static_cast<unsigned char>(doc[i-1]))
+                && std::isdigit(static_cast<unsigned char>(doc[i+1]))) {
+            digitComma = true;
+            std::printf("   first offender near: %s\n", doc.substr(i - 20, 40).c_str());
+            break;
+        }
+    }
+    check(!digitComma, "no decimal commas in the output");
+}
+
 void testEnvelopeMatchesTheCapturedShape(const std::string &doc)
 {
     check(!doc.empty(), "a document was produced");
@@ -164,6 +204,7 @@ int main()
     std::ofstream("/tmp/generated_samples.json") << doc;
     std::printf("(written to /tmp/generated_samples.json)\n\n");
 
+    testDecimalSeparatorSurvivesACommaLocale();
     testEnvelopeMatchesTheCapturedShape(doc);
     testFieldsLandWhereTheSchemaSaysTheyShould(doc);
     testEventsBecomeAnArray(doc);

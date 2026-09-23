@@ -13,6 +13,23 @@ namespace SmlJson {
 
 namespace {
 
+// snprintf's %g honours the C library's *current* locale, and on a Finnish
+// phone that means "1,35" - which is not JSON, and which the server
+// rejected with "Workout could not be saved". Caught only on real hardware:
+// the tests here ran under a C locale, where the bug is invisible.
+//
+// Rather than touching the process-wide locale (which would be a
+// thread-unsafe side effect on a Qt app's behalf), the separator is fixed
+// up afterwards. A formatted double contains no other comma - %g does not
+// group thousands without the ' flag - so this is unambiguous.
+void forceDecimalPoint(std::string *text)
+{
+    for (char &c : *text) {
+        if (c == ',')
+            c = '.';
+    }
+}
+
 // Shortest representation that reads back as the same double, which is what
 // a JSON writer should emit and what the captured upload shows (an altitude
 // appears as 205.4000000000001 because that is genuinely the nearest
@@ -26,18 +43,25 @@ std::string formatNumber(double v)
     if (v == std::floor(v) && std::fabs(v) < 9007199254740992.0) {
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%.0f", v);
-        return std::string(buf);
+        return std::string(buf); // integral: no separator to worry about
     }
     for (int precision = 15; precision <= 17; ++precision) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "%.*g", precision, v);
+        // sscanf reads back under the same locale that wrote it, so the
+        // round-trip check stays valid before the separator is normalised.
         double back = 0;
-        if (std::sscanf(buf, "%lf", &back) == 1 && back == v)
-            return std::string(buf);
+        if (std::sscanf(buf, "%lf", &back) == 1 && back == v) {
+            std::string out(buf);
+            forceDecimalPoint(&out);
+            return out;
+        }
     }
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.17g", v);
-    return std::string(buf);
+    std::string out(buf);
+    forceDecimalPoint(&out);
+    return out;
 }
 
 std::string quote(const std::string &s)
@@ -199,7 +223,8 @@ std::string literalFor(const Sml::Reading &reading)
 } // namespace
 
 std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
-                           const std::string &source, int offsetMinutes)
+                           const std::string &source, int offsetMinutes,
+                           int64_t fallbackTimeMs)
 {
     // One JSON sample per chunk, in payload order.
     struct Entry
@@ -228,11 +253,15 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     for (const Entry &entry : entries) {
         if (!entry.used)
             continue;
-        // A sample with no clock yet can't be placed on the timeline, and
-        // the cloud keys everything by TimeISO8601 - skip rather than stamp
-        // it with the epoch (the failure this project already hit once with
-        // the watch's own local64 clock).
-        if (entry.timeMs == 0)
+        // A /Summary payload carries no clock chunk at all, so every entry
+        // in it has timeMs == 0. The captured upload stamps summary.json's
+        // entries at the end of the workout, which is what fallbackTimeMs
+        // supplies. Without a fallback there is still nothing to do but
+        // skip: the cloud keys everything by TimeISO8601, and stamping the
+        // epoch is the failure this project already hit once with the
+        // watch's own local64 clock.
+        const int64_t stamp = entry.timeMs != 0 ? entry.timeMs : fallbackTimeMs;
+        if (stamp == 0)
             continue;
         if (!first)
             out += ",";
@@ -242,7 +271,7 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
         out += "},\"Source\":";
         out += quote(source);
         out += ",\"TimeISO8601\":";
-        out += quote(Iso8601::formatLocal(entry.timeMs, offsetMinutes));
+        out += quote(Iso8601::formatLocal(stamp, offsetMinutes));
         out += "}";
     }
     out += "]}";

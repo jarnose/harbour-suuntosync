@@ -39,8 +39,14 @@ namespace SmlJson {
 // UTC offset to stamp timestamps with; the watch records local time plus an
 // offset (see Sbem::decodeLocal64) and the cloud's format keeps both.
 //
+// `fallbackTimeMs` stamps entries that carry no clock of their own. A
+// /Data payload needs none (it has a time base chunk); a /Summary payload
+// has no clock at all, and the captured upload stamps its entries at the
+// end of the workout. Pass 0 for /Data.
+//
 // Returns the document, or an empty string if nothing decodable was found.
 std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
-                           const std::string &source, int offsetMinutes);
+                           const std::string &source, int offsetMinutes,
+                           int64_t fallbackTimeMs = 0);
 
 } // namespace SmlJson

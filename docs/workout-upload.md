@@ -377,6 +377,32 @@ same way the entry's own `TimeISO8601` is. Worth noting how much better a
 field and the value, so each round trip now costs one bug rather than a
 guess.
 
+### ✅ Working, 2026-09-23
+
+Fourth attempt returned 200, and the workout shows up in the official
+Android app. The full chain - BLE fetch, Heatshrink, SBEM decode, JSON
+build, zip, multipart POST - works from Sailfish with no Android app
+involved.
+
+Four bugs stood between the first attempt and this one, and it's worth
+recording that **none of them was the one I predicted**. I flagged the
+omitted nil readings as "the first thing to look at"; the upload succeeds
+without them, so that difference is now confirmed harmless. What actually
+broke it:
+
+1. A locale-dependent decimal separator (`1,35`) - invisible to every test
+   here, because the tests and the fixtures shared the same C locale.
+2. `summary.json` missing entirely, because a /Summary payload has no clock
+   chunk and every entry got skipped.
+3. Full float precision where the schema's `precision=` says to round.
+4. `local64` timestamps written as numbers instead of ISO strings.
+
+Three of the four were things the captured upload already showed plainly;
+I had the evidence and read past it. The fourth (locale) no capture could
+have revealed. The lesson that generalises: a golden vector proves the
+*structure* of what you build, and proves nothing about the environment
+you build it in.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

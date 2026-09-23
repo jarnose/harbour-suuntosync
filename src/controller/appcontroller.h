@@ -328,4 +328,5 @@ private:
     void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
     // Builds the sml.zip for one workout from its stored raw payloads.
     QByteArray buildUploadZip(const QString &key) const;
+    void probeHealthPathAt(const QStringList &paths, int index, const QStringList &results);
 };

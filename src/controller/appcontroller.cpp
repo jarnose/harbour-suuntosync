@@ -819,39 +819,61 @@ void AppController::testHealthResourceFetch(const QString &kind)
         return;
     }
 
-    // The serial, as the resource path spells it - the same last-word rule
-    // smlSourceFor() uses on the BlueZ device name.
+    // Two candidate spellings, tried in order.
+    //
+    // The APK's string table has "suunto://MDS/Sleep/%s/Entries", but the
+    // %s there is the MDS library's *device* handle on the Android side -
+    // the path this project actually talks to over BLE for the equivalent
+    // logbook resource is plain "/Logbook/Entries", with no serial. So the
+    // serial-less form is the better bet and goes first; the serial form is
+    // kept because being wrong about that is cheap and finding out is not.
     const QString serial = m_pairedWatch.name.section(QLatin1Char(' '), -1).trimmed();
-    if (serial.isEmpty()) {
-        emit logbookTestResult(tr("No paired watch serial to build the path from"));
-        return;
-    }
-    const QString path = QStringLiteral("/%1/%2/Entries").arg(kind, serial);
+    QStringList paths;
+    paths << QStringLiteral("/%1/Entries").arg(kind);
+    if (!serial.isEmpty())
+        paths << QStringLiteral("/%1/%2/Entries").arg(kind, serial);
+    // Control: a path known to work, fetched the same way. Without it a
+    // short reply is ambiguous - it could mean "no such resource" or "this
+    // is what a reply looks like". With it, the difference is visible in
+    // the same report.
+    paths << QStringLiteral("/Logbook/Entries");
 
     m_logbookTestInFlight = true;
-    m_whiteboardClient->fetchStructuredRaw(path,
-            [this, path](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+    probeHealthPathAt(paths, 0, QStringList());
+}
+
+// Walks the candidate paths one at a time - the Whiteboard link is strictly
+// one request in flight - collecting a line per attempt so the report shows
+// what every spelling replied, not just the first that didn't fail.
+void AppController::probeHealthPathAt(const QStringList &paths, int index,
+                                       const QStringList &results)
+{
+    if (index >= paths.size()) {
         m_logbookTestInFlight = false;
+        emit logbookTestResult(results.join(QStringLiteral("\n\n")));
+        return;
+    }
+
+    const QString path = paths.at(index);
+    m_whiteboardClient->fetchStructuredRaw(path,
+            [this, paths, index, results, path]
+            (bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        QStringList next = results;
         if (!ok) {
-            emit logbookTestResult(tr("%1: %2").arg(path, error));
-            return;
+            next.append(tr("%1: %2").arg(path, error));
+        } else {
+            QString hex;
+            for (size_t i = 0; i < body.size() && i < 48; ++i)
+                hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
+            QString ascii;
+            for (size_t i = 0; i < body.size() && i < 32; ++i) {
+                const uint8_t c = body[i];
+                ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
+            }
+            next.append(tr("%1: %2 bytes\n%3\n\"%4\"")
+                        .arg(path).arg(body.size()).arg(hex.trimmed(), ascii));
         }
-
-        // First 48 bytes as hex - enough to recognise an SBEM container
-        // ("SBEM0103"), a protocol_v9 structure header, or an error code,
-        // without flooding a phone-sized label.
-        QString hex;
-        for (size_t i = 0; i < body.size() && i < 48; ++i)
-            hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
-
-        QString ascii;
-        for (size_t i = 0; i < body.size() && i < 32; ++i) {
-            const uint8_t c = body[i];
-            ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
-        }
-
-        emit logbookTestResult(tr("%1: %2 bytes\n%3\n\"%4\"")
-                                .arg(path).arg(body.size()).arg(hex.trimmed(), ascii));
+        probeHealthPathAt(paths, index + 1, next);
     });
 }
 

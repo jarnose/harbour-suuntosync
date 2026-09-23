@@ -77,9 +77,14 @@ struct Night
     double heartRateMinHz = 0;
     double maxSpo2 = 0;          // 0..1
     double altitudeMetres = 0;
-    int hrvAverageMs = 0;
-    int hrvSampleCount = 0;
-    int qualityPercent = 0;
+    // -1 means the watch recorded no value. The file uses 0xFF as the
+    // "no reading" sentinel for these byte fields - three of twelve
+    // captured nights have quality = 255 - and passing that through as a
+    // number is what made the cloud reject an upload with "'quality' with
+    // value 2.55 is outside of range 0.0...1.0".
+    int hrvAverageMs = -1;
+    int hrvSampleCount = -1;
+    int qualityPercent = -1;
     bool isNap = false;
 
     std::vector<StageSample> stages;

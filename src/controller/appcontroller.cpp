@@ -1118,9 +1118,15 @@ static QByteArray sleepEntryJson(const SleepTimeline::Night &night)
     o.insert(QStringLiteral("hrMin"), night.heartRateMinHz);
     o.insert(QStringLiteral("maxSpo2"), night.maxSpo2);
     o.insert(QStringLiteral("altitude"), night.altitudeMetres);
-    o.insert(QStringLiteral("avgHrv"), night.hrvAverageMs);
-    o.insert(QStringLiteral("avgHrvSampleCount"), night.hrvSampleCount);
-    o.insert(QStringLiteral("quality"), night.qualityPercent / 100.0);
+    // Fields the watch didn't measure are left out entirely rather than
+    // sent as a sentinel. The cloud validates ranges and rejects the whole
+    // batch otherwise.
+    if (night.hrvAverageMs >= 0)
+        o.insert(QStringLiteral("avgHrv"), night.hrvAverageMs);
+    if (night.hrvSampleCount >= 0)
+        o.insert(QStringLiteral("avgHrvSampleCount"), night.hrvSampleCount);
+    if (night.qualityPercent >= 0)
+        o.insert(QStringLiteral("quality"), night.qualityPercent / 100.0);
     o.insert(QStringLiteral("sleepId"), static_cast<qint64>(night.sleepId));
     o.insert(QStringLiteral("isNap"), night.isNap);
     return QJsonDocument(o).toJson(QJsonDocument::Compact);

@@ -90,6 +90,18 @@ int main()
     check(known->hrvAverageMs == 32, "avgHrv = 32");
     check(known->hrvSampleCount == 55, "avgHrvSampleCount = 55");
     check(known->qualityPercent == 82, "quality = 82% (cloud says 0.82)");
+
+    // 0xFF means "not measured" and must not reach the cloud as 255, which
+    // it did once: the upload came back with "'quality' with value 2.55 is
+    // outside of range 0.0...1.0". Three of the captured nights have it.
+    int missingQuality = 0;
+    for (const SleepTimeline::Night &n : nights) {
+        check(n.qualityPercent <= 100, "quality is a percentage or -1, never 255");
+        if (n.qualityPercent < 0)
+            ++missingQuality;
+    }
+    check(missingQuality == 3, "three nights have no quality reading ("
+           + std::to_string(missingQuality) + ")");
     check(!known->isNap, "isNap false");
     check(known->source == "suunto-247-sleep-2352D0000247", "source string");
 

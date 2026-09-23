@@ -60,6 +60,15 @@ int64_t readMicrosAsMs(const std::vector<uint8_t> &v)
     return static_cast<int64_t>(raw / 1000);
 }
 
+// 0xFF is the "no reading" sentinel for the byte-sized fields; -1 carries
+// that through to the caller instead of a plausible-looking 255.
+int readByteOrMissing(const std::vector<uint8_t> &v)
+{
+    if (v.empty() || v[0] == 0xFF)
+        return -1;
+    return v[0];
+}
+
 std::string readString(const std::vector<uint8_t> &v)
 {
     size_t n = 0;
@@ -118,16 +127,13 @@ std::vector<Night> decode(const std::vector<Sbem::Chunk> &chunks)
         case kAltitude:        current.altitudeMetres = readFloat(chunk.value); break;
         case kSleepId:         current.sleepId = readU32(chunk.value); break;
         case kQualityPercent:
-            if (!chunk.value.empty())
-                current.qualityPercent = chunk.value[0];
+            current.qualityPercent = readByteOrMissing(chunk.value);
             break;
         case kHrvAverage:
-            if (!chunk.value.empty())
-                current.hrvAverageMs = chunk.value[0];
+            current.hrvAverageMs = readByteOrMissing(chunk.value);
             break;
         case kHrvSamples:
-            if (!chunk.value.empty())
-                current.hrvSampleCount = chunk.value[0];
+            current.hrvSampleCount = readByteOrMissing(chunk.value);
             break;
         case kIsNap:
             if (!chunk.value.empty())

@@ -84,6 +84,79 @@ paired. One sleep fetch in that trace shows the exact bytes, the same way
 the original capture cracked `/Logbook/Entries`. Decompiling `libmds.so`'s
 `getWithHeader` is the fallback, and slower.
 
+## The 2026-09-23 HCI capture: all three answered
+
+A full `btsnoop_hci.log` taken on the S7 during one official-app sync,
+decoded into 1284 Whiteboard frames. It settles items 3, 4 and 5 at once,
+and each answer is different from what this doc had assumed.
+
+Frame types seen: `0x0a`/`0x02` GET+ack (100), `0x0d`/`0x05` handle fetch
+(363), `0x10`/`0x08` stream start (14), **`0x0e`/`0x07` PUT (161)**,
+`0x01`/`0x0b`/`0x03` bulk. `0x0e` is the write verb this project has never
+needed until now.
+
+### Item 3: sleep is a file, not a resource
+
+`/Sleep/<serial>/Entries` is an MDS-library abstraction on the Android
+side. Over BLE the exchange is:
+
+```
+GET  /Daily/Sleep/Timeline/Data     -> ack
+0x0d handle fetch, body "mdsSlp.sbem"   (watch writes the file)
+GET  /Dev/FileSystem/Stream         -> ack
+0x0d reads at increasing offsets, body "mdsSlp.sbm" + offset
+     -> payload begins "SBEM0102", contains "suunto-247-sleep-<serial>"
+GET  /Dev/FileSystem/FileDelete     -> cleanup
+0x0e "mdsSlp.sbem"
+```
+
+So the watch renders its sleep timeline into a temporary file and the app
+streams it off, then deletes it. Note the container is **SBEM0102**, not
+the SBEM0103 a workout uses - close, but the version differs and shouldn't
+be assumed identical.
+
+The same run also shows `/Activity/Moments/Sync/Data` and
+`/Activity/TrendData` for daily activity, and `/Activity/TrainingLab/
+StressBalance` - the recovery figure.
+
+### Item 4: the watch downloads its own ephemeris
+
+There is no ephemeris blob on the BLE link at all. What the app does is
+hand the watch credentials and let it fetch over WiFi:
+
+```
+GET  /Settings/Wifi/Cloud/OfflineMaps/Url     -> ack
+0x0e "https://api.sports-tracker.com/apiserver..."
+GET  /Device/GNSS/ExtendedEphemerisData/Date  -> "2026-09-23T00:00:00"
+GET  /Settings/Wifi/Cloud/STTAuthorization    -> ack
+0x0e "WatchUserKey A2d6..."
+```
+
+"Syncing GPS performance" on the watch's screen is this handshake. The
+Date read is the freshness check - it already said today's date, which is
+why nothing was downloaded. **This is much less work than expected**: no
+ephemeris format to decode, no large transfer to implement. Writing the
+URL and the session key is two PUTs.
+
+### Item 5: weather, partially
+
+`GET /Weather/Sync` appears, followed by a `0x10` stream start and a short
+`0x08` reply - but no forecast payload. Most likely the same
+fetch-it-yourself pattern as the ephemeris, given the cloud credentials
+were just written, but that is an inference and not established: a
+`WeatherUpdateModel.updateWeatherToDevice` exists on the app side, so a
+direct push may happen when the forecast is actually stale. Worth one more
+capture with the weather view opened and the watch's forecast expired.
+
+### What is needed to implement any of this
+
+`0x0e` (PUT) is unimplemented here - `mdswirecodec.cpp` only encodes GET,
+handle fetch, stream start/stop. The capture has 161 real PUT frames to
+build it against, which is the same position the GET work started from.
+
+Note the capture is **not checked in**: it contains the account's
+`STTAuthorization` value in clear.
+
 ## Item 4 - how the watch's GPS data is updated
 
 This is **extended ephemeris**, i.e. A-GPS: a few days of predicted

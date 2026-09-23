@@ -25,6 +25,7 @@
 #include <QDir>
 #include <QFile>
 #include <QDateTime>
+#include <QTextStream>
 
 #include <algorithm>
 #include <cmath>
@@ -33,6 +34,20 @@
 #include <stdexcept>
 
 namespace {
+
+// Appends a probe result to a file next to the app's cache. See the
+// connect() in the constructor for why.
+void appendProbeLog(const QString &text)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(dir);
+    QFile file(dir + QStringLiteral("/probe-log.txt"));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append))
+        return;
+    QTextStream out(&file);
+    out << QDateTime::currentDateTime().toString(Qt::ISODate) << "\n"
+        << text << "\n\n";
+}
 
 QString dbPath()
 {
@@ -544,6 +559,13 @@ AppController::AppController(QObject *parent)
 
     if (!m_healthStore->open(&error))
         emit errorOccurred(tr("Failed to open database: %1").arg(error));
+
+    // Mirror every probe result to a file as well as to the screen. These
+    // are hex dumps read off a phone banner and then retyped by hand, which
+    // is slow and error-prone (one retyped serial already sent me looking
+    // for a path bug that wasn't there). The file can just be copied off.
+    connect(this, &AppController::logbookTestResult, this, appendProbeLog);
+    connect(this, &AppController::whiteboardTestResult, this, appendProbeLog);
 
     if (!m_pairedWatchStore->open(&error)) {
         emit errorOccurred(tr("Failed to open database: %1").arg(error));

@@ -346,6 +346,37 @@ Worth recording: the earlier "known difference" about nil readings being
 omitted rather than written as `null` was **not** the cause, and remains
 untested either way.
 
+### Third attempt: `local64` fields are ISO strings
+
+With summary.json finally in the payload, the server's answer changed from
+a flat 523 to a specific one:
+
+```
+422 {"error":{"code":"322","description":
+     "Header DateTime is not a valid ISO datetime: 1790186340390"}}
+```
+
+Which is exactly right: `Header.DateTime` is `<FRM>local64`, this writer
+was emitting it as the raw millisecond number, and the captured upload has
+`"DateTime": "2026-09-22T15:20:28.420+03:00"`.
+
+The rule is by format, not by field name - four descriptors are `local64`:
+
+| id | field |
+|---|---|
+| 60 | `Sample.UTC` |
+| 74 | `Sample.GpsRef.utc` |
+| 136 | `Header.DateTime` |
+| 211 | `Header.Settings.SgeeEpoTimestamp` |
+
+(32 and 33 are also local64 but are envelope fields, already filtered out.)
+
+All four are now written as ISO strings with the document's offset, the
+same way the entry's own `TimeISO8601` is. Worth noting how much better a
+422 is than a 500 here: the server validates field by field and names the
+field and the value, so each round trip now costs one bug rather than a
+guess.
+
 ## Still open
 
 1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`

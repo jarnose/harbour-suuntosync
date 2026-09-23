@@ -165,6 +165,26 @@ void testFieldsLandWhereTheSchemaSaysTheyShould(const std::string &doc)
     }
 }
 
+// local64 fields are timestamps and the cloud wants ISO strings. Sending
+// raw milliseconds is what the server rejected with "Header DateTime is
+// not a valid ISO datetime: 1790186340390".
+void testTimestampFieldsAreIsoStrings(const std::string &doc)
+{
+    const char *timestampKeys[] = { "\"UTC\":", "\"DateTime\":", "\"utc\":",
+                                     "\"SgeeEpoTimestamp\":" };
+    for (const char *key : timestampKeys) {
+        const size_t at = doc.find(key);
+        if (at == std::string::npos)
+            continue; // not in this fixture
+        const char next = doc[at + std::string(key).size()];
+        check(next == '"', std::string("timestamp field is quoted: ") + key
+                             + " followed by '" + next + "'");
+        // And it must look like a date, not a number in quotes.
+        check(doc.compare(at + std::string(key).size() + 1, 2, "20") == 0,
+               std::string("timestamp field looks like a date: ") + key);
+    }
+}
+
 void testEventsBecomeAnArray(const std::string &doc)
 {
     // "Sample.Events.Array.Lap.Type" must produce Events: [ { Lap: {...} } ].
@@ -207,6 +227,7 @@ int main()
     testDecimalSeparatorSurvivesACommaLocale();
     testEnvelopeMatchesTheCapturedShape(doc);
     testFieldsLandWhereTheSchemaSaysTheyShould(doc);
+    testTimestampFieldsAreIsoStrings(doc);
     testEventsBecomeAnArray(doc);
     testAgainstTheCapturedUploadsKeys(doc);
 

@@ -216,10 +216,22 @@ const char *lapTypeName(double value)
     }
 }
 
-std::string literalFor(const Sml::Reading &reading)
+std::string literalFor(const Sml::Reading &reading, int offsetMinutes)
 {
     if (reading.isText)
         return quote(reading.text);
+
+    // A local64 field is a timestamp, and the cloud wants it as an ISO
+    // string rather than a number. Sending the raw milliseconds is what
+    // the server rejected with "Header DateTime is not a valid ISO
+    // datetime: 1790186340390". Sml::decode has already folded the
+    // timestamp's own UTC offset in (see Sbem::decodeLocal64), so it is
+    // re-stamped with the document's offset, exactly as the entry's own
+    // TimeISO8601 is.
+    if (reading.descriptor->format == SbemDescriptors::Format::Local64) {
+        return quote(Iso8601::formatLocal(static_cast<int64_t>(reading.value),
+                                            offsetMinutes));
+    }
 
     const std::string name = reading.descriptor->name;
     if (name == "Sample.Events.Array.Lap.Type"
@@ -249,14 +261,14 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     };
     std::vector<Entry> entries(chunks.size());
 
-    Sml::decode(chunks, [&entries](const Sml::Reading &reading) {
+    Sml::decode(chunks, [&entries, offsetMinutes](const Sml::Reading &reading) {
         if (reading.chunkIndex >= entries.size() || !reading.descriptor)
             return;
         const char *name = reading.descriptor->name;
         if (!name || name[0] == '\0' || isEnvelopeField(name))
             return;
         Entry &entry = entries[reading.chunkIndex];
-        insert(&entry.root, name, literalFor(reading));
+        insert(&entry.root, name, literalFor(reading, offsetMinutes));
         entry.used = true;
         if (reading.timeMs != 0)
             entry.timeMs = reading.timeMs;

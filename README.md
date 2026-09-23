@@ -1,46 +1,80 @@
 # Suunto Sync
 
-Native Sailfish OS (C++/QML, Silica) app to sync workout history and stats
-from a Suunto smartwatch (Suunto Race primarily, Suunto 9 Baro planned) and
-forward phone notifications to it. Two data paths, built in parallel:
+A native Sailfish OS app (C++/QML, Silica) that talks to a Suunto Race over
+Bluetooth LE and to the Suunto cloud over HTTPS — without the official
+Android app in the loop.
 
-- **Cloud**: sign in to the Suunto account, pull workout history/stats from
-  `cloud-api.suunto.com`.
-- **Direct BLE**: pair with the watch and sync the on-device logbook and push
-  notifications, using the same Movesense "Whiteboard" BLE protocol
-  (`suunto://MDS/...` resource paths) the official app uses internally.
+## What works
 
-## Status
+Confirmed on real hardware, not just in tests:
 
-**Phase 1 (app scaffold) only** — no real features yet. The full phased plan,
-including the three protocol/platform unknowns that gate the BLE and
-notification work, is at
-[`~/.claude/plans/agile-hopping-harp.md`](~/.claude/plans/agile-hopping-harp.md).
+- **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
+  each entry, and decodes it: route, heart rate, altitude, cadence, laps,
+  per-sample charts and the watch's own summary totals.
+- **Workouts from the Suunto cloud**, with route, training metrics and
+  sample data.
+- **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
+  payload is converted to the JSON the cloud expects, zipped and posted. A
+  workout recorded on the watch shows up in the official app afterwards.
+- **Sleep, recovery and daily activity.** Read from the cloud, and read
+  *directly off the watch* — which matters, because a night that the watch
+  has recorded but never uploaded is invisible to every other client.
+  Watch-sourced entries can be pushed up to the cloud too.
 
-Short version of what's still unknown and needs an on-device capture before
-the corresponding phase can be built:
-- **BLE wire framing** (how a Whiteboard request/response is packed into GATT
-  write/notify bytes) — needs a Bluetooth HCI snoop log captured from the
-  official Android app while syncing a real Suunto Race.
-- **Cloud OAuth/API schema** — needs an HTTPS capture (mitmproxy) of the
-  official app's login + workout fetch.
-- **Whether a sandboxed Sailfish app can observe other apps' notifications at
-  all** (needed for the phone→watch bridge) — needs an on-device D-Bus check
-  from an actual `sailjail`-sandboxed install, not devel-mode.
+## What doesn't, yet
+
+- **Notifications to the watch.** The mechanism is understood (see
+  `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
+  costs Jolla Store eligibility — a decision, not a missing feature.
+- **Weather and GPS-ephemeris updates to the watch.** Both are mapped;
+  neither is implemented. They need the `0x0e` PUT verb, which this
+  project does not encode yet.
+- Suunto 9 Baro. Only the Race has been tested.
+
+## How it was built
+
+Nothing here came from a published specification, because there isn't one.
+The protocol was reconstructed from Bluetooth HCI snoop logs, HTTPS
+captures of the official app, and decompiling `libmds.so` and the app's own
+dex. `docs/` carries the results:
+
+| document | what it covers |
+|---|---|
+| `logbook-data-format.md` | the BLE Whiteboard protocol, SBEM containers, the `/Data`, `/Entries` and `/Summary` transports |
+| `sbem-chunk-map.md` | the watch's own 359-field descriptor table, read out of the device |
+| `workout-upload.md` | the cloud's multipart upload, and the health API |
+| `watch-push-resources.md` | sleep and activity timeline files, GPS ephemeris, weather |
+| `notifications.md` | why a sandboxed Sailfish app cannot observe notifications |
+
+Two habits run through the whole thing and are worth stating, because they
+caught real bugs:
+
+**Decoders are Qt-free and tested against golden vectors.** Anything that
+parses bytes lives in plain C++ with STL only, so it compiles and runs with
+`g++` on a desktop. Expected values come from an independent source
+wherever possible — the Suunto cloud's own figures for the same workout,
+Python's `datetime` for epoch conversions, a format's published example —
+rather than from this code's own output.
+
+**Captured bytes beat inference.** Several times a plausible reading of the
+protocol turned out to be wrong and only a real capture settled it: the
+sleep resource path that does not exist on the wire, a parameter prefix
+that looked like a length and was a type code, and an upload that failed
+four times for four unrelated reasons. The commit messages record which
+guesses were wrong, deliberately.
 
 ## Building
 
-Open in Qt Creator with the Sailfish OS SDK, or via `sfdk`/`mb2` from the
-command line; dependencies resolve via `pkg-config` inside the build engine.
+Sailfish SDK, CMake. `zlib` is the only dependency beyond Qt5 and
+sailfishapp.
 
-This project has never used Qt Bluetooth before (see
-`rpm/harbour-suuntosync.spec`'s note on `pkgconfig(Qt5Bluetooth)`) — if the
-build fails to find it, check the exact package name inside the build engine
-with `pkgconfig --list-all | grep -i bluetooth` and fix the spec/CMakeLists.
+The golden-vector tests need fixtures that are **not** in this repository —
+they are real captures containing GPS tracks and sleep data. See
+`tests/README.md`.
 
-## Security model
+## Licence
 
-Suunto account OAuth tokens are stored in the **Sailfish Secrets vault**
-(same pattern as `harbour-otpcove`'s `src/secrets/secretvault.cpp`), never in
-plain text on disk. Everything else (workout metadata, paired watch info) is
-a plain SQLite database in the app's data directory.
+MIT. Vendored: [heatshrink](https://github.com/atomicobject/heatshrink)
+(ISC, unmodified, in `src/ble/heatshrink/`).
+
+Not affiliated with or endorsed by Suunto or Sports Tracker.

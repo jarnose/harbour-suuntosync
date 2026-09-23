@@ -78,6 +78,14 @@ Page {
         PullDownMenu {
             busy: AppController.healthSyncInProgress
             MenuItem {
+                // Straight from the watch - no Suunto account involved, and
+                // it finds nights the watch hasn't uploaded yet.
+                visible: AppController.whiteboardReady
+                text: qsTr("Sync sleep from watch")
+                onClicked: AppController.syncWatchHealth()
+            }
+            MenuItem {
+                visible: AppController.cloudSignedIn
                 text: qsTr("Sync health data")
                 onClicked: AppController.syncHealthData()
             }

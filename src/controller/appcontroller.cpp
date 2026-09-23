@@ -12,6 +12,7 @@
 #include "../ble/logbookdecoder.h"
 #include "../ble/summarydecoder.h"
 #include "../ble/smldecoder.h"
+#include "../ble/sleepdecoder.h"
 #include "../cloud/polyline.h"
 #include "../cloud/smljson.h"
 #include "../cloud/zipwriter.h"
@@ -1096,6 +1097,114 @@ void AppController::uploadWorkoutToCloud(const QString &key)
             m_workoutStore->markSmlUploaded(key, cloudKey, nullptr);
             emit workoutUploaded(key, true, tr("Uploaded to Suunto"));
         });
+    });
+}
+
+// Renders a decoded night into the JSON the cloud uses, field for field,
+// so both sources land in one table and one page. Names and units are the
+// cloud's: quality as 0..1 rather than the file's percent, heart rate left
+// in hertz because that is what the cloud stores too.
+static QByteArray sleepEntryJson(const SleepTimeline::Night &night)
+{
+    QJsonObject o;
+    o.insert(QStringLiteral("duration"), night.durationSeconds);
+    o.insert(QStringLiteral("deepSleepDuration"), night.deepSeconds);
+    o.insert(QStringLiteral("lightSleepDuration"), night.lightSeconds);
+    o.insert(QStringLiteral("remSleepDuration"), night.remSeconds);
+    o.insert(QStringLiteral("sleepOnsetLatencyDuration"), night.onsetLatencySeconds);
+    o.insert(QStringLiteral("wakeAfterSleepOnsetDuration"), night.wakeAfterOnsetSeconds);
+    o.insert(QStringLiteral("wakeBeforeOffBedDuration"), night.wakeBeforeOffBedSeconds);
+    o.insert(QStringLiteral("hrAvg"), night.heartRateAvgHz);
+    o.insert(QStringLiteral("hrMin"), night.heartRateMinHz);
+    o.insert(QStringLiteral("maxSpo2"), night.maxSpo2);
+    o.insert(QStringLiteral("altitude"), night.altitudeMetres);
+    o.insert(QStringLiteral("avgHrv"), night.hrvAverageMs);
+    o.insert(QStringLiteral("avgHrvSampleCount"), night.hrvSampleCount);
+    o.insert(QStringLiteral("quality"), night.qualityPercent / 100.0);
+    o.insert(QStringLiteral("sleepId"), static_cast<qint64>(night.sleepId));
+    o.insert(QStringLiteral("isNap"), night.isNap);
+    return QJsonDocument(o).toJson(QJsonDocument::Compact);
+}
+
+static QString stageName(SleepTimeline::Stage stage)
+{
+    switch (stage) {
+    case SleepTimeline::Stage::Awake: return QStringLiteral("AWAKE");
+    case SleepTimeline::Stage::Rem:   return QStringLiteral("REM");
+    case SleepTimeline::Stage::Light: return QStringLiteral("LIGHT");
+    case SleepTimeline::Stage::Deep:  return QStringLiteral("DEEP");
+    }
+    return QStringLiteral("AWAKE");
+}
+
+void AppController::syncWatchHealth()
+{
+    if (!m_whiteboardReady) {
+        emit errorOccurred(tr("Connect the watch first."));
+        return;
+    }
+    if (m_healthSyncInProgress || m_workoutSyncInProgress) {
+        emit errorOccurred(tr("A sync is already in progress."));
+        return;
+    }
+
+    m_healthSyncInProgress = true;
+    emit healthSyncInProgressChanged();
+
+    // Ask for everything newer than what is already stored, falling back to
+    // a fortnight on an empty database - the watch keeps a limited history
+    // anyway, so asking for more costs nothing.
+    qint64 since = m_healthStore->newestTimestamp(QStringLiteral("sleep"));
+    if (since == 0)
+        since = QDateTime::currentMSecsSinceEpoch() - 14LL * 24 * 3600 * 1000;
+
+    m_whiteboardClient->fetchTimelineFile(
+            QStringLiteral("/Daily/Sleep/Timeline/Data"),
+            QStringLiteral("mdsSlp.sbm"), since,
+            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+        m_healthSyncInProgress = false;
+        emit healthSyncInProgressChanged();
+
+        if (!ok) {
+            emit errorOccurred(tr("Could not read sleep from the watch: %1").arg(error));
+            return;
+        }
+
+        const std::vector<SleepTimeline::Night> nights =
+                SleepTimeline::decode(Sbem::parseContainer(data));
+        if (nights.empty()) {
+            emit errorOccurred(tr("The watch returned %1 bytes but no readable nights.")
+                                .arg(data.size()));
+            return;
+        }
+
+        QVector<HealthEntry> entries;
+        for (const SleepTimeline::Night &night : nights) {
+            HealthEntry entry;
+            entry.kind = QStringLiteral("sleep");
+            entry.timestamp = night.startMs;
+            entry.data = sleepEntryJson(night);
+            entries.append(entry);
+
+            for (const SleepTimeline::StageSample &stage : night.stages) {
+                QJsonObject o;
+                o.insert(QStringLiteral("stage"), stageName(stage.stage));
+                o.insert(QStringLiteral("duration"),
+                          static_cast<double>(stage.durationSeconds));
+                HealthEntry stageEntry;
+                stageEntry.kind = QStringLiteral("sleepstages");
+                stageEntry.timestamp = stage.startMs;
+                stageEntry.data = QJsonDocument(o).toJson(QJsonDocument::Compact);
+                entries.append(stageEntry);
+            }
+        }
+
+        QString storeError;
+        if (!m_healthStore->upsert(entries, &storeError)) {
+            emit errorOccurred(tr("Could not save sleep data: %1").arg(storeError));
+            return;
+        }
+        emit healthDataChanged();
     });
 }
 

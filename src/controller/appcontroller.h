@@ -220,6 +220,17 @@ public:
     // 2026-09-21 only reached the cloud when the watch was finally synced.
     Q_INVOKABLE void syncHealthData();
 
+    // The same sleep data, read straight off the watch instead of from the
+    // cloud (item 3 of the 2026-09-22 list). Decodes the watch's timeline
+    // file and stores it in exactly the shape the cloud sync produces, so
+    // HealthPage shows it without knowing where it came from - and so a
+    // night that reached the watch but never reached the cloud still shows
+    // up, which is the case that started this.
+    //
+    // Entries are keyed by (kind, timestamp), so a night synced both ways
+    // is stored once rather than twice.
+    Q_INVOKABLE void syncWatchHealth();
+
     // Stored entries for one kind, newest first, as
     // { timestamp, <the entryData fields, flattened> } - the payload's own
     // field names are passed through untouched rather than mapped, since

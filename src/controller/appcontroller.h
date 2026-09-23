@@ -121,13 +121,13 @@ public:
     // and daily-activity data be read over BLE, rather than only from the
     // cloud after the watch has uploaded it?
     //
-    // suunto://MDS/Sleep/%s/Entries and /Activity/%s/Entries are real
-    // resources (APK string table, docs/watch-push-resources.md) but
-    // nothing is known about what they reply with. This issues the same
-    // two-step exchange /Logbook/Entries needs and reports the raw
-    // response as a hex dump, because the honest first question is "does
-    // anything come back at all" - guessing a decoder before seeing bytes
-    // is what cost three attempts on /Entries itself.
+    // Uses the mechanism the 2026-09-23 capture revealed: the watch
+    // renders a timeline file and we page it off its filesystem. The first
+    // version of this probe asked for "/Sleep/<serial>/Entries", which the
+    // capture showed does not exist on the wire at all - that path is an
+    // MDS-library abstraction on the Android side. Still a hex dump rather
+    // than a decoder: the payload is SBEM0102, and this project has only
+    // ever parsed 0103.
     //
     // `kind` is "Sleep" or "Activity".
     Q_INVOKABLE void testHealthResourceFetch(const QString &kind);
@@ -328,5 +328,4 @@ private:
     void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
     // Builds the sml.zip for one workout from its stored raw payloads.
     QByteArray buildUploadZip(const QString &key) const;
-    void probeHealthPathAt(const QStringList &paths, int index, const QStringList &results);
 };

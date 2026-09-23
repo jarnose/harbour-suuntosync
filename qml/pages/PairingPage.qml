@@ -119,17 +119,16 @@ Page {
                 onClicked: AppController.testEntriesFetch()
             }
             MenuItem {
-                // Item 3 of the list: probing whether sleep can be read
-                // from the watch directly rather than only from the cloud.
-                // Reports the raw reply as hex - see
-                // AppController::testHealthResourceFetch().
+                // Item 3: reading sleep from the watch directly rather
+                // than via the cloud. Renders the watch's timeline file and
+                // pages it off - see AppController::testHealthResourceFetch().
                 visible: AppController.watchConnected
-                text: qsTr("Probe /Sleep/<serial>/Entries")
+                text: qsTr("Fetch sleep timeline")
                 onClicked: AppController.testHealthResourceFetch("Sleep")
             }
             MenuItem {
                 visible: AppController.watchConnected
-                text: qsTr("Probe /Activity/<serial>/Entries")
+                text: qsTr("Fetch activity timeline")
                 onClicked: AppController.testHealthResourceFetch("Activity")
             }
         }

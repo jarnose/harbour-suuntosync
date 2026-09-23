@@ -841,61 +841,48 @@ void AppController::testHealthResourceFetch(const QString &kind)
         return;
     }
 
-    // Two candidate spellings, tried in order.
-    //
-    // The APK's string table has "suunto://MDS/Sleep/%s/Entries", but the
-    // %s there is the MDS library's *device* handle on the Android side -
-    // the path this project actually talks to over BLE for the equivalent
-    // logbook resource is plain "/Logbook/Entries", with no serial. So the
-    // serial-less form is the better bet and goes first; the serial form is
-    // kept because being wrong about that is cheap and finding out is not.
-    const QString serial = m_pairedWatch.name.section(QLatin1Char(' '), -1).trimmed();
-    QStringList paths;
-    paths << QStringLiteral("/%1/Entries").arg(kind);
-    if (!serial.isEmpty())
-        paths << QStringLiteral("/%1/%2/Entries").arg(kind, serial);
-    // Control: a path known to work, fetched the same way. Without it a
-    // short reply is ambiguous - it could mean "no such resource" or "this
-    // is what a reply looks like". With it, the difference is visible in
-    // the same report.
-    paths << QStringLiteral("/Logbook/Entries");
-
-    m_logbookTestInFlight = true;
-    probeHealthPathAt(paths, 0, QStringList());
-}
-
-// Walks the candidate paths one at a time - the Whiteboard link is strictly
-// one request in flight - collecting a line per attempt so the report shows
-// what every spelling replied, not just the first that didn't fail.
-void AppController::probeHealthPathAt(const QStringList &paths, int index,
-                                       const QStringList &results)
-{
-    if (index >= paths.size()) {
-        m_logbookTestInFlight = false;
-        emit logbookTestResult(results.join(QStringLiteral("\n\n")));
-        return;
+    // The real mechanism, from the 2026-09-23 capture: the watch renders a
+    // timeline file and we page it off the filesystem. The earlier probe
+    // used "/Sleep/<serial>/Entries", which the capture showed never
+    // exists on the wire - it is an MDS-library abstraction on the Android
+    // side, and the watch answered every spelling of it with the six-byte
+    // f5 error.
+    QString resource, filename;
+    if (kind == QLatin1String("Sleep")) {
+        resource = QStringLiteral("/Daily/Sleep/Timeline/Data");
+        filename = QStringLiteral("mdsSlp.sbm");
+    } else {
+        // Seen in the same capture next to the sleep fetch. The filename is
+        // a guess by analogy and may well be wrong - if it is, the read
+        // will fail rather than return something misleading.
+        resource = QStringLiteral("/Activity/Moments/Sync/Data");
+        filename = QStringLiteral("mdsAct.sbm");
     }
 
-    const QString path = paths.at(index);
-    m_whiteboardClient->fetchStructuredRaw(path,
-            [this, paths, index, results, path]
-            (bool ok, const std::vector<uint8_t> &body, const QString &error) {
-        QStringList next = results;
+    // A week back. The capture used roughly a day; a week is a harmless
+    // widening for a probe and shows whether the cursor is honoured.
+    const qint64 newerThan = QDateTime::currentMSecsSinceEpoch() - 7LL * 24 * 3600 * 1000;
+
+    m_logbookTestInFlight = true;
+    m_whiteboardClient->fetchTimelineFile(resource, filename, newerThan,
+            [this, resource, filename](bool ok, const std::vector<uint8_t> &data,
+                                        const QString &error) {
+        m_logbookTestInFlight = false;
         if (!ok) {
-            next.append(tr("%1: %2").arg(path, error));
-        } else {
-            QString hex;
-            for (size_t i = 0; i < body.size() && i < 48; ++i)
-                hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
-            QString ascii;
-            for (size_t i = 0; i < body.size() && i < 32; ++i) {
-                const uint8_t c = body[i];
-                ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
-            }
-            next.append(tr("%1: %2 bytes\n%3\n\"%4\"")
-                        .arg(path).arg(body.size()).arg(hex.trimmed(), ascii));
+            emit logbookTestResult(tr("%1 (%2): %3").arg(resource, filename, error));
+            return;
         }
-        probeHealthPathAt(paths, index + 1, next);
+
+        QString hex;
+        for (size_t i = 0; i < data.size() && i < 32; ++i)
+            hex += QStringLiteral("%1 ").arg(data[i], 2, 16, QLatin1Char('0'));
+        QString ascii;
+        for (size_t i = 0; i < data.size() && i < 48; ++i) {
+            const uint8_t c = data[i];
+            ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
+        }
+        emit logbookTestResult(tr("%1: %2 bytes\n%3\n\"%4\"")
+                                .arg(resource).arg(data.size()).arg(hex.trimmed(), ascii));
     });
 }
 

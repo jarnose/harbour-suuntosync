@@ -103,6 +103,27 @@ public:
     // succeed with nonsense.
     void fetchStructuredRaw(const QString &path, DataCallback callback);
 
+    // Reads one of the watch's rendered timeline files - how sleep and
+    // daily activity actually come off the device (docs/watch-push-
+    // resources.md). Three steps, all confirmed against the 2026-09-23
+    // capture:
+    //
+    //   1. GET `resourcePath` (e.g. "/Daily/Sleep/Timeline/Data")
+    //   2. a parameterised handle fetch carrying `newerThanMs` and
+    //      `filename` - this is what makes the watch render the file
+    //   3. GET /Dev/FileSystem/Stream, then paged reads of `filename` at
+    //      increasing offsets until the watch stops saying "continue"
+    //
+    // The payload is an SBEM container, but version 0102 rather than the
+    // 0103 a workout carries - close, and deliberately not assumed
+    // identical.
+    //
+    // The official app deletes the file afterwards; this does not, because
+    // deleting needs the PUT verb which isn't encoded yet. The watch
+    // overwrites it on the next fetch, so the cost is one stale file.
+    void fetchTimelineFile(const QString &resourcePath, const QString &filename,
+                            qint64 newerThanMs, DataCallback callback);
+
     // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
     // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at
     // increasing byte offsets until a page comes back marked "last" (see
@@ -169,6 +190,13 @@ private:
     // One step of fetchSummary()'s page loop: reads at the given offset,
     // appends the payload to collected, and either recurses for the next
     // page or hands the whole thing to callback.
+    // Shared by /Summary's paged reads and the timeline-file reads: the
+    // reply framing is identical (19-byte header, 100 = continue,
+    // 200 = last), only the request differs, so the encoder is a parameter.
+    using PageRequestEncoder = std::function<std::vector<uint8_t>(uint16_t, uint32_t)>;
+    void readPages(PageRequestEncoder encoder, uint32_t offset,
+                    std::vector<uint8_t> collected, DataCallback callback);
+
     void readNextPage(const std::vector<uint8_t> &ackBody, uint32_t offset,
                        std::vector<uint8_t> collected, DataCallback callback);
 

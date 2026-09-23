@@ -475,9 +475,17 @@ void MdsWhiteboardClient::fetchSummary(const QString &path, DataCallback callbac
 void MdsWhiteboardClient::readNextPage(const std::vector<uint8_t> &ackBody, uint32_t offset,
                                         std::vector<uint8_t> collected, DataCallback callback)
 {
-    getRaw([ackBody, offset](uint16_t requestId) {
-        return Mds::encodePagedReadRequest(requestId, ackBody, offset);
-    }, [this, ackBody, offset, collected, callback]
+    readPages([ackBody](uint16_t requestId, uint32_t at) {
+        return Mds::encodePagedReadRequest(requestId, ackBody, at);
+    }, offset, collected, callback);
+}
+
+void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
+                                     std::vector<uint8_t> collected, DataCallback callback)
+{
+    getRaw([encoder, offset](uint16_t requestId) {
+        return encoder(requestId, offset);
+    }, [this, encoder, offset, collected, callback]
             (bool ok, const Mds::Frame &frame, const QString &error) mutable {
         if (!ok) {
             callback(false, {}, tr("Paged read at offset %1 failed: %2").arg(offset).arg(error));
@@ -502,7 +510,61 @@ void MdsWhiteboardClient::readNextPage(const std::vector<uint8_t> &ackBody, uint
             callback(true, collected, QString());
             return;
         }
-        readNextPage(ackBody, offset + static_cast<uint32_t>(payloadSize), collected, callback);
+        readPages(encoder, offset + static_cast<uint32_t>(payloadSize), collected, callback);
+    });
+}
+
+void MdsWhiteboardClient::fetchTimelineFile(const QString &resourcePath,
+                                             const QString &filename,
+                                             qint64 newerThanMs, DataCallback callback)
+{
+    const std::string name = filename.toStdString();
+
+    // Step 1: GET the timeline resource.
+    getRaw([resourcePath](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, resourcePath.toStdString());
+    }, [this, resourcePath, name, newerThanMs, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(resourcePath, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body").arg(resourcePath));
+            return;
+        }
+
+        // Step 2: ask the watch to render the file.
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, newerThanMs, name](uint16_t requestId) {
+            return Mds::encodeTimelineFileFetch(requestId, ackBody,
+                                                 static_cast<int64_t>(newerThanMs), name);
+        }, [this, name, callback](bool renderOk, const Mds::Frame &, const QString &renderError) {
+            if (!renderOk) {
+                callback(false, {}, tr("Timeline render request failed: %1").arg(renderError));
+                return;
+            }
+
+            // Step 3: open the filesystem stream and page the file off.
+            getRaw([](uint16_t requestId) {
+                return Mds::encodeGetRequest(requestId, "/Dev/FileSystem/Stream");
+            }, [this, name, callback]
+                    (bool streamOk, const Mds::Frame &streamAck, const QString &streamError) {
+                if (!streamOk) {
+                    callback(false, {}, tr("GET /Dev/FileSystem/Stream failed: %1")
+                                          .arg(streamError));
+                    return;
+                }
+                if (streamAck.body.size() < 6) {
+                    callback(false, {}, tr("Filesystem stream acked with a short body"));
+                    return;
+                }
+                const std::vector<uint8_t> streamHandle = streamAck.body;
+                readPages([streamHandle, name](uint16_t requestId, uint32_t at) {
+                    return Mds::encodeFileReadRequest(requestId, streamHandle, name, at);
+                }, 0, {}, callback);
+            });
+        });
     });
 }
 

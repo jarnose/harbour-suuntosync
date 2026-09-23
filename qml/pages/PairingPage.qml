@@ -118,6 +118,20 @@ Page {
                 text: qsTr("Test /Entries shortcut")
                 onClicked: AppController.testEntriesFetch()
             }
+            MenuItem {
+                // Item 3 of the list: probing whether sleep can be read
+                // from the watch directly rather than only from the cloud.
+                // Reports the raw reply as hex - see
+                // AppController::testHealthResourceFetch().
+                visible: AppController.watchConnected
+                text: qsTr("Probe /Sleep/<serial>/Entries")
+                onClicked: AppController.testHealthResourceFetch("Sleep")
+            }
+            MenuItem {
+                visible: AppController.watchConnected
+                text: qsTr("Probe /Activity/<serial>/Entries")
+                onClicked: AppController.testHealthResourceFetch("Activity")
+            }
         }
 
         delegate: ListItem {

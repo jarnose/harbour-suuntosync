@@ -117,6 +117,21 @@ public:
     // entry ids via logbookTestResult() or the failure.
     Q_INVOKABLE void testEntriesFetch();
 
+    // Probe for item 3 of the 2026-09-22 list: can the watch's own sleep
+    // and daily-activity data be read over BLE, rather than only from the
+    // cloud after the watch has uploaded it?
+    //
+    // suunto://MDS/Sleep/%s/Entries and /Activity/%s/Entries are real
+    // resources (APK string table, docs/watch-push-resources.md) but
+    // nothing is known about what they reply with. This issues the same
+    // two-step exchange /Logbook/Entries needs and reports the raw
+    // response as a hex dump, because the honest first question is "does
+    // anything come back at all" - guessing a decoder before seeing bytes
+    // is what cost three attempts on /Entries itself.
+    //
+    // `kind` is "Sleep" or "Activity".
+    Q_INVOKABLE void testHealthResourceFetch(const QString &kind);
+
     // The real end-user "sync directly from the watch" action, now that
     // both halves are proven on real hardware:
     // MdsWhiteboardClient::fetchLogEntries() (see testEntriesFetch()) lists

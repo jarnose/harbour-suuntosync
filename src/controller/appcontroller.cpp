@@ -808,6 +808,53 @@ void AppController::testEntriesFetch()
     });
 }
 
+void AppController::testHealthResourceFetch(const QString &kind)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+
+    // The serial, as the resource path spells it - the same last-word rule
+    // smlSourceFor() uses on the BlueZ device name.
+    const QString serial = m_pairedWatch.name.section(QLatin1Char(' '), -1).trimmed();
+    if (serial.isEmpty()) {
+        emit logbookTestResult(tr("No paired watch serial to build the path from"));
+        return;
+    }
+    const QString path = QStringLiteral("/%1/%2/Entries").arg(kind, serial);
+
+    m_logbookTestInFlight = true;
+    m_whiteboardClient->fetchStructuredRaw(path,
+            [this, path](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(tr("%1: %2").arg(path, error));
+            return;
+        }
+
+        // First 48 bytes as hex - enough to recognise an SBEM container
+        // ("SBEM0103"), a protocol_v9 structure header, or an error code,
+        // without flooding a phone-sized label.
+        QString hex;
+        for (size_t i = 0; i < body.size() && i < 48; ++i)
+            hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
+
+        QString ascii;
+        for (size_t i = 0; i < body.size() && i < 32; ++i) {
+            const uint8_t c = body[i];
+            ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
+        }
+
+        emit logbookTestResult(tr("%1: %2 bytes\n%3\n\"%4\"")
+                                .arg(path).arg(body.size()).arg(hex.trimmed(), ascii));
+    });
+}
+
 void AppController::loginToCloud(const QString &email, const QString &password)
 {
     if (m_cloudLoginInProgress)

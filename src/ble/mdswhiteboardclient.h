@@ -91,6 +91,18 @@ public:
     // fetchLogbookData()'s own stream-trigger mechanism for /Entries.
     void fetchLogEntries(const QString &path, EntriesCallback callback);
 
+    // The same two-step exchange fetchLogEntries() uses - GET, then a
+    // TYPE=0x0D handle fetch built from the ack - but handing back the raw
+    // response body instead of running it through LogEntries::decode().
+    //
+    // For probing resources whose structure isn't known yet:
+    // /Sleep/<serial>/Entries and /Activity/<serial>/Entries are real
+    // resources (they're in the APK's string table, see
+    // docs/watch-push-resources.md) but nothing here knows what they reply
+    // with. Decoding them as logbook entries would either fail or, worse,
+    // succeed with nonsense.
+    void fetchStructuredRaw(const QString &path, DataCallback callback);
+
     // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
     // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at
     // increasing byte offsets until a page comes back marked "last" (see

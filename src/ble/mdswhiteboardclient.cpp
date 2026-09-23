@@ -429,6 +429,32 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
     });
 }
 
+void MdsWhiteboardClient::fetchStructuredRaw(const QString &path, DataCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ackFrame, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        try {
+            const std::vector<uint8_t> ackBody = ackFrame.body;
+            getRaw([ackBody](uint16_t requestId) {
+                return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
+            }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+                if (!fetchOk) {
+                    callback(false, {}, tr("Fetch failed: %1").arg(fetchError));
+                    return;
+                }
+                callback(true, frame.body, QString());
+            });
+        } catch (const std::exception &e) {
+            callback(false, {}, tr("Could not build the fetch trigger: %1").arg(e.what()));
+        }
+    });
+}
+
 void MdsWhiteboardClient::fetchSummary(const QString &path, DataCallback callback)
 {
     getRaw([path](uint16_t requestId) {

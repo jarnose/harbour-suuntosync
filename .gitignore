@@ -7,3 +7,12 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 bin/
+
+# Test fixtures are real captures off Jarno's own watch: GPS tracks whose
+# start point is his home to within a few metres, twelve nights of sleep
+# with heart rate and HRV, and the watch serial. They stay on this machine
+# and out of the public repository.
+#
+# The tests need them, so a clone cannot run the golden-vector suite -
+# see tests/README.md for what they are and how to regenerate them.
+tests/fixtures/

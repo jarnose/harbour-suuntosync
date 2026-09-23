@@ -34,6 +34,56 @@ Worth noting: the cloud already has this data (item 1, now implemented), so
 reading it from the watch directly is an improvement rather than the only
 route - it would mean sleep without a Suunto account round-trip.
 
+### What the probe settled (2026-09-23)
+
+Ran on real hardware. Three paths, one request each, same code path:
+
+| path | bytes | first byte |
+|---|---|---|
+| `/Logbook/Entries` (control) | 170 | `f0` |
+| `/Sleep/Entries` | 6 | `f5` |
+| `/Sleep/<serial>/Entries` | 6 | `f5` |
+
+So **`f5 01 00 80 00 00` is this protocol's error reply** - six bytes, and
+identical for two different resources. `f0` is the success marker, the same
+one the request itself carries. Worth knowing generally: a short `f5` body
+means the request was rejected, not that the resource is empty.
+
+Then the APK said why. `SpartanBt.fetchSleepSamples(long since)`:
+
+```java
+path = String.format("suunto://MDS/Sleep/%s/Entries", watchBt.getSerial())
+body = moshi.adapter(SuuntoSleepDataContract.class)
+            .toJson(new SuuntoSleepDataContract(since))
+MdsRx.getWithHeader(path, body)
+```
+
+Two corrections to what this doc assumed:
+
+1. **`%s` really is the serial.** The original path spelling was right; the
+   serial-less guess (reasoning by analogy from `/Logbook/Entries`) was
+   wrong.
+2. **The request carries a JSON body.** `getWithHeader`, not a plain GET.
+   `SuuntoSleepDataContract` is a single `long`, and its Moshi adapter
+   names the field **`NewerThan`** - so the body is
+   `{"NewerThan": <timestamp>}`, the incremental cursor.
+
+`/Logbook/Entries` needs no body, which is why the existing code never had
+to send one.
+
+**What is still missing**: how a body is framed on the wire. This
+project's `Mds::encodeGetRequest()` builds
+`[0x01 verb][0x80 0x00][PATHLEN][path]` and stops there; where the JSON
+goes after that - appended, length-prefixed, or a different message type
+entirely - is not recoverable from the APK, because `getWithHeader` is
+implemented inside `libmds.so`.
+
+The cheapest way to find out is a `btmon` capture on the S7 while the
+official app syncs, since that device already has the app and the watch
+paired. One sleep fetch in that trace shows the exact bytes, the same way
+the original capture cracked `/Logbook/Entries`. Decompiling `libmds.so`'s
+`getWithHeader` is the fallback, and slower.
+
 ## Item 4 - how the watch's GPS data is updated
 
 This is **extended ephemeris**, i.e. A-GPS: a few days of predicted

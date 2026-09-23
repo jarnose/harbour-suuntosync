@@ -932,19 +932,50 @@ void AppController::fetchHealthKindAt(int index, int fetched, const QStringList 
 
 bool AppController::canUploadWorkout(const QString &key) const
 {
+    QByteArray data;
     return m_cloudAccount.isSignedIn()
-            && !m_workoutStore->loadSml(key).isEmpty()
+            && m_workoutStore->loadSmlSources(key, &data, nullptr)
             && !m_workoutStore->isSmlUploaded(key);
+}
+
+// Rebuilds the upload payload from the stored raw /Data and /Summary.
+// Empty if this workout has none - which is the case for anything synced
+// before saveSmlSources() existed, and for a cloud workout.
+QByteArray AppController::buildUploadZip(const QString &key) const
+{
+    QByteArray data, summary;
+    if (!m_workoutStore->loadSmlSources(key, &data, &summary))
+        return QByteArray();
+
+    // Timestamps come from the stored workout, not from "now".
+    qint64 startTime = 0;
+    qint64 stopTime = 0;
+    for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
+        if (w.key == key) {
+            startTime = w.startTime;
+            stopTime = w.stopTime;
+            break;
+        }
+    }
+
+    const std::vector<uint8_t> dataVec(
+            reinterpret_cast<const uint8_t *>(data.constData()),
+            reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
+    const std::vector<uint8_t> summaryVec(
+            reinterpret_cast<const uint8_t *>(summary.constData()),
+            reinterpret_cast<const uint8_t *>(summary.constData()) + summary.size());
+    return buildSmlZip(dataVec, summaryVec, smlSourceFor(m_pairedWatch.name),
+                        startTime, stopTime);
 }
 
 void AppController::uploadWorkoutToCloud(const QString &key)
 {
     if (m_uploadInProgress)
         return;
-    const QByteArray zip = m_workoutStore->loadSml(key);
+    const QByteArray zip = buildUploadZip(key);
     if (zip.isEmpty()) {
         emit workoutUploaded(key, false,
-                              tr("Nothing to upload - this workout was not synced from the watch."));
+                              tr("Nothing to upload - sync this workout from the watch first."));
         return;
     }
     if (m_workoutStore->isSmlUploaded(key)) {
@@ -1401,15 +1432,19 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 if (!lapsJson.isEmpty())
                     m_workoutStore->saveLaps(w.key, lapsJson, nullptr);
 
-                // Build the cloud upload payload now, while both raw
-                // payloads are in hand - rebuilding it later would mean
-                // going back to the watch. Storing it is not sending it;
-                // see uploadWorkoutToCloud().
-                const QByteArray zip = buildSmlZip(
-                        data, summaryOk ? payload : std::vector<uint8_t>(),
-                        smlSourceFor(m_pairedWatch.name), w.startTime, w.stopTime);
-                if (!zip.isEmpty())
-                    m_workoutStore->saveSml(w.key, zip, nullptr);
+                // Keep the raw payloads for a later cloud upload - they
+                // can't be refetched without going back to the watch. The
+                // zip is built at upload time from these, so a fix to the
+                // JSON writer takes effect without re-syncing (see
+                // WorkoutStore::saveSmlSources()).
+                m_workoutStore->saveSmlSources(
+                        w.key,
+                        QByteArray(reinterpret_cast<const char *>(data.data()),
+                                    static_cast<int>(data.size())),
+                        summaryOk ? QByteArray(reinterpret_cast<const char *>(payload.data()),
+                                                static_cast<int>(payload.size()))
+                                  : QByteArray(),
+                        nullptr);
             } else {
                 failuresCopy.append(tr("%1: failed to save (%2)").arg(logbookId, storeError));
             }

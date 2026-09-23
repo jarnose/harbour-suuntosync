@@ -114,18 +114,37 @@ bool WorkoutStore::open(QString *error)
         return false;
     }
 
-    // The upload payload plus its outcome. uploaded_key stays NULL until
-    // the cloud has taken it; see WorkoutStore::saveSml().
+    // The upload inputs plus the outcome. uploaded_key stays NULL until the
+    // cloud has taken it; see WorkoutStore::saveSmlSources().
     QSqlQuery sml(db);
     if (!sml.exec(QStringLiteral(
             "CREATE TABLE IF NOT EXISTS workout_sml ("
             "  key TEXT PRIMARY KEY,"
-            "  zip BLOB NOT NULL,"
+            "  data BLOB,"
+            "  summary BLOB,"
             "  uploaded_key TEXT"
             ")"))) {
         if (error)
             *error = sml.lastError().text();
         return false;
+    }
+
+    // This table first held a finished `zip` column; the rows it left
+    // behind carry a payload built by the old, broken writer, so they are
+    // dropped rather than migrated - the data is re-fetchable from the
+    // watch, and keeping them would silently offer a bad upload.
+    {
+        QSqlQuery legacy(db);
+        if (legacy.exec(QStringLiteral("SELECT zip FROM workout_sml LIMIT 1"))) {
+            legacy.exec(QStringLiteral("DROP TABLE workout_sml"));
+            legacy.exec(QStringLiteral(
+                    "CREATE TABLE workout_sml ("
+                    "  key TEXT PRIMARY KEY,"
+                    "  data BLOB,"
+                    "  summary BLOB,"
+                    "  uploaded_key TEXT"
+                    ")"));
+        }
     }
 
     QSqlQuery details(db);
@@ -369,16 +388,19 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
     return true;
 }
 
-bool WorkoutStore::saveSml(const QString &key, const QByteArray &zip, QString *error)
+bool WorkoutStore::saveSmlSources(const QString &key, const QByteArray &data,
+                                   const QByteArray &summary, QString *error)
 {
     QSqlQuery q(QSqlDatabase::database(m_connectionName));
-    // Deliberately not INSERT OR REPLACE: that would drop uploaded_key and
-    // let a re-sync offer an already-uploaded workout for upload again.
+    // Not INSERT OR REPLACE: that would drop uploaded_key and let a re-sync
+    // offer an already-uploaded workout again.
     q.prepare(QStringLiteral(
-            "INSERT INTO workout_sml (key, zip) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET zip = excluded.zip"));
+            "INSERT INTO workout_sml (key, data, summary) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET data = excluded.data,"
+            " summary = excluded.summary"));
     q.addBindValue(key);
-    q.addBindValue(zip);
+    q.addBindValue(data);
+    q.addBindValue(summary.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(summary));
     if (!q.exec()) {
         if (error)
             *error = q.lastError().text();
@@ -387,14 +409,19 @@ bool WorkoutStore::saveSml(const QString &key, const QByteArray &zip, QString *e
     return true;
 }
 
-QByteArray WorkoutStore::loadSml(const QString &key) const
+bool WorkoutStore::loadSmlSources(const QString &key, QByteArray *data,
+                                   QByteArray *summary) const
 {
     QSqlQuery q(QSqlDatabase::database(m_connectionName));
-    q.prepare(QStringLiteral("SELECT zip FROM workout_sml WHERE key = ?"));
+    q.prepare(QStringLiteral("SELECT data, summary FROM workout_sml WHERE key = ?"));
     q.addBindValue(key);
     if (!q.exec() || !q.next())
-        return QByteArray();
-    return q.value(0).toByteArray();
+        return false;
+    if (data)
+        *data = q.value(0).toByteArray();
+    if (summary)
+        *summary = q.value(1).toByteArray();
+    return !q.value(0).toByteArray().isEmpty();
 }
 
 bool WorkoutStore::markSmlUploaded(const QString &key, const QString &cloudKey, QString *error)

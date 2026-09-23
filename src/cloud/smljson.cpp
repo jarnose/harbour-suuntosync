@@ -34,10 +34,24 @@ void forceDecimalPoint(std::string *text)
 // a JSON writer should emit and what the captured upload shows (an altitude
 // appears as 205.4000000000001 because that is genuinely the nearest
 // double, not because the app padded it).
-std::string formatNumber(double v)
+// `precision` is the schema's own <FRM> precision= for this field, or -1
+// when it has none. It is an *output* rounding, not a storage one: the
+// watch stores heart rate as whole bpm, the canonical value is 80/60 =
+// 1.3333..., and a captured upload writes "HR": 1.33 because Sample.HR is
+// precision=2. Sample.Altitude has no precision= at all, which is why the
+// same capture carries 205.4000000000001 in full.
+//
+// Rounding first and then taking the shortest round-tripping form gives
+// exactly the capture's output: 1.33 stays 1.33, and 2.0 at precision=1
+// prints as "2" rather than "2.0".
+std::string formatNumber(double v, int precision)
 {
     if (!std::isfinite(v))
         return "null"; // JSON has no NaN/Infinity; "no reading" is the honest answer
+    if (precision >= 0 && precision < 18) {
+        const double factor = std::pow(10.0, precision);
+        v = std::round(v * factor) / factor;
+    }
     // Integral values are written without a decimal point, matching the
     // capture ("Distance": 2, not 2.0).
     if (v == std::floor(v) && std::fabs(v) < 9007199254740992.0) {
@@ -217,7 +231,7 @@ std::string literalFor(const Sml::Reading &reading)
     }
     if (reading.descriptor->format == SbemDescriptors::Format::Bool)
         return reading.value != 0 ? "true" : "false";
-    return formatNumber(reading.value);
+    return formatNumber(reading.value, reading.descriptor->precision);
 }
 
 } // namespace

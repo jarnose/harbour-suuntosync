@@ -75,7 +75,7 @@ def parse(descriptors):
         entry = {
             "id": did, "name": short_path(text), "children": [],
             "base": "", "size": 0, "scale": 1.0, "offset": 0.0,
-            "nil": None, "delta_of": 0,
+            "nil": None, "delta_of": 0, "precision": -1,
         }
 
         group = re.match(r"<GRP>([\d,]+)", text)
@@ -101,6 +101,14 @@ def parse(descriptors):
             for part in parts[1:]:
                 if part.startswith("nillable="):
                     entry["nil"] = float(part.split("=", 1)[1])
+                elif part.startswith("precision="):
+                    # Decimal places for *output*, not storage - the cloud's
+                    # own JSON rounds to this (Sample.HR is precision=2, and
+                    # a captured upload has "HR": 1.33 where the raw value is
+                    # 80/60 = 1.3333...). Fields without it, e.g.
+                    # Sample.Altitude, are written at full precision, which
+                    # is why the capture has 205.4000000000001.
+                    entry["precision"] = int(part.split("=", 1)[1])
 
         mod = re.search(r"<MOD>([^\n]*)", text)
         if mod:
@@ -168,6 +176,7 @@ struct Descriptor {
     bool hasNil;            // raw == nil means "no reading"
     double nil;
     uint16_t deltaOf;       // descriptor this is a delta against, 0 if none
+    int8_t precision;       // decimal places when written out; -1 = full
     const uint16_t *children;
     uint16_t childCount;    // >0 means this is a group
 };
@@ -195,12 +204,12 @@ namespace {
         for did in ids:
             d = descriptors[did]
             children = "kChildren%d" % did if d["children"] else "nullptr"
-            f.write('    {%d, "%s", %s, %d, %r, %r, %s, %r, %d, %s, %d},\n' % (
+            f.write('    {%d, "%s", %s, %d, %r, %r, %s, %r, %d, %d, %s, %d},\n' % (
                 did, d["name"], cpp_enum(d["base"]), d["size"],
                 d["scale"], d["offset"],
                 "true" if d["nil"] is not None else "false",
                 d["nil"] if d["nil"] is not None else 0.0,
-                d["delta_of"], children, len(d["children"])))
+                d["delta_of"], d["precision"], children, len(d["children"])))
         f.write("};\n\n} // namespace\n\n")
         f.write("""const Descriptor *find(uint16_t id)
 {

@@ -34,6 +34,7 @@ struct Descriptor {
     bool hasNil;            // raw == nil means "no reading"
     double nil;
     uint16_t deltaOf;       // descriptor this is a delta against, 0 if none
+    int8_t precision;       // decimal places when written out; -1 = full
     const uint16_t *children;
     uint16_t childCount;    // >0 means this is a group
 };

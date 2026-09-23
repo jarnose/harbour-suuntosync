@@ -311,4 +311,6 @@ private:
     // at once, so a failure can name which kind failed and the tally stays
     // simple.
     void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
+    // Builds the sml.zip for one workout from its stored raw payloads.
+    QByteArray buildUploadZip(const QString &key) const;
 };

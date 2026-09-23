@@ -58,13 +58,20 @@ public:
     bool saveLaps(const QString &key, const QByteArray &json, QString *error);
     QByteArray loadLaps(const QString &key) const;
 
-    // The ready-made sml.zip for uploading this workout to the cloud (see
-    // docs/workout-upload.md). Built at sync time, while the raw SBEM is
-    // still in hand, because rebuilding it later would mean fetching from
-    // the watch again. Stored compressed, so a workout costs tens of
-    // kilobytes rather than the megabyte its JSON would.
-    bool saveSml(const QString &key, const QByteArray &zip, QString *error);
-    QByteArray loadSml(const QString &key) const;
+    // The two raw payloads a cloud upload is built from: /Data (still
+    // Heatshrink-compressed, as the watch sent it) and /Summary. Kept
+    // because refetching them would mean going back to the watch.
+    //
+    // Deliberately NOT the finished zip, which is what this stored first.
+    // That was a mistake: a fix to the JSON writer left every already-synced
+    // workout carrying the old broken payload, so correcting a bug meant
+    // re-syncing from the watch to see the correction. Storing the inputs
+    // and building the zip at upload time costs about the same space
+    // (/Data is already compressed) and makes every fix take effect
+    // immediately.
+    bool saveSmlSources(const QString &key, const QByteArray &data,
+                         const QByteArray &summary, QString *error);
+    bool loadSmlSources(const QString &key, QByteArray *data, QByteArray *summary) const;
     // Set once the cloud has accepted it, so the action can stop offering
     // itself and a second tap can't create a duplicate workout up there.
     bool markSmlUploaded(const QString &key, const QString &cloudKey, QString *error);

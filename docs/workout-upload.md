@@ -430,17 +430,13 @@ half right:
 
 ## Still open
 
-1. **The exact field order of `HeaderSerializer.c`, `ServiceHeaderSerializer.b`
-   and the four sub-serializers.** Readable, not yet read.
-2. **`sml.zip`'s contents.** A zip, but of what - the watch's raw SBEM
-   bytes, or Suunto's XML/JSON SML? The cloud's *download* side
-   (`GET workouts/{key}/sml`, which this project now parses) returns JSON,
-   which is suggestive but not proof that the upload side matches.
-3. ~~Whether the SML part may be omitted~~ - **answered: yes**, see above.
-   What an SML part looks like when present is still uncaptured, since that
-   needs a watch-synced workout.
-
-~~There is no golden vector for any of this.~~ **There are two now** - see
-the capture section above. What is still missing is a *watch-synced*
-upload, which is the only way to see an `sml` part; the two captured here
-were both recorded on the phone.
+1. **`workoutBinary`'s exact field order** - `HeaderSerializer.c`,
+   `ServiceHeaderSerializer.b` and the four sub-serializers. Readable, not
+   read. **Not needed**: a watch-recorded upload sends SML instead, and
+   that path works. This stays documented in case a phone-recorded workout
+   ever matters.
+2. **Whether omitting nil readings matters.** The upload succeeds without
+   them, so the difference is confirmed harmless - but it has never been
+   tested the other way.
+3. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
+   been observed non-zero on this watch.

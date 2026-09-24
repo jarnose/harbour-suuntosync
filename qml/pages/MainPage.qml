@@ -35,24 +35,16 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                text: AppController.watchPaired ? qsTr("Change watch") : qsTr("Pair a watch")
-                onClicked: pageStack.push(Qt.resolvedUrl("PairingPage.qml"))
+                // Account and watch used to be two separate pull-down
+                // entries here; they live in Settings now.
+                text: qsTr("Settings")
+                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
             }
             MenuItem {
-                // Sleep, recovery and daily activity, read from the cloud -
-                // see AppController::syncHealthData().
-                visible: AppController.cloudSignedIn
+                // Sleep and recovery, from the cloud or straight off the
+                // watch - so this is useful without an account too.
                 text: qsTr("Health")
                 onClicked: pageStack.push(Qt.resolvedUrl("HealthPage.qml"))
-            }
-            MenuItem {
-                text: AppController.cloudSignedIn ? qsTr("Sign out of Suunto") : qsTr("Sign in to Suunto")
-                onClicked: {
-                    if (AppController.cloudSignedIn)
-                        AppController.logoutFromCloud()
-                    else
-                        pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-                }
             }
             MenuItem {
                 visible: AppController.cloudSignedIn

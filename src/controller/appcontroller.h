@@ -42,6 +42,9 @@ class AppController : public QObject
     Q_PROPERTY(bool workoutSyncInProgress READ isWorkoutSyncInProgress NOTIFY workoutSyncInProgressChanged)
     Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
     Q_PROPERTY(bool healthSyncInProgress READ isHealthSyncInProgress NOTIFY healthSyncInProgressChanged)
+    // What the cover shows. Stored in QSettings; see coverMode().
+    Q_PROPERTY(QString coverMode READ coverMode WRITE setCoverMode NOTIFY coverModeChanged)
+    Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -56,6 +59,24 @@ public:
     bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
+
+    // One of "latest", "totals", "sleep" or "nothing" - what the cover
+    // page draws. A plain string rather than an enum so QML can pass it
+    // straight through to a ComboBox without a registered type.
+    QString coverMode() const { return m_coverMode; }
+    void setCoverMode(const QString &mode);
+
+    // Whether connecting to the watch should start a sync by itself.
+    // Default off: a sync is minutes of radio time, and doing it because
+    // the watch happened to come into range is not obviously what someone
+    // wants.
+    bool syncOnConnect() const { return m_syncOnConnect; }
+    void setSyncOnConnect(bool enabled);
+
+    // Summary for the cover, so CoverPage doesn't reach into models: the
+    // newest workout's name/date/distance, lifetime totals, and last
+    // night's sleep. Empty values where there is nothing to show.
+    Q_INVOKABLE QVariantMap coverSummary() const;
 
     // Defined in the .cpp file, not inline here: DeviceListModel is only
     // forward-declared in this header, so the implicit DeviceListModel* ->
@@ -281,6 +302,8 @@ signals:
     void cloudSamplesInProgressChanged();
     void healthSyncInProgressChanged();
     void healthDataChanged();
+    void coverModeChanged();
+    void syncOnConnectChanged();
     void workoutUploaded(const QString &key, bool ok, const QString &message);
 
 private:
@@ -337,6 +360,9 @@ private:
     // Guards against a second tap while a POST is in flight - the server
     // has no idempotency key, so a double send would create two workouts.
     bool m_uploadInProgress = false;
+
+    QString m_coverMode;
+    bool m_syncOnConnect = false;
 
     HealthStore *m_healthStore;
     bool m_healthSyncInProgress = false;

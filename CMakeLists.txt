@@ -166,6 +166,7 @@ add_custom_target(distfiles
         qml/pages/LoginPage.qml
         qml/pages/WorkoutDetailPage.qml
         qml/pages/HealthPage.qml
+        qml/pages/SettingsPage.qml
         rpm/harbour-suuntosync.spec
         ${TS_FILES})
 

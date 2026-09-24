@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QFile>
 #include <QDateTime>
+#include <QSettings>
 #include <QTextStream>
 
 #include <algorithm>
@@ -566,6 +567,16 @@ AppController::AppController(QObject *parent)
     // are hex dumps read off a phone banner and then retyped by hand, which
     // is slow and error-prone (one retyped serial already sent me looking
     // for a path bug that wasn't there). The file can just be copied off.
+    {
+        // QSettings rather than another SQLite table: these are two
+        // preferences, and Sailfish puts them under the app's own config
+        // directory automatically.
+        QSettings settings;
+        m_coverMode = settings.value(QStringLiteral("cover/mode"),
+                                      QStringLiteral("latest")).toString();
+        m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
+    }
+
     connect(this, &AppController::logbookTestResult, this, appendProbeLog);
     connect(this, &AppController::whiteboardTestResult, this, appendProbeLog);
 
@@ -1355,6 +1366,68 @@ void AppController::uploadHealthKindAt(int index, int sent, const QStringList &f
 int AppController::pendingHealthUploads() const
 {
     return m_healthStore->pendingUploadCount();
+}
+
+void AppController::setCoverMode(const QString &mode)
+{
+    if (mode == m_coverMode)
+        return;
+    m_coverMode = mode;
+    QSettings().setValue(QStringLiteral("cover/mode"), mode);
+    emit coverModeChanged();
+}
+
+void AppController::setSyncOnConnect(bool enabled)
+{
+    if (enabled == m_syncOnConnect)
+        return;
+    m_syncOnConnect = enabled;
+    QSettings().setValue(QStringLiteral("sync/onConnect"), enabled);
+    emit syncOnConnectChanged();
+}
+
+QVariantMap AppController::coverSummary() const
+{
+    QVariantMap out;
+
+    const QVector<Workout> workouts = m_workoutStore->loadAll(nullptr);
+    if (!workouts.isEmpty()) {
+        // loadAll is newest first.
+        const Workout &newest = workouts.first();
+        out.insert(QStringLiteral("hasWorkout"), true);
+        out.insert(QStringLiteral("activityId"), newest.activityId);
+        out.insert(QStringLiteral("source"), newest.source);
+        out.insert(QStringLiteral("startTime"), newest.startTime);
+        out.insert(QStringLiteral("distance"), newest.totalDistance);
+        out.insert(QStringLiteral("duration"), newest.totalTime);
+
+        double totalDistance = 0;
+        double totalTime = 0;
+        for (const Workout &w : workouts) {
+            totalDistance += w.totalDistance;
+            totalTime += w.totalTime;
+        }
+        out.insert(QStringLiteral("count"), workouts.size());
+        out.insert(QStringLiteral("totalDistance"), totalDistance);
+        out.insert(QStringLiteral("totalTime"), totalTime);
+    } else {
+        out.insert(QStringLiteral("hasWorkout"), false);
+    }
+
+    const QVector<HealthEntry> nights = m_healthStore->load(QStringLiteral("sleep"), 1, nullptr);
+    if (!nights.isEmpty()) {
+        const QJsonObject o = QJsonDocument::fromJson(nights.first().data).object();
+        out.insert(QStringLiteral("hasSleep"), true);
+        out.insert(QStringLiteral("sleepStart"), nights.first().timestamp);
+        out.insert(QStringLiteral("sleepDuration"),
+                    o.value(QStringLiteral("duration")).toDouble());
+        out.insert(QStringLiteral("sleepQuality"),
+                    o.value(QStringLiteral("quality")).toDouble());
+    } else {
+        out.insert(QStringLiteral("hasSleep"), false);
+    }
+
+    return out;
 }
 
 QVariantList AppController::healthEntries(const QString &kind, int limit) const

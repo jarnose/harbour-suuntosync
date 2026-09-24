@@ -514,6 +514,67 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
     });
 }
 
+void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallback callback)
+{
+    // Two steps, as captured: GET /Dev/FileSystem/FileDelete for a handle,
+    // then PUT the filename through it.
+    putString(QStringLiteral("/Dev/FileSystem/FileDelete"), filename, callback);
+}
+
+void MdsWhiteboardClient::putString(const QString &path, const QString &value,
+                                     SimpleCallback callback)
+{
+    const std::string text = value.toStdString();
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, text, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, text](uint16_t requestId) {
+            return Mds::encodePutString(requestId, ackBody, text);
+        }, [path, callback](bool putOk, const Mds::Frame &, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("PUT %1 failed: %2").arg(path, putError));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}
+
+void MdsWhiteboardClient::putEmpty(const QString &path, SimpleCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodePut(requestId, ackBody, {});
+        }, [path, callback](bool putOk, const Mds::Frame &, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("PUT %1 failed: %2").arg(path, putError));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::fetchTimelineFile(const QString &resourcePath,
                                              const QString &filename,
                                              qint64 newerThanMs, DataCallback callback)
@@ -562,7 +623,18 @@ void MdsWhiteboardClient::fetchTimelineFile(const QString &resourcePath,
                 const std::vector<uint8_t> streamHandle = streamAck.body;
                 readPages([streamHandle, name](uint16_t requestId, uint32_t at) {
                     return Mds::encodeFileReadRequest(requestId, streamHandle, name, at);
-                }, 0, {}, callback);
+                }, 0, {},
+                [this, name, callback](bool readOk, const std::vector<uint8_t> &data,
+                                        const QString &readError) {
+                    // Step 4: delete the rendered file, as the official app
+                    // does. Best effort - the data is already in hand, so a
+                    // failed cleanup must not fail the fetch. The watch
+                    // overwrites the file next time either way.
+                    deleteWatchFile(QString::fromStdString(name),
+                            [callback, readOk, data, readError](bool, const QString &) {
+                        callback(readOk, data, readError);
+                    });
+                });
             });
         });
     });

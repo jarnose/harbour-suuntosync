@@ -214,6 +214,23 @@ std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
                                                 const std::vector<uint8_t> &ackBody,
                                                 const std::vector<FetchParameter> &parameters);
 
+// A write. Same body as the fetch above - the capture shows PUT frames with
+// zero parameters ("f0 53 0e 01 80 00 00") and with one - and differs only
+// in the frame type, 0x0E.
+//
+// This is what the official app uses to put settings onto the watch: the
+// cloud URL and session key the watch needs for its own WiFi downloads
+// (which is all "syncing GPS performance" actually is), SuuntoPlus plugin
+// ids, the timezone, and deleting a file it asked the watch to render.
+std::vector<uint8_t> encodePut(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                const std::vector<FetchParameter> &parameters);
+
+// The common case: a single NUL-terminated string. Confirmed against three
+// captured writes - a URL, a session key and a plugin id - all of which use
+// type code 0x000C.
+std::vector<uint8_t> encodePutString(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                      const std::string &value);
+
 // The sleep/activity timeline fetch: asks the watch to render everything
 // newer than `newerThanMs` into `filename` on its own filesystem, which is
 // then read back through /Dev/FileSystem/Stream. See

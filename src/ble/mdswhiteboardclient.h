@@ -118,11 +118,30 @@ public:
     // 0103 a workout carries - close, and deliberately not assumed
     // identical.
     //
-    // The official app deletes the file afterwards; this does not, because
-    // deleting needs the PUT verb which isn't encoded yet. The watch
-    // overwrites it on the next fetch, so the cost is one stale file.
+    // The rendered file is deleted afterwards, as the official app does.
+    // That cleanup is best effort: the data is already in hand by then, so
+    // a failed delete does not fail the fetch.
     void fetchTimelineFile(const QString &resourcePath, const QString &filename,
                             qint64 newerThanMs, DataCallback callback);
+
+    // Writes a string to a watch resource: GET the path for a handle, then
+    // PUT through it. This is how the official app configures the watch -
+    // see docs/watch-push-resources.md.
+    //
+    // Deliberately narrow. A write to the wrong resource on someone's
+    // watch is not something to offer a generic API for, so callers name
+    // the path explicitly and there is no "write anything anywhere" entry
+    // point.
+    using SimpleCallback = std::function<void(bool ok, const QString &error)>;
+    void putString(const QString &path, const QString &value, SimpleCallback callback);
+
+    // A PUT with no value - used for the "do this now" resources, and for
+    // deleting a rendered file once its name has been written.
+    void putEmpty(const QString &path, SimpleCallback callback);
+
+    // Removes a file the watch rendered for us. fetchTimelineFile() calls
+    // this itself once the data is read.
+    void deleteWatchFile(const QString &filename, SimpleCallback callback);
 
     // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
     // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <stdexcept>
+#include <string>
 
 namespace Mds {
 
@@ -16,6 +17,10 @@ constexpr uint8_t kTypeGetRequest = 0x0A;
 constexpr uint8_t kTypeStreamStartTrigger = 0x10;
 constexpr uint8_t kTypeStreamStopTrigger = 0x11;
 constexpr uint8_t kTypeHandleFetch = 0x0D;
+// PUT via a handle. The captured app uses it to write settings onto the
+// watch - the cloud URL and session key it needs for its own WiFi
+// downloads, plugin ids, the timezone - and to delete a rendered file.
+constexpr uint8_t kTypePut = 0x0E;
 constexpr uint8_t kGetVerb = 0x01;
 
 std::array<uint32_t, 256> makeCrcTable()
@@ -140,14 +145,19 @@ std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::ve
     return encodeFrame(kTypeHandleFetch, requestId, body);
 }
 
-std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
-                                                const std::vector<uint8_t> &ackBody,
-                                                const std::vector<FetchParameter> &parameters)
+namespace {
+
+// Fetch and PUT share one body layout - [ackBody(6)][count][type16][bytes]...
+// - and differ only in the frame type. Confirmed against captured frames of
+// both kinds.
+std::vector<uint8_t> parameterisedBody(const std::vector<uint8_t> &ackBody,
+                                        const std::vector<FetchParameter> &parameters,
+                                        const char *who)
 {
     if (ackBody.size() < 6)
-        throw std::invalid_argument("encodeParameterisedFetch: ackBody shorter than 6 bytes");
+        throw std::invalid_argument(std::string(who) + ": ackBody shorter than 6 bytes");
     if (parameters.size() > 255)
-        throw std::invalid_argument("encodeParameterisedFetch: too many parameters");
+        throw std::invalid_argument(std::string(who) + ": too many parameters");
 
     std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
     body.push_back(static_cast<uint8_t>(parameters.size()));
@@ -156,7 +166,32 @@ std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
         body.push_back(static_cast<uint8_t>((p.typeCode >> 8) & 0xFF));
         body.insert(body.end(), p.bytes.begin(), p.bytes.end());
     }
-    return encodeFrame(kTypeHandleFetch, requestId, body);
+    return body;
+}
+
+} // namespace
+
+std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
+                                                const std::vector<uint8_t> &ackBody,
+                                                const std::vector<FetchParameter> &parameters)
+{
+    return encodeFrame(kTypeHandleFetch, requestId,
+                        parameterisedBody(ackBody, parameters, "encodeParameterisedFetch"));
+}
+
+std::vector<uint8_t> encodePut(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                const std::vector<FetchParameter> &parameters)
+{
+    return encodeFrame(kTypePut, requestId,
+                        parameterisedBody(ackBody, parameters, "encodePut"));
+}
+
+std::vector<uint8_t> encodePutString(uint16_t requestId, const std::vector<uint8_t> &ackBody,
+                                      const std::string &value)
+{
+    std::vector<uint8_t> bytes(value.begin(), value.end());
+    bytes.push_back(0x00);
+    return encodePut(requestId, ackBody, { { kParamString, bytes } });
 }
 
 std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,

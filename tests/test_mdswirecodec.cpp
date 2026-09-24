@@ -263,6 +263,58 @@ void testFileReadMatchesTheCapture()
               "86030000");
 }
 
+// PUT frames, byte-for-byte against the 2026-09-23 capture. These are the
+// first writes this project encodes; everything before was a read.
+void testPutMatchesTheCapture()
+{
+    // A zero-parameter PUT: reqid 674. CRC32 of the captured frame
+    // verified before this was written.
+    const std::vector<uint8_t> ackA = { 0xF0, 0x53, 0x0E, 0x01, 0x80, 0x00 };
+    const std::vector<uint8_t> expectedA = {
+        0x7E, 0xA5, 0x0E, 0x07, 0x00, 0xA2, 0x02,
+        0xF0, 0x53, 0x0E, 0x01, 0x80, 0x00, 0x00,
+        0xFD, 0x72, 0xEF, 0x41, 0x7E,
+    };
+    expectEq("zero-parameter PUT matches the capture",
+              toHex(Mds::encodePut(674, ackA, {})), toHex(expectedA));
+
+    // A string PUT: reqid 651, writing a SuuntoPlus plugin id. Same shape
+    // the GNSS cloud URL and session-key writes use.
+    const std::vector<uint8_t> ackB = { 0xF0, 0x53, 0x11, 0x01, 0x80, 0x00 };
+    const std::vector<uint8_t> expectedB = {
+        0x7E, 0xA5, 0x0E, 0x12, 0x00, 0x8B, 0x02,
+        0xF0, 0x53, 0x11, 0x01, 0x80, 0x00,
+        0x01, 0x0C, 0x00,
+        0x7A, 0x7A, 0x62, 0x72, 0x6E, 0x72, 0x66, 0x69, 0x00,
+        0x4B, 0x36, 0x17, 0x3F, 0x7E,
+    };
+    expectEq("string PUT matches the capture",
+              toHex(Mds::encodePutString(651, ackB, "zzbrnrfi")), toHex(expectedB));
+
+    // PUT and fetch differ only in the frame type - assert that rather
+    // than leaving it as a claim in a comment.
+    //
+    // Decoded rather than sliced at fixed offsets: SLIP escapes any 0x7E
+    // or 0x7D in the CRC, so two frames with identical bodies can differ
+    // in length. An earlier version of this check sliced blindly and
+    // failed for exactly that reason - the codec was right, the test was
+    // wrong.
+    const std::vector<uint8_t> put = Mds::encodePut(1, ackA, {});
+    const std::vector<uint8_t> fetch = Mds::encodeParameterisedFetch(1, ackA, {});
+
+    Mds::Decoder putDecoder, fetchDecoder;
+    const std::vector<Mds::Frame> putFrames = putDecoder.feed(put.data(), put.size());
+    const std::vector<Mds::Frame> fetchFrames = fetchDecoder.feed(fetch.data(), fetch.size());
+    if (putFrames.size() != 1 || fetchFrames.size() != 1) {
+        expectEqU("both frames decode", 1, 0);
+        return;
+    }
+    expectEqU("PUT frame type is 0x0E", putFrames[0].type, 0x0E);
+    expectEqU("fetch frame type is 0x0D", fetchFrames[0].type, 0x0D);
+    expectEq("their bodies are identical",
+              toHex(putFrames[0].body), toHex(fetchFrames[0].body));
+}
+
 // /Entries is the same envelope with no parameters - confirming the two
 // encoders agree rather than being separate guesses.
 void testEntriesIsTheZeroParameterCase()
@@ -282,6 +334,7 @@ int main()
 {
     testTimelineFileFetchMatchesTheCapture();
     testFileReadMatchesTheCapture();
+    testPutMatchesTheCapture();
     testEntriesIsTheZeroParameterCase();
     testEncodeLogbookEntries();
     testEncodeSystemMode();

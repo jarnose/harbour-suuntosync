@@ -13,6 +13,7 @@
 #include "../ble/summarydecoder.h"
 #include "../ble/smldecoder.h"
 #include "../ble/sleepdecoder.h"
+#include "../ble/recoverydecoder.h"
 #include "../cloud/polyline.h"
 #include "../cloud/smljson.h"
 #include "../cloud/zipwriter.h"
@@ -1209,6 +1210,63 @@ void AppController::syncWatchHealth()
         // fromWatch: these rows are candidates for pushing to the cloud.
         if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save sleep data: %1").arg(storeError));
+            return;
+        }
+        emit healthDataChanged();
+
+        // Recovery comes from a different resource and needs no rendered
+        // file, so it is a separate fetch chained after this one rather
+        // than part of the same reply.
+        fetchWatchRecovery();
+    });
+}
+
+void AppController::fetchWatchRecovery()
+{
+    qint64 since = m_healthStore->newestTimestamp(QStringLiteral("recovery"));
+    if (since == 0)
+        since = QDateTime::currentMSecsSinceEpoch() - 14LL * 24 * 3600 * 1000;
+
+    m_healthSyncInProgress = true;
+    emit healthSyncInProgressChanged();
+
+    // Seconds, not milliseconds - see fetchRecoveryMoments().
+    m_whiteboardClient->fetchRecoveryMoments(since / 1000,
+            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+        m_healthSyncInProgress = false;
+        emit healthSyncInProgressChanged();
+
+        if (!ok) {
+            // Sleep already succeeded by this point, so this is reported
+            // but not treated as a failed sync.
+            emit errorOccurred(tr("Sleep synced. Recovery failed: %1").arg(error));
+            return;
+        }
+
+        const std::vector<RecoveryMoments::Sample> samples = RecoveryMoments::decode(data);
+        if (samples.empty()) {
+            emit errorOccurred(tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
+                                .arg(data.size()));
+            return;
+        }
+
+        QVector<HealthEntry> entries;
+        entries.reserve(samples.size());
+        for (const RecoveryMoments::Sample &sample : samples) {
+            QJsonObject o;
+            // The cloud's own field names and scale: balance 0..1.
+            o.insert(QStringLiteral("balance"), sample.balancePercent / 100.0);
+            o.insert(QStringLiteral("stressState"), sample.stressState);
+            HealthEntry entry;
+            entry.kind = QStringLiteral("recovery");
+            entry.timestamp = sample.timestampMs;
+            entry.data = QJsonDocument(o).toJson(QJsonDocument::Compact);
+            entries.append(entry);
+        }
+
+        QString storeError;
+        if (!m_healthStore->upsert(entries, &storeError, true)) {
+            emit errorOccurred(tr("Could not save recovery data: %1").arg(storeError));
             return;
         }
         emit healthDataChanged();

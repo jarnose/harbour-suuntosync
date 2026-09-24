@@ -119,6 +119,46 @@ The same run also shows `/Activity/Moments/Sync/Data` and
 `/Activity/TrendData` for daily activity, and `/Activity/TrainingLab/
 StressBalance` - the recovery figure.
 
+### Recovery, and what activity is not (2026-09-24)
+
+`/Activity/Moments/Sync/Data` is the **recovery** series, and it needs no
+rendered file - the reply carries the records directly, in the same paged
+framing `/Summary` uses. The request is a one-parameter fetch whose cursor
+is unix **seconds**, where the sleep fetch passes milliseconds. Same type
+code, different unit.
+
+Eight bytes per record, cross-checked against the cloud's own entries for
+the same half-hours:
+
+| bytes | meaning |
+|---|---|
+| 0-3 | timestamp, unix seconds |
+| 4 | resource balance, percent (cloud reports 0..1) |
+| 5 | stress state |
+| 6-7 | vary between records; unidentified |
+
+The cloud says `21:30+03:00 -> balance 0.72, stressState 1`; the watch says
+`18:30 UTC -> [72, 1]`.
+
+Two things the decoder had to handle that the format does not announce:
+
+- The reply has eleven bytes before the record array. Rather than hard-code
+  that from one sample, it finds the start by looking for two consecutive
+  plausible timestamps **exactly half an hour apart**. Plausibility alone
+  locked on two bytes early, because four bytes straddling a record
+  boundary happened to read as a number in range.
+- Unused trailing entries are zero-filled, which would otherwise decode as
+  1970.
+
+**Daily activity is still open.** `mdsAct.sbm`, guessed by analogy with the
+sleep file, does not exist - the capture contains only `mdsSlp.sbm` and
+`sysevt.sbm`. `/Activity/TrendData` returns a different structure with no
+unix timestamps in it (a longer-term trend, not the ten-minute series), and
+the ten-minute step/energy/HR series that the app POSTs to the cloud was
+not seen coming off the watch in this capture at all. It may need a
+resource that only appears when there is unsynced activity, which there was
+not - the watch had been synced the day before.
+
 ### Item 4: the watch downloads its own ephemeris
 
 There is no ephemeris blob on the BLE link at all. What the app does is

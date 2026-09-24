@@ -143,6 +143,16 @@ public:
     // this itself once the data is read.
     void deleteWatchFile(const QString &filename, SimpleCallback callback);
 
+    // The recovery series from /Activity/Moments/Sync/Data. Unlike sleep
+    // this needs no rendered file - the reply carries the records directly,
+    // in the same paged framing /Summary uses.
+    //
+    // `newerThanSeconds` is unix SECONDS: the captured request passes them
+    // that way, where the sleep fetch passes milliseconds. Same parameter
+    // type code, different unit, which is exactly the kind of thing worth
+    // not guessing.
+    void fetchRecoveryMoments(qint64 newerThanSeconds, DataCallback callback);
+
     // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
     // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at
     // increasing byte offsets until a page comes back marked "last" (see

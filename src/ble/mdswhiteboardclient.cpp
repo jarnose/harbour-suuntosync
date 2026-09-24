@@ -514,6 +514,37 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
     });
 }
 
+void MdsWhiteboardClient::fetchRecoveryMoments(qint64 newerThanSeconds, DataCallback callback)
+{
+    const QString path = QStringLiteral("/Activity/Moments/Sync/Data");
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, newerThanSeconds, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        std::vector<uint8_t> since(8);
+        for (int i = 0; i < 8; ++i) {
+            since[i] = static_cast<uint8_t>(
+                    (static_cast<uint64_t>(newerThanSeconds) >> (8 * i)) & 0xFF);
+        }
+        readPages([ackBody, since](uint16_t requestId, uint32_t) {
+            // The offset is carried by the cursor parameter rather than a
+            // separate one, so every page repeats the same request; the
+            // paging loop's own offset is unused here.
+            return Mds::encodeParameterisedFetch(requestId, ackBody,
+                                                   { { Mds::kParamInt64, since } });
+        }, 0, {}, callback);
+    });
+}
+
 void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallback callback)
 {
     // Two steps, as captured: GET /Dev/FileSystem/FileDelete for a handle,

@@ -346,6 +346,10 @@ private:
     // simple.
     void fetchHealthKindAt(int index, int fetched, const QStringList &failures);
     void uploadHealthKindAt(int index, int sent, const QStringList &failures);
+    // Chained after the sleep fetch - a separate resource, so a separate
+    // request. Sleep having already succeeded, a failure here is reported
+    // rather than failing the whole sync.
+    void fetchWatchRecovery();
     // Builds the sml.zip for one workout from its stored raw payloads.
     QByteArray buildUploadZip(const QString &key) const;
 };

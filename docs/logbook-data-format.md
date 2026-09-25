@@ -277,29 +277,25 @@ an artifact of whatever raw/less-processed capture format they were
 working from at that point in their own investigation, not a correction
 to what's already confirmed working here.
 
-## Still open (where Phase 6/`LogbookSync` picks up next)
+## Still open
 
-1. **Find the actual SBEM chunk-id assignment mechanism** - now
-   understood to be a "dynamic schema" rather than fixed constants (see
-   above), which reframes the whole remaining-chunk question: the next
-   useful step probably isn't more guess-and-check against Ocean/Nautic
-   offsets, it's figuring out how/where the Race exposes its *own*
-   chunk-id assignment (if over BLE at all) or accepting per-firmware
-   calibration against known real values as the practical path.
-2. **Decode `0x16`/`0x18`/`0x1f`'s internal value structure** - `0x0c`
-   is now solved (UTC timestamp + GPS fix, see "GPS found" below, which
-   also gives distance and speed for free); altitude and cadence/steps
-   are the remaining unknowns, most likely in one of these three.
-3. Add resync-on-malformed-chunk robustness to `Sbem::parseContainer()`
-   (see point 3 under issue #70 above) before relying on it against a
-   live BLE download rather than a replayed historical capture.
-4. Confirm this same pipeline holds for a workout **as it's actively
-   streamed live** (this capture was of the official Android app doing a
-   historical sync, presumably after the workout already ended) -
-   probably fine, no reason to expect otherwise, but not yet exercised.
-5. Resolve the countdown-counter field noted in "Ground-truth
-   calibration" below (the offset-13 puzzle itself is resolved - see
-   "GPS found" further down).
+This list used to be five items about undecoded chunks. Four of them were
+answered by fetching the watch's **own descriptor table** off its
+`/Descriptors` resource (see `sbem-chunk-map.md`) rather than by guessing
+offsets against other Suunto devices - altitude, cadence, steps and the
+chunk-id assignment all came from there. The lesson is recorded because it
+generalises: the device knew its own schema all along, and the productive
+move was asking it instead of brute-forcing.
+
+What is genuinely left:
+
+1. **A live-streamed workout.** Everything here was captured from a
+   historical sync, after the workout ended. There is no reason to expect
+   the pipeline differs, but it has not been exercised.
+2. **`Header.TraingingLoadPeak`** is in the descriptor table and has never
+   been observed non-zero on this watch.
+3. **A few walking-specific fields** noted further down, never seen with a
+   non-nil value.
 
 ## Ground-truth calibration (ID = actual UTC timestamp; `0x0c` decoded)
 

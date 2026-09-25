@@ -13,8 +13,6 @@ Page {
         pendingUploads = AppController.pendingWorkoutUploads()
     }
 
-    Component.onCompleted: refreshPending()
-
     Connections {
         target: AppController
         onWorkoutSyncInProgressChanged: {
@@ -41,7 +39,10 @@ Page {
         return h > 0 ? qsTr("%1h %2min").arg(h).arg(m) : qsTr("%1min").arg(m)
     }
 
-    Component.onCompleted: AppController.loadCachedWorkouts()
+    Component.onCompleted: {
+        AppController.loadCachedWorkouts()
+        refreshPending()
+    }
 
     Connections {
         target: AppController

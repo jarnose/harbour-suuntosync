@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QFile>
 #include <QDateTime>
+#include <QTimer>
 #include <QSettings>
 #include <QTextStream>
 
@@ -608,6 +609,29 @@ AppController::AppController(QObject *parent)
     });
     connect(m_whiteboardClient, &MdsWhiteboardClient::errorOccurred,
             this, &AppController::errorOccurred);
+
+    // Ask BlueZ what it already knows, once, at startup.
+    //
+    // onDeviceUpdated() attaches the Whiteboard client to a watch that is
+    // already connected at the BlueZ level - but it only runs in response
+    // to a deviceUpdated signal, and BlueZ emits nothing when nothing
+    // changes. A watch connected before this process started therefore
+    // stayed invisible until something else called refresh(), which in
+    // practice meant opening the pairing page. The app showed "not
+    // connected" for a watch that was connected, and "Change watch" was
+    // the only way to fix it.
+    //
+    // Only worth doing when a watch is actually paired: otherwise this is
+    // a D-Bus round trip listing every Bluetooth device the phone has ever
+    // seen, for nothing.
+    //
+    // Deferred to the event loop rather than called here: refresh() is a
+    // blocking GetManagedObjects, and a wedged bluetoothd would hold up
+    // startup for the D-Bus timeout. That is not hypothetical - it has
+    // happened on this device before (see the Phase 5 notes). This way the
+    // UI is up first and a slow answer costs nothing visible.
+    if (m_pairedWatch.isValid())
+        QTimer::singleShot(0, this, [this]() { m_bluezAdapter->refresh(); });
 }
 
 AppController::~AppController() = default;

@@ -1972,14 +1972,20 @@ capture: its constants put the count at the right offset and the records at
 `/Logbook/UnsynchronisedLogs` *is* fetched during a sync, and is a separate
 resource from `/Logbook/Entries`. Conflating them was the mistake.
 
-**Still unexplained**: why the 9 Baro listed four entries and then two. It
-is not a decoder bug - `LogEntries::decode()` reads the watch's own count
-field and returns nothing rather than a truncated list if the body is short,
-so two means the watch said two. Candidates, none of them established: the
-9 Baro prunes its logbook as it fills, its firmware generation answers
-`/Logbook/Entries` differently, or something else removed them. The cheap
-test is to look at the watch's own logbook screen and see whether those
-December workouts are still on it.
+**And the 9 Baro, answered the same evening**: its own logbook screen shows
+those two workouts and nothing else. The three December ones are not on the
+watch any more - it pruned them, presumably to make room, since they were
+17 to 46 kB each and two new workouts had been recorded that afternoon.
+
+So nothing about `/Logbook/Entries` was ever filtering anything. It listed
+four when the watch held four and two when it held two, on both watches,
+and `LogEntries::decode()` read the count correctly every time. The whole
+"unsynchronised entries" story was invented to explain a number that had a
+much duller cause.
+
+It does leave one real consequence, which is why any of this mattered: this
+project's stored copy of those three workouts is now **the only copy**. The
+watch does not have them and never will again.
 
 **What survives regardless.** A workout stored from a wrong decode cannot
 always be repaired by syncing again, whatever the reason the entry stops

@@ -37,16 +37,18 @@ Confirmed on real hardware, not just in tests:
 - **Notifications to the watch.** The mechanism is understood (see
   `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
   costs Jolla Store eligibility — a decision, not a missing feature.
-- **Weather and GPS-ephemeris updates to the watch.** There are two
-  mechanisms, one per watch generation, and both are now mapped. A Race
-  fetches over its own WiFi once the phone writes it a cloud URL and an
-  authorization string — two PUTs, blocked only by a 16-character token
-  whose origin is not yet known. A 9 Baro has no WiFi, so the phone pushes
-  the data: 61440 bytes in 453-byte chunks through
-  `/Device/GNSS/ExtendedEphemerisData/Upload/0`, then a commit. That
-  framing is pinned down byte for byte; what is missing is where the phone
-  downloads those bytes from, which needs one HTTPS capture. See
-  `docs/watch-push-resources.md`.
+- **GPS-ephemeris updates to the watch.** Fully mapped, both mechanisms,
+  and blocked in both cases on where the bytes come from rather than on
+  anything about the protocol. A Race fetches over its own WiFi once the
+  phone writes it a cloud URL and an authorization string — two PUTs,
+  blocked on a 16-character token whose origin is unknown. A 9 Baro has no
+  WiFi and is pushed 61440 bytes in 453-byte chunks, framing known byte
+  for byte — blocked on the download URL, which needs one HTTPS capture.
+  The two watches want different formats (LLE and CEP), so neither route
+  serves both. See `docs/watch-push-resources.md`.
+- **Weather to the watch** is not a missing feature: a Race fetches its
+  own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
+  pushed over BLE on either.
 
 ### Which watches
 

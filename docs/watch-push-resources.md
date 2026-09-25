@@ -682,3 +682,62 @@ earliest the watch can be behind is the following day.
 resource is there, and the framing is known byte for byte - then the
 official app's choice is a curiosity rather than a blocker. What is still
 needed either way is the source of the 61440 bytes.
+
+
+## The answer: no, and the reason is not WiFi (2026-09-25, later)
+
+Jarno's question was whether a Race with WiFi switched off would have the
+ephemeris pushed to it instead. Reading the two watches' `Format` values
+settles it without a capture.
+
+```
+/Device/GNSS/ExtendedEphemerisData/Format   Suunto 9 Baro -> 2
+                                            Suunto Race   -> 3
+```
+
+The enum the watches spell out is `SGEE, EPO, CEP, LLE`, so those are
+**CEP** for the 9 Baro and **LLE** for the Race. The two watches do not
+want the same bytes.
+
+And the app can only ever obtain one of them. Its string table has exactly
+one field of that family - `cepUrl`, alongside `cepBinary`,
+`cepBinaryPath` and `cep_lastModified`. There is no `lleUrl`, no
+`sgeeUrl`, no `epoUrl`; `LLE` appears as a standalone word only in the
+enum the watch itself sends.
+
+**So the app has nothing to push to a Race, whatever its WiFi is doing.**
+The fallback does not exist, and the reason is not a branch on WiFi
+availability - it is that no LLE blob is ever fetched. A Race with WiFi
+off simply goes without fresh ephemeris.
+
+That the Race's firmware *accepts* `.../Upload/0` (it acks with 200, see
+above) is a separate fact and stays true. The firmware can be pushed to;
+the app has nothing to push.
+
+### What this means for implementing it here
+
+- **A 9 Baro can be served.** Its format is CEP, this project has a real
+  61440-byte CEP file byte-identical to what the official app pushed, and
+  the framing is known exactly. The only missing piece is `cepUrl`, so the
+  file can be refreshed rather than replayed.
+- **A Race cannot**, not by pushing. It wants LLE and nothing here has a
+  source for one. Its route stays the WiFi handshake, which is blocked on
+  the 16-character token instead.
+
+Two watches, two blockers, and both are "where do the bytes come from"
+rather than anything about the protocol.
+
+## Item 5 closed: weather is never pushed to either watch
+
+On the Race, `/Weather/Sync` acks and produces no payload, twice captured.
+Its own event log explains that: `Weather sync ok d:1500 f:0`,
+`synced city:Tampere` - the watch fetches its own forecast over WiFi.
+
+On the 9 Baro, `/Weather/Sync` acks and the app moves straight on to the
+next resource. No stream start, no PUT, nothing. And the Baro's analytics
+carry no weather entries at all - no `Weather sync ok`, no city.
+
+So a 9 Baro has no weather, and no mechanism exists to give it one over
+BLE. There is nothing here left to implement: for a Race it is the same
+WiFi handshake the ephemeris uses, and for a Baro the feature is simply
+absent.

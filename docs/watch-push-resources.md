@@ -590,3 +590,33 @@ cannot be obtained any other way.
 **Implementable today**: everything except the source of the bytes. The
 chunking, the framing, the byte-array type code and the begin/commit
 sequence are all pinned down.
+
+## Which watches this protocol covers, and which it does not
+
+Three Suunto watches were available while this was written, and they fall
+into three different places.
+
+| watch | link to the phone | this project |
+|---|---|---|
+| Suunto Race | Whiteboard over BLE, own WiFi for cloud fetches | fully supported |
+| Suunto 9 Baro | Whiteboard over BLE, no WiFi at all | supported; needs its own descriptor table, and gets ephemeris pushed |
+| Suunto 7 | **Google's Wear OS Data Layer** | out of scope over BLE |
+
+The Suunto 7 is a Wear OS watch and is not part of the Movesense/Whiteboard
+family at all. The APK says so - `isWearOsNode`, `isWearOsPaired`,
+`Suunto7Capability`, 57 references to `com.google.android.gms.wearable`
+including `CAPABILITY_CHANGED` and `NODE_MIGRATED`, and **not one string
+tying Suunto7 to MDS, Whiteboard, Movesense or Spartan**.
+
+Confirmed on hardware rather than left as a reading of the strings: the
+official Suunto app on a phone paired with a Suunto 7 **does not find the
+watch at all**. Its companion channel is Google Play Services', which a
+Sailfish app cannot speak and which is not this protocol.
+
+So a BLE capture of a Suunto 7 would show Wear OS companion traffic and
+nothing useful here. It was not taken.
+
+**What does cover it**: a Suunto 7 uploads its own workouts to the Suunto
+cloud over WiFi, so this project's cloud sync should already read them
+without any watch-side work. Untested, and worth one look at the workout
+list before claiming it.

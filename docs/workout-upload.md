@@ -440,3 +440,70 @@ half right:
    tested the other way.
 3. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
+
+## Setting up HTTPS interception again (2026-09-25)
+
+Written down because it was not, last time, and that cost an evening: the
+2026-09-22 capture recorded two values only as `https://api.sports-
+tracker.com/apiserver...` and `WatchUserKey A2d6...`, and by the time the
+full values were wanted the capture was gone and the CA mount had died
+with a reboot.
+
+The device is a rooted LineageOS 21 (Android 14) phone with Magisk. The
+system CA store lives in the Conscrypt APEX, which is mounted read-only
+and, worse, is mounted per-namespace - so it is not enough to change it
+once, it has to be changed inside every namespace whose processes should
+see it.
+
+```sh
+# 1. The CA, named by its subject hash. openssl -subject_hash_old, not
+#    -subject_hash: Android wants the old algorithm.
+openssl x509 -inform PEM -subject_hash_old -in ~/.mitmproxy/mitmproxy-ca-cert.cer -noout
+cp ~/.mitmproxy/mitmproxy-ca-cert.cer <hash>.0
+adb push <hash>.0 /data/local/tmp/
+
+# 2. Stage a full copy of the store plus the new certificate. The SELinux
+#    label matters as much as the mode; without it apps get an empty store.
+adb shell su -c '
+  rm -rf /data/local/tmp/cacerts && mkdir -p /data/local/tmp/cacerts
+  cp /apex/com.android.conscrypt/cacerts/* /data/local/tmp/cacerts/
+  cp /data/local/tmp/<hash>.0 /data/local/tmp/cacerts/
+  chown root:root /data/local/tmp/cacerts/*
+  chmod 644 /data/local/tmp/cacerts/*
+  chcon u:object_r:system_file:s0 /data/local/tmp/cacerts/*'
+
+# 3. Bind it in, in init's namespace and in every zygote - apps fork from
+#    zygote, so that is the one that decides what new processes see.
+adb shell su -c '
+  for p in 1 $(pgrep -f zygote); do
+    nsenter --mount=/proc/$p/ns/mnt -- mount --bind /data/local/tmp/cacerts /apex/com.android.conscrypt/cacerts
+  done'
+
+# 4. Proxy over USB rather than the network: no IP to get wrong, and it
+#    stops working the moment the cable is out, which is a feature.
+mitmdump --listen-port 8080 -w capture.flows &
+adb reverse tcp:8080 tcp:8080
+adb shell su -c 'settings put global http_proxy 127.0.0.1:8080'
+
+# 5. Apps already running kept the old namespace. Restart the one you want.
+adb shell su -c 'am force-stop com.stt.android.suunto'
+```
+
+**Check it with an app, not with `curl`.** `curl` on the device carries its
+own CA bundle and fails with `ssl_verify_result=20` no matter how correct
+the system store is; that failure means nothing. What means something is a
+real app getting a 200 through the proxy - `api.sports-tracker.com`
+answering 200 is the proof that the Suunto app is interceptable and does
+not pin.
+
+**Undo**, in the order that leaves the phone working:
+
+```sh
+adb shell su -c 'settings put global http_proxy :0'
+adb reverse --remove tcp:8080
+```
+
+Everything else is a tmpfs bind mount and disappears on reboot. Leaving the
+proxy set while the cable is out, or across a reboot, breaks networking for
+every app on the phone until somebody notices - so unset it before walking
+away, even if the capture is not finished.

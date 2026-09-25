@@ -48,6 +48,15 @@ Confirmed on real hardware, not just in tests:
   downloads those bytes from, which needs one HTTPS capture. See
   `docs/watch-push-resources.md`.
 
+### Which watches
+
+A Race and a 9 Baro are both supported over BLE, and they need different
+field tables (see above). A **Suunto 7** is not: it is a Wear OS watch on
+Google's companion channel, not the Movesense/Whiteboard family — the
+official app does not even find it over that link. Its workouts reach the
+Suunto cloud on their own, so the cloud sync here should cover it, which
+is not the same as having been tried.
+
 ## How it was built
 
 Nothing here came from a published specification, because there isn't one.

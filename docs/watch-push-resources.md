@@ -653,3 +653,32 @@ taking, an `f5` means it is legacy-only and the idea is dead.
 `AppController::probePath()` exists for exactly this, and for the next
 question of the same shape - of which there have been several, each
 previously costing a capture.
+
+### The probe's answer: a Race has the push resource too
+
+```
+/Settings/Wifi/Enabled                        exists (f0 a4 9f 01 80 00 c8 00)
+/Device/GNSS/ExtendedEphemerisData/Upload/0   exists (01 40 07 01 80 00 c8 00)
+```
+
+Both acked with status 200 rather than the `f5` rejection, so **the push
+path is not legacy-only**. The handle bytes for `Upload/0` are
+`01 40 07 01 80 00` on the Race - character for character what a 9 Baro
+answered for the same path, which is worth noting on its own: a handle is
+per resource, not per session, at least for this one.
+
+So the hypothesis survives its first test. What it does *not* yet show is
+whether the official app ever chooses that path for a Race - the resource
+existing and the app using it are different claims, and only a capture of
+a sync where the Race genuinely needs new ephemeris can settle the second.
+
+**That capture has to wait for the data to go stale.** The Race's `Date`
+said `2026-09-25T00:00:00Z`, the day's own file, because the watch had
+already fetched it over WiFi. Switching WiFi off does not make what it
+already holds stale. The file regenerates daily at 00:00 GMT, so the
+earliest the watch can be behind is the following day.
+
+**And it matters less than it did.** If our own code can push - and the
+resource is there, and the framing is known byte for byte - then the
+official app's choice is a curiosity rather than a blocker. What is still
+needed either way is the source of the 61440 bytes.

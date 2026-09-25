@@ -952,32 +952,26 @@ void AppController::probePath(const QString &path)
     }
 
     m_logbookTestInFlight = true;
-    m_whiteboardClient->get(path, [this, path](bool ok, const Mds::Frame &frame,
-                                                 const QString &error) {
+    m_whiteboardClient->readValue(path,
+            [this, path](bool ok, const std::vector<uint8_t> &body, const QString &error) {
         m_logbookTestInFlight = false;
         if (!ok) {
-            emit logbookTestResult(tr("%1: %2").arg(path, error));
+            // readValue() says "not on this watch" for the f5 rejection,
+            // which is the answer this probe usually exists to get.
+            emit logbookTestResult(tr("%1\n%2").arg(path, error));
             return;
         }
 
-        // f5 with a short body is this protocol's rejection, confirmed
-        // against two resources that do not exist (docs/watch-push-
-        // resources.md). Saying so beats printing six bytes of hex and
-        // leaving the reader to remember what they mean.
-        const bool rejected = frame.body.size() <= 6 && !frame.body.empty()
-                && frame.body[0] == 0xF5;
-
         QString hex;
-        for (size_t i = 0; i < frame.body.size() && i < 32; ++i)
-            hex += QStringLiteral("%1 ").arg(frame.body[i], 2, 16, QLatin1Char('0'));
-
-        emit logbookTestResult(tr("%1\n%2 - type 0x%3, %4 bytes\n%5")
-                                .arg(path,
-                                      rejected ? tr("NOT on this watch")
-                                               : tr("exists"))
-                                .arg(frame.type, 2, 16, QLatin1Char('0'))
-                                .arg(frame.body.size())
-                                .arg(hex.trimmed()));
+        for (size_t i = 0; i < body.size() && i < 40; ++i)
+            hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
+        QString ascii;
+        for (size_t i = 0; i < body.size() && i < 48; ++i) {
+            const uint8_t c = body[i];
+            ascii += (c >= 0x20 && c < 0x7F) ? QChar(c) : QLatin1Char('.');
+        }
+        emit logbookTestResult(tr("%1\nexists - %2 bytes\n%3\n\"%4\"")
+                                .arg(path).arg(body.size()).arg(hex.trimmed(), ascii));
     });
 }
 

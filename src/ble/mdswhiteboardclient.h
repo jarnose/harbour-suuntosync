@@ -167,6 +167,17 @@ public:
     void fetchWithCursor(const QString &path, uint16_t typeCode, qint64 value,
                           DataCallback callback);
 
+    // Reads a resource's value: the ordinary GET, then a handle fetch
+    // carrying no parameters at all. That is how the official app reads a
+    // scalar - the captured read of /Device/GNSS/ExtendedEphemerisData/
+    // Format is exactly the ack's six bytes with a zero count appended.
+    //
+    // Not the same as fetchStructuredRaw(), which forces the handle's
+    // first byte to 0xF0 because /Logbook/Entries needed that. Resources
+    // whose handle starts 0xF1 or 0x01 - and several do - need the ack's
+    // own bytes left alone.
+    void readValue(const QString &path, DataCallback callback);
+
     // The daily-activity series from /Activity/TrendData - ten-minute
     // buckets of steps, energy and heart rate (docs/watch-push-
     // resources.md). Records come straight back in the reply, like

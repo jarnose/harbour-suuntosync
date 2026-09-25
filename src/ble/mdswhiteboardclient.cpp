@@ -545,6 +545,37 @@ void MdsWhiteboardClient::fetchRecoveryMoments(qint64 newerThanSeconds, DataCall
     });
 }
 
+void MdsWhiteboardClient::readValue(const QString &path, DataCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        // f5 in six bytes or fewer is this protocol's rejection - a
+        // resource this watch does not have - not a short value. Confirmed
+        // against two non-existent resources, see
+        // docs/watch-push-resources.md.
+        if (ack.body.size() <= 6
+                && (ack.body.empty() || ack.body[0] == 0xF5)) {
+            callback(false, ack.body, tr("not on this watch"));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodeParameterisedFetch(requestId, ackBody, {});
+        }, [path, callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+            if (!fetchOk) {
+                callback(false, {}, tr("Reading %1 failed: %2").arg(path, fetchError));
+                return;
+            }
+            callback(true, frame.body, QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::fetchWithCursor(const QString &path, uint16_t typeCode, qint64 value,
                                            DataCallback callback)
 {

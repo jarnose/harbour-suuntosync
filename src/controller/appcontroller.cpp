@@ -940,6 +940,47 @@ void AppController::testDescriptorsFetch(const QString &logbookId)
     });
 }
 
+void AppController::probePath(const QString &path)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+
+    m_logbookTestInFlight = true;
+    m_whiteboardClient->get(path, [this, path](bool ok, const Mds::Frame &frame,
+                                                 const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(tr("%1: %2").arg(path, error));
+            return;
+        }
+
+        // f5 with a short body is this protocol's rejection, confirmed
+        // against two resources that do not exist (docs/watch-push-
+        // resources.md). Saying so beats printing six bytes of hex and
+        // leaving the reader to remember what they mean.
+        const bool rejected = frame.body.size() <= 6 && !frame.body.empty()
+                && frame.body[0] == 0xF5;
+
+        QString hex;
+        for (size_t i = 0; i < frame.body.size() && i < 32; ++i)
+            hex += QStringLiteral("%1 ").arg(frame.body[i], 2, 16, QLatin1Char('0'));
+
+        emit logbookTestResult(tr("%1\n%2 - type 0x%3, %4 bytes\n%5")
+                                .arg(path,
+                                      rejected ? tr("NOT on this watch")
+                                               : tr("exists"))
+                                .arg(frame.type, 2, 16, QLatin1Char('0'))
+                                .arg(frame.body.size())
+                                .arg(hex.trimmed()));
+    });
+}
+
 void AppController::testHealthResourceFetch(const QString &kind)
 {
     if (!m_whiteboardReady) {

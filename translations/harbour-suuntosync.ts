@@ -795,6 +795,16 @@
     </message>
     <message>
         <location filename="../qml/pages/PairingPage.qml" line="97"/>
+        <source>Resource path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/PairingPage.qml" line="98"/>
+        <source>Probe</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/PairingPage.qml" line="97"/>
         <source>Fetch descriptors</source>
         <translation type="unfinished"></translation>
     </message>

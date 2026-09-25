@@ -93,6 +93,35 @@ Page {
                 }
             }
 
+            Row {
+                visible: AppController.watchConnected
+                // Ask the watch whether it has a resource at all. A model
+                // that does not answers with the six-byte f5 error, so a
+                // question that used to need adb and a capture takes two
+                // seconds here.
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                spacing: Theme.paddingSmall
+
+                TextField {
+                    id: probePathField
+                    width: parent.width - probeButton.width - parent.spacing
+                    label: qsTr("Resource path")
+                    placeholderText: qsTr("e.g. /Device/GNSS/ExtendedEphemerisData/Format")
+                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                    EnterKey.enabled: text.length > 0
+                    EnterKey.onClicked: probeButton.clicked()
+                }
+
+                Button {
+                    id: probeButton
+                    anchors.verticalCenter: probePathField.verticalCenter
+                    enabled: probePathField.text.length > 0
+                    text: qsTr("Probe")
+                    onClicked: AppController.probePath(probePathField.text)
+                }
+            }
+
             Button {
                 // The watch's own field table. Needed per watch model: a
                 // Suunto 9 Baro transfers workouts perfectly and decodes

@@ -190,6 +190,16 @@ public:
     // a different path.
     Q_INVOKABLE void testDescriptorsFetch(const QString &logbookId);
 
+    // Sends one plain GET to any Whiteboard path and reports what came
+    // back. A resource this watch does not have answers with the six-byte
+    // f5 error rather than a timeout, so "does this model have that
+    // resource at all" is a question with a two-second answer - which is
+    // otherwise an evening with adb, a capture and tshark.
+    //
+    // Read-only by construction: a GET resolves a handle, and nothing here
+    // follows it with the PUT that would write anything.
+    Q_INVOKABLE void probePath(const QString &path);
+
     // The real end-user "sync directly from the watch" action, now that
     // both halves are proven on real hardware:
     // MdsWhiteboardClient::fetchLogEntries() (see testEntriesFetch()) lists

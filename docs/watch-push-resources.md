@@ -620,3 +620,36 @@ nothing useful here. It was not taken.
 cloud over WiFi, so this project's cloud sync should already read them
 without any watch-side work. Untested, and worth one look at the workout
 list before claiming it.
+
+
+## Does a Race have the push path too? (open, but cheap to settle)
+
+Jarno's question: with the Race's WiFi switched off, would the app fall
+back to pushing the ephemeris over BLE the way it does for a 9 Baro? If it
+did, one mechanism would cover both watches and the unknown 16-character
+token would stop mattering.
+
+Two things in the 2026-09-25 Race capture argue against it, and one makes
+the experiment a waste of an evening *today*:
+
+- **The app never reads the watch's WiFi state.** It touches exactly two
+  WiFi paths, `/Settings/Wifi/Cloud/OfflineMaps/Url` and
+  `.../STTAuthorization`, both writes. `/Settings/Wifi/Enabled` exists as a
+  resource and is not asked for. Together with
+  `OBI2::**LegacyDevice**GNSS::putEphemerisData` that points at a branch on
+  device class, not on WiFi being available.
+- **The Race's ephemeris is current.** Its `Date` answered
+  `2026-09-25T00:00:00Z` - the watch had already fetched the day's file
+  itself. Switching WiFi off does not make that stale; the data is good for
+  days. A capture taken now would show the same nothing the last one did.
+
+The cheap way to settle it is to ask the watch instead of the app. A
+resource a model does not have answers with the six-byte `f5` rejection
+rather than timing out, so one GET to
+`/Device/GNSS/ExtendedEphemerisData/Upload/0` on a Race is the whole
+experiment: an ack means the push path exists there and a capture is worth
+taking, an `f5` means it is legacy-only and the idea is dead.
+
+`AppController::probePath()` exists for exactly this, and for the next
+question of the same shape - of which there have been several, each
+previously costing a capture.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ble/sbemcontainer.h"
+#include "../ble/sbemtable.h"
 
 #include <cstdint>
 #include <string>
@@ -46,6 +47,15 @@ namespace SmlJson {
 //
 // Returns the document, or an empty string if nothing decodable was found.
 std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
+                           const std::string &source, int offsetMinutes,
+                           int64_t fallbackTimeMs = 0);
+
+// The same, against a particular watch's field table. Descriptor ids are
+// per watch model (see src/ble/sbemtable.h), so a 9 Baro's payload built
+// against a Race's table would produce an empty document - and an upload
+// of nothing.
+std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
+                           const SbemDescriptors::Table &table,
                            const std::string &source, int offsetMinutes,
                            int64_t fallbackTimeMs = 0);
 

@@ -159,6 +159,147 @@ not seen coming off the watch in this capture at all. It may need a
 resource that only appears when there is unsynced activity, which there was
 not - the watch had been synced the day before.
 
+### Daily activity: `libmds.so` answers it (2026-09-25)
+
+**The paragraph above is wrong about `/Activity/TrendData`**, and the
+reason it was wrong is worth keeping. That reading came from one capture in
+which the watch had nothing unsynced to send. libmds.so has a specific
+error string for exactly that case - `"Empty array was returned"` - so what
+was read as "a different structure with no timestamps in it" was an empty
+reply. An empty array has no timestamps in it either.
+
+`SDS::Activity` is the class behind `suunto://MDS/Activity/<serial>/
+Entries`, and its four methods say the whole mechanism:
+
+| symbol | what the disassembly shows |
+|---|---|
+| `SDS::Activity::get` | reads `NewerThan` out of the request body, **multiplies it by 1000**, and calls `getFragment` in a loop |
+| `SDS::Activity::getFragment` | builds `"/net/" + serial + "/Activity/TrendData"`, sends one parameter named `timestamp`, 3000 ms timeout |
+| `SDS::Activity::entriesToJson` | emits `Timestamp`, `Steps`, `Energy`, `TimeISO8601` |
+| `SDS::Activity::getTimeZoneOffset` | reads `/net/<serial>/Timezone/...`, which is how `TimeISO8601` gets its offset |
+
+So:
+
+- **The resource is `/Activity/TrendData`** - the same path the earlier
+  note dismissed.
+- **The cursor is milliseconds.** `NewerThan` arrives in seconds from the
+  app and is multiplied by 1000 before the fetch. Sleep counts
+  milliseconds, recovery counts seconds, and this one counts milliseconds.
+  That is three neighbouring resources and two different units, which is
+  why the probe tries both rather than picking one.
+- **The reply carries records directly**, like recovery and unlike sleep -
+  one whiteboard op, no rendered file, no filesystem paging.
+- **It is fragmented, and the continue code is not the usual one.** Status
+  `200` is the last fragment; status **`202`** means call again. Every
+  other paged resource here uses `100` for continue, so `readPages()`
+  would treat `202` as "done" and quietly return the first fragment as if
+  it were everything. Not a subtle failure to hunt for later: a short
+  answer that looks complete.
+- **The next cursor is taken from an entry of the fragment just received**,
+  not from a byte offset. Which entry, and which of its fields, is not
+  readable with confidence from the assembly - the list-splice code reads
+  a field at +8 in the first node - so pagination is deliberately not
+  implemented on a guess.
+
+What the disassembly does **not** give is the parameter's wire width, or
+the record layout: both are decided by the watch's own metadata, which the
+JSON layer in between hides. `AppController::testActivityTrendFetch()`
+tries int64-ms, int64-s and int32-s in turn, stops at the first the watch
+does not answer with the six-byte `f5` rejection, and writes the whole
+reply - paged header included, because the status word in it is half the
+point - to `<cache>/trenddata.bin`.
+
+There is deliberately no int32-milliseconds attempt: epoch milliseconds do
+not fit in 32 bits, so it could only send a truncated cursor, and the risk
+is not that it fails but that the watch answers anyway and the sweep
+reports a working encoding that is asking for the wrong window.
+
+**Ground truth for the decode is already in hand**: the cloud's own
+`/v1/activity/export` carries the same ten-minute series
+(`{hr, stepCount, energyConsumption}` per entry, see
+`cloud_247_v1_activity.json`), so the watch's records can be checked
+against the cloud's figures for the same ten minutes - the same way the
+recovery decoder was.
+
+One thing the cloud series has that `entriesToJson` does not: **`hr`**. The
+MDS layer emits only Timestamp/Steps/Energy, so either the watch's record
+carries a heart rate that libmds drops, or the app fills it from somewhere
+else. Unresolved, and worth looking for in the raw bytes.
+
+### The bytes, off a real watch (2026-09-25)
+
+The probe ran on Jarno's Race the same day. Everything above held, and the
+one open question answered itself.
+
+- **The cursor is int64 milliseconds**, accepted first try.
+- **The cursor is not a strict lower bound**, and the first reading of this
+  got it wrong. The probe asked for `1790157250530`, which is 09:54:10.530
+  UTC; the reply's first record is 09:00:00.480, fifty-four minutes
+  *earlier*, and the last is 10:30. So the reply straddles the cursor.
+  Whether the watch rounds the cursor down, or returns whole blocks of ten
+  and the cursor picks the block, cannot be told from one sample - and the
+  coincidence that made "inclusive" look obvious was only that both
+  numbers start `09:`. Not established; do not build on it.
+- **Status 202**, in the same halfword `/Summary`'s 100/200 lives in.
+  Confirmed on the wire, not just in the disassembly.
+- **426 bytes: a 26-byte header and ten 40-byte records**, ten minutes
+  apart. Every byte accounted for.
+- **The heart rate is there** - libmds simply drops it. It is one byte, in
+  **bpm**, and the cloud is what divides by sixty. That also closes a
+  question `docs/` had deliberately left open: the watch's own unit is
+  beats per minute, and the hertz in the cloud's JSON is the cloud's doing.
+
+```
+ 0..3    float32  energy      (the cloud's energyConsumption, same unit)
+ 4..5    uint16   steps
+ 6..7    uint16   zero in every record seen
+ 8..15   uint64   timestamp, unix MILLISECONDS
+16       uint8    0x01 in every record seen
+17       uint8    heart rate, BPM
+18..39   ?        varies, sometimes all zero, often looks like stale buffer
+```
+
+Cross-checked against the cloud's own entries for the same ten buckets:
+**thirty values, thirty matches** - `92109.625` came back to the
+fraction. `tests/test_activitydecoder.cpp` reads its expected values out
+of `cloud_247_v1_activity_trend.json` rather than having them typed in, so
+the check is against something that has never seen this decoder.
+
+One detail that is not cosmetic: **the watch's timestamps are not on the
+ten-minute mark** - `:00.480`, `:00.030`, `:00.200`. The cloud's are,
+exactly. `ActivityTrend::decode()` therefore snaps to the grid, because
+otherwise the same ten minutes read from the watch and read from the cloud
+would be two different rows of `health_entries` and would show up twice.
+The raw value is kept alongside for the fetch loop, which has to advance
+its cursor *past* the last record: advancing by the snapped value would ask
+for an instant slightly before a record already in hand, and get it back
+forever.
+
+**Pagination** is implemented from the 202 marker plus a cursor of
+`last raw timestamp + 1`, with a stop on any of: status not 202, an empty
+fragment, a cursor that did not advance, or 250 fragments.
+
+**Confirmed end to end on the Race, same day.** A real sync pulled **79
+consecutive buckets, 00:00 through 13:00 with no gaps** - roughly eight
+fragments, so the loop ran and terminated on its own. Cross-checked against
+the watch's own screen rather than against the cloud this time:
+
+| | app | watch |
+|---|---|---|
+| steps today | 1553 | 1553 |
+| energy today | 410306 J / 4184 = 98.1 | 98 kcal |
+
+That also settles the **energy unit: joules**. The 4184 divisor was
+previously an inference from the cloud's numbers; a day's worth of watch
+bytes landing on the watch's own kcal figure is a second, independent
+source for it.
+
+Every timestamp landed on the ten-minute grid and none was duplicated, so
+the snapping works.
+
+Still unidentified: bytes 18..39, and whether the `0x01` at 16 is a record
+type or a validity flag.
+
 ### Item 4: the watch downloads its own ephemeris
 
 There is no ephemeris blob on the BLE link at all. What the app does is

@@ -17,3 +17,6 @@ bin/
 # see tests/README.md for what they are and how to regenerate them.
 tests/fixtures/
 *.qm
+
+# Python bytecode from the tools/ scripts
+__pycache__/

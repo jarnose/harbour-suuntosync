@@ -56,6 +56,10 @@ MODS = {
     "x+85000": (1.0, 85000.0),
     "x*3.6": (3.6, 0.0),
     "PI*x/(10^7*180)": (1e-7, 0.0),  # degrees, see above
+    # The 9 Baro has a compass; the Race does not. Raw is 1/100 degree and
+    # the schema converts to radians, but degrees are what this project
+    # uses everywhere else - same deliberate deviation as latitude above.
+    "PI*x/100/180": (1.0 / 100, 0.0),
 }
 
 
@@ -184,6 +188,11 @@ struct Descriptor {
 // Returns nullptr for an id the captured table doesn't describe.
 const Descriptor *find(uint16_t id);
 
+// The whole built-in table, for code that has to walk it rather than look
+// one id up - SbemLayout::resolve() does, because it has to find which
+// group carries a field rather than being told.
+const Descriptor *all(size_t *count);
+
 } // namespace SbemDescriptors
 """)
 
@@ -227,6 +236,13 @@ namespace {
             high = mid;
     }
     return nullptr;
+}
+
+const Descriptor *all(size_t *count)
+{
+    if (count)
+        *count = sizeof(kDescriptors) / sizeof(kDescriptors[0]);
+    return kDescriptors;
 }
 
 } // namespace SbemDescriptors

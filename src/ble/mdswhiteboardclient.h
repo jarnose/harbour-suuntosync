@@ -1,5 +1,6 @@
 #pragma once
 
+#include "activitydecoder.h"
 #include "logentriesdecoder.h"
 #include "mdswirecodec.h"
 
@@ -153,6 +154,42 @@ public:
     // not guessing.
     void fetchRecoveryMoments(qint64 newerThanSeconds, DataCallback callback);
 
+    // One GET plus one parameterised handle fetch carrying a single
+    // integer cursor, handing back the reply body **with its paged header
+    // still on the front**. Everything else here strips that header; this
+    // one keeps it because a probe needs to read the status code in it,
+    // which is how the watch says whether more fragments follow.
+    //
+    // `typeCode` is Mds::kParamInt32 or kParamInt64, and the unit of
+    // `value` is the resource's business, not this function's: sleep
+    // counts milliseconds, recovery counts seconds, and neither announces
+    // which. Callers say what they mean.
+    void fetchWithCursor(const QString &path, uint16_t typeCode, qint64 value,
+                          DataCallback callback);
+
+    // The daily-activity series from /Activity/TrendData - ten-minute
+    // buckets of steps, energy and heart rate (docs/watch-push-
+    // resources.md). Records come straight back in the reply, like
+    // recovery and unlike sleep.
+    //
+    // Fragmented, and not in the way everything else here is: the watch
+    // sends about ten records at a time and says **202** to mean "ask
+    // again", where /Summary and the rest use 100. It is also not a byte
+    // offset that advances - the next request carries a new timestamp
+    // cursor, taken from the last record received - so this cannot go
+    // through readPages() and has its own loop.
+    //
+    // `newerThanMs` is unix milliseconds. It is NOT a strict lower bound -
+    // the one observed reply started fifty-four minutes before the cursor
+    // it was given (docs/watch-push-resources.md) - so the caller may get
+    // back buckets it already has. Harmless: health_entries upserts on
+    // (kind, timestamp). What stops the loop is a cursor that stopped
+    // advancing, not the watch promising anything about the window.
+    using ActivityCallback = std::function<void(bool ok,
+                                                 const std::vector<ActivityTrend::Sample> &samples,
+                                                 const QString &error)>;
+    void fetchActivityTrend(qint64 newerThanMs, ActivityCallback callback);
+
     // Fetches a paged resource such as "/Logbook/byId/<id>/Summary": the
     // ordinary GET, then repeated Mds::encodePagedReadRequest() reads at
     // increasing byte offsets until a page comes back marked "last" (see
@@ -223,6 +260,9 @@ private:
     // reply framing is identical (19-byte header, 100 = continue,
     // 200 = last), only the request differs, so the encoder is a parameter.
     using PageRequestEncoder = std::function<std::vector<uint8_t>(uint16_t, uint32_t)>;
+    // One step of fetchActivityTrend()'s fragment loop.
+    void fetchActivityFragment(qint64 cursorMs, std::vector<ActivityTrend::Sample> collected,
+                                int fragments, ActivityCallback callback);
     void readPages(PageRequestEncoder encoder, uint32_t offset,
                     std::vector<uint8_t> collected, DataCallback callback);
 

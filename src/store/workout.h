@@ -53,4 +53,12 @@ struct Workout
     // build the stored route on sync. Not a column - the decoded route
     // lives in its own table (see WorkoutStore::saveRoute()).
     QString polyline;
+
+    // Derived, not a column of `workouts`: whether the cloud has taken this
+    // one (workout_sml.uploaded_key is set). Only meaningful for
+    // source == "ble" - a cloud workout has no workout_sml row at all, so
+    // this reads false for something that is, obviously, in the cloud. The
+    // list only asks about watch workouts, which is where the question
+    // makes sense.
+    bool uploadedToCloud = false;
 };

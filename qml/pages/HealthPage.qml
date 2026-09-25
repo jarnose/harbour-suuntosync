@@ -84,7 +84,9 @@ Page {
                 // Straight from the watch - no Suunto account involved, and
                 // it finds nights the watch hasn't uploaded yet.
                 visible: AppController.whiteboardReady
-                text: qsTr("Sync sleep from watch")
+                // Sleep, recovery and daily activity - three
+                // resources, three mechanisms, one action.
+                text: qsTr("Sync health from watch")
                 onClicked: AppController.syncWatchHealth()
             }
             MenuItem {

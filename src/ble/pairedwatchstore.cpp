@@ -30,7 +30,7 @@ bool PairedWatchStore::open(QString *error)
     }
 
     QSqlQuery q(db);
-    const bool ok = q.exec(QStringLiteral(
+    bool ok = q.exec(QStringLiteral(
             "CREATE TABLE IF NOT EXISTS paired_watch ("
             "  id INTEGER PRIMARY KEY,"
             "  address TEXT NOT NULL,"
@@ -40,6 +40,16 @@ bool PairedWatchStore::open(QString *error)
             // service set - NULL, not an empty-string placeholder.
             "  model TEXT"
             ")"));
+
+    if (ok) {
+        // Added after the fact, so a device that already has a paired_watch
+        // row gets this table on the next launch rather than on a wipe.
+        ok = q.exec(QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS watch_descriptors ("
+                "  address TEXT PRIMARY KEY,"
+                "  payload BLOB NOT NULL"
+                ")"));
+    }
     if (!ok) {
         if (error)
             *error = q.lastError().text();
@@ -104,4 +114,31 @@ bool PairedWatchStore::clear(QString *error)
         return false;
     }
     return true;
+}
+
+bool PairedWatchStore::saveDescriptors(const QString &address, const QByteArray &payload,
+                                        QString *error)
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral(
+            "INSERT INTO watch_descriptors (address, payload) VALUES (?, ?) "
+            "ON CONFLICT(address) DO UPDATE SET payload = excluded.payload"));
+    q.addBindValue(address);
+    q.addBindValue(payload);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QByteArray PairedWatchStore::loadDescriptors(const QString &address) const
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral("SELECT payload FROM watch_descriptors WHERE address = ?"));
+    q.addBindValue(address);
+    if (!q.exec() || !q.next())
+        return QByteArray();
+    return q.value(0).toByteArray();
 }

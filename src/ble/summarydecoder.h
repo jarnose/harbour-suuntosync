@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+namespace SbemLayout { struct Layout; }
+
 // Decodes a /Logbook/byId/<id>/Summary payload - the watch's own computed
 // totals for a workout, as opposed to /Data's raw sample stream. Qt-free
 // (STL only), same golden-vector-before-BLE discipline as logbookdecoder.h.
@@ -77,5 +79,11 @@ struct DecodedSummary
 };
 
 DecodedSummary decode(const std::vector<uint8_t> &payload);
+
+// The same, against a particular watch's field table. The chunk that
+// carries the header is 0x1b on a Suunto Race and 0x1e on a Suunto 9
+// Baro, so a decoder that knows only one of them returns nothing at all
+// for the other - which is exactly what happened. See sbemlayout.h.
+DecodedSummary decode(const std::vector<uint8_t> &payload, const SbemLayout::Layout &layout);
 
 } // namespace Summary

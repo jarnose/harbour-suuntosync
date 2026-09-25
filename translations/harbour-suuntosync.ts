@@ -384,7 +384,7 @@
     </message>
     <message>
         <location filename="../qml/pages/HealthPage.qml" line="87"/>
-        <source>Sync sleep from watch</source>
+        <source>Sync health from watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -794,6 +794,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../qml/pages/PairingPage.qml" line="97"/>
+        <source>Fetch descriptors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../qml/pages/PairingPage.qml" line="91"/>
         <source>Fetch and save</source>
         <translation type="unfinished"></translation>
@@ -820,7 +825,7 @@
     </message>
     <message>
         <location filename="../qml/pages/PairingPage.qml" line="131"/>
-        <source>Fetch activity timeline</source>
+        <source>Fetch activity trend</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

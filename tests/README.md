@@ -21,7 +21,9 @@ off a real watch and a real account, and they are personal data:
   metres. Two different workouts on different days start from the same
   spot, which is exactly what makes it identifying.
 - **Twelve nights of sleep**, with heart rate, HRV, SpO2 and sleep quality.
-- **The watch serial**, which appears in several of them.
+- **The watch serial**, which appears in several of them - including,
+  unavoidably, in a descriptor table, whose `Sample.Source` enum is
+  literally `0=suunto-<serial>`.
 
 They are kept on the machine they were captured on. The repository carries
 the decoders, the documentation and the reasoning; it does not carry
@@ -41,6 +43,11 @@ To regenerate equivalents from your own watch, the paths are:
 | `logbook_data_heatshrink*.bin` | the bulk stream from `/Logbook/byId/<id>/Data` |
 | `logbook_summary_cycling.bin` | the paged reads from `/Logbook/byId/<id>/Summary` |
 | `sleep_timeline.sbem` | `/Daily/Sleep/Timeline/Data`, then `mdsSlp.sbm` off `/Dev/FileSystem/Stream` |
+| `activity_trend.bin` | `/Activity/TrendData` with a millisecond cursor - one fragment, header and all |
+| `descriptors_9baro.bin` | `/Logbook/byId/<id>/Descriptors` off a Suunto 9 Baro - the watch's own field table |
+| `logbook_data_9baro.bin` | a 9 Baro workout's `/Data`, for decoding against that table |
+| `logbook_summary_9baro.bin` | the same workout's `/Summary` |
+| `cloud_247_v1_activity_trend.json` | the cloud's own entries for the same ten-minute buckets, the expected values for the above |
 | `cloud_sml_*.json` | the `sml.zip` part of a captured `POST /v1/workout` |
 | `cloud_247_v1_*.json` | a captured `POST` to `247.sports-tracker.com/v1/<kind>` |
 | `workout_binary_*.bin` | the `workoutBinary` part of a phone-recorded upload |

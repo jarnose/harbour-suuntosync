@@ -175,6 +175,41 @@ Page {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         anchors.verticalCenter: parent.verticalCenter
                     }
+                    // Whether the cloud has this one. Only watch workouts
+                    // get the marker: a cloud workout is in the cloud by
+                    // definition, so the question only arises here.
+                    //
+                    // icon-s-cloud-upload is the only cloud glyph the
+                    // Silica theme has that isn't branded for somebody's
+                    // file-sync service - and it lives in icons-monochrome,
+                    // so it takes a colour. There is no crossed-out cloud,
+                    // hence the strike drawn on top for the negative state.
+                    Item {
+                        width: cloudIcon.width
+                        height: cloudIcon.height
+                        visible: model.source === "ble"
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Image {
+                            id: cloudIcon
+                            source: "image://theme/icon-s-cloud-upload?"
+                                    + (model.uploadedToCloud ? Theme.highlightColor
+                                                             : Theme.secondaryColor)
+                        }
+                        // Diagonal bar for "not up there yet". Drawn in the
+                        // accent colour over the dimmed glyph so the two
+                        // states differ by colour as well as by the bar -
+                        // at this size one cue on its own is easy to miss.
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: Math.round(parent.width * 1.25)
+                            height: Math.max(1, Math.round(parent.height / 12))
+                            radius: height / 2
+                            rotation: -45
+                            color: Theme.highlightColor
+                            visible: !model.uploadedToCloud
+                        }
+                    }
                 }
                 Label {
                     text: qsTr("%1 km · %2")

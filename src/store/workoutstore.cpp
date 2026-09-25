@@ -300,11 +300,17 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery q(db);
     if (!q.exec(QStringLiteral(
-            "SELECT key, source, activity_id, start_time, stop_time, total_time, "
-            "total_distance, total_ascent, total_descent, max_speed, energy_consumption, "
-            "step_count, avg_heart_rate, max_heart_rate, epoc, peak_training_effect, "
-            "recovery_time, max_vo2, training_load, training_stress_score FROM workouts "
-            "ORDER BY start_time DESC"))) {
+            // The join is what tells the list whether the cloud has taken a
+            // watch workout. A LEFT JOIN rather than a per-row
+            // isSmlUploaded() call, because the list redraws whole and one
+            // query beats one-per-workout.
+            "SELECT w.key, w.source, w.activity_id, w.start_time, w.stop_time, w.total_time, "
+            "w.total_distance, w.total_ascent, w.total_descent, w.max_speed, w.energy_consumption, "
+            "w.step_count, w.avg_heart_rate, w.max_heart_rate, w.epoc, w.peak_training_effect, "
+            "w.recovery_time, w.max_vo2, w.training_load, w.training_stress_score, "
+            "s.uploaded_key FROM workouts w "
+            "LEFT JOIN workout_sml s ON s.key = w.key "
+            "ORDER BY w.start_time DESC"))) {
         if (error)
             *error = q.lastError().text();
         return result;
@@ -332,6 +338,7 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
         w.maxVo2 = q.value(17).toDouble();
         w.trainingLoad = q.value(18).toDouble();
         w.trainingStressScore = q.value(19).toDouble();
+        w.uploadedToCloud = !q.value(20).isNull();
         result.append(w);
     }
     return result;

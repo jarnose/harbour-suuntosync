@@ -14,6 +14,7 @@
 #include "../ble/smldecoder.h"
 #include "../ble/sleepdecoder.h"
 #include "../ble/recoverydecoder.h"
+#include "../ble/activitydecoder.h"
 #include "../cloud/polyline.h"
 #include "../cloud/smljson.h"
 #include "../cloud/zipwriter.h"
@@ -151,10 +152,11 @@ DisplayValue toDisplayUnits(const QString &name, double value)
 // Decodes every field in a /Summary payload - not just the dozen that get
 // their own Workout column - into { name: { value, unit } } for storage.
 // See WorkoutStore::saveDetails() for why this isn't a set of columns.
-QByteArray summaryDetailsJson(const std::vector<uint8_t> &payload)
+QByteArray summaryDetailsJson(const std::vector<uint8_t> &payload,
+                               const SbemDescriptors::Table &table)
 {
     QJsonObject fields;
-    Sml::decode(Sbem::parseContainer(payload), [&fields](const Sml::Reading &reading) {
+    Sml::decode(Sbem::parseContainer(payload), table, [&fields](const Sml::Reading &reading) {
         const QString name = QString::fromLatin1(reading.descriptor->name);
         if (name.isEmpty())
             return;
@@ -236,10 +238,11 @@ QByteArray seriesJsonFromSamples(const std::map<QString, std::vector<double>> &s
 // Reduces each charted series from a /Data payload to a fixed-size curve.
 // Returns {} if nothing chartable was found, which is normal - a workout
 // with no GPS and no heart-rate strap has very little to draw.
-QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed)
+QByteArray buildSeriesJson(const std::vector<uint8_t> &compressed,
+                            const SbemDescriptors::Table &table)
 {
     std::map<QString, std::vector<double>> samples;
-    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
+    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)), table,
                 [&samples](const Sml::Reading &reading) {
         samples[QString::fromLatin1(reading.descriptor->name)].push_back(reading.value);
     });
@@ -317,21 +320,23 @@ QByteArray buildCloudSeriesJson(const QByteArray &body)
 // recorded in another timezone.
 QByteArray buildSmlZip(const std::vector<uint8_t> &compressedData,
                         const std::vector<uint8_t> &summaryPayload,
-                        const QString &source, qint64 startTimeMs, qint64 stopTimeMs)
+                        const QString &source, qint64 startTimeMs, qint64 stopTimeMs,
+                        const SbemDescriptors::Table &table)
 {
     const int offsetMinutes =
             QDateTime::fromMSecsSinceEpoch(startTimeMs).offsetFromUtc() / 60;
     const std::string src = source.toStdString();
 
     const std::string samples = SmlJson::buildDocument(
-            Sbem::parseContainer(Sbem::heatshrinkDecompress(compressedData)),
+            Sbem::parseContainer(Sbem::heatshrinkDecompress(compressedData)), table,
             src, offsetMinutes);
     // A /Summary payload has no clock chunk, so its entries need stamping
     // from outside. The captured upload puts summary.json's entries at the
     // end of the workout, so that is what goes in.
     const std::string summary = summaryPayload.empty()
             ? std::string()
-            : SmlJson::buildDocument(Sbem::parseContainer(summaryPayload), src, offsetMinutes,
+            : SmlJson::buildDocument(Sbem::parseContainer(summaryPayload), table, src,
+                                      offsetMinutes,
                                       stopTimeMs != 0 ? stopTimeMs : startTimeMs);
 
     std::vector<ZipWriter::Entry> entries;
@@ -379,7 +384,8 @@ QString lapTypeName(int type)
 // the split duration and distance as well as the marker that ended it.
 // Sample.Distance is cumulative, which is what makes the distance split
 // just a subtraction.
-QByteArray buildLapsJson(const std::vector<uint8_t> &compressed)
+QByteArray buildLapsJson(const std::vector<uint8_t> &compressed,
+                          const SbemDescriptors::Table &table)
 {
     struct Marker { int type; int64_t timeMs; double distance; };
     std::vector<Marker> markers;
@@ -387,7 +393,7 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed)
     int64_t firstTimeMs = 0;
     int64_t lastTimeMs = 0;
 
-    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)),
+    Sml::decode(Sbem::parseContainer(Sbem::heatshrinkDecompress(compressed)), table,
                 [&](const Sml::Reading &reading) {
         const QLatin1String name(reading.descriptor->name);
         if (reading.timeMs > 0) {
@@ -578,6 +584,11 @@ AppController::AppController(QObject *parent)
         m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
     }
 
+    // Until a watch's own table has been read, the compiled-in Race one
+    // stands in - which is what every version before this used.
+    m_descriptorTable = SbemDescriptors::Table::builtin();
+    m_descriptorLayout = SbemLayout::builtin();
+
     connect(this, &AppController::logbookTestResult, this, appendProbeLog);
     connect(this, &AppController::whiteboardTestResult, this, appendProbeLog);
 
@@ -587,6 +598,10 @@ AppController::AppController(QObject *parent)
         m_pairedWatch = m_pairedWatchStore->load(&error);
         if (!error.isEmpty())
             emit errorOccurred(tr("Failed to load paired watch: %1").arg(error));
+        // Its field table, if this watch has been read before - so an
+        // upload or a probe works right away, without waiting for a sync
+        // to fetch it.
+        loadStoredDescriptors();
     }
 
     // Safe to call every launch - "already exists" counts as success inside
@@ -722,6 +737,13 @@ void AppController::selectWatch(const QString &objectPath, const QString &addres
     }
     m_pairedWatch = watch;
     m_watchConnected = false;
+    // A different watch means a different field table. Whatever is in
+    // hand belongs to the old one, so drop back to the built-in until
+    // this one's own has been loaded or read.
+    m_descriptorTable = SbemDescriptors::Table::builtin();
+    m_descriptorLayout = SbemLayout::builtin();
+    m_descriptorAddress.clear();
+    loadStoredDescriptors();
     emit pairedWatchChanged();
     emit watchConnectedChanged();
 
@@ -786,6 +808,9 @@ void AppController::testLogbookFetch(const QString &logbookId)
     }
 
     m_logbookTestInFlight = true;
+    // Same as a real sync: this watch's own field table first, or the
+    // probe reports zeros for a watch that is not a Race.
+    ensureDescriptors(logbookId, [this, logbookId]() {
     const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
     m_whiteboardClient->fetchLogbookData(path,
             [this, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
@@ -796,7 +821,7 @@ void AppController::testLogbookFetch(const QString &logbookId)
         }
 
         try {
-            const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+            const Logbook::DecodedWorkout decoded = Logbook::decode(data, m_descriptorLayout);
             const Workout w = workoutFromDecoded(logbookId, decoded);
 
             QString storeError;
@@ -822,6 +847,7 @@ void AppController::testLogbookFetch(const QString &logbookId)
                                             .arg(data.size())
                                             .arg(QString::fromUtf8(e.what())));
         }
+    });
     });
 }
 
@@ -867,6 +893,53 @@ void AppController::testEntriesFetch()
     });
 }
 
+void AppController::testDescriptorsFetch(const QString &logbookId)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+
+    m_logbookTestInFlight = true;
+    const QString path = QStringLiteral("/Logbook/byId/%1/Descriptors").arg(logbookId);
+    m_whiteboardClient->fetchSummary(path,
+            [this, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(tr("Descriptors fetch failed: %1").arg(error));
+            return;
+        }
+
+        // Saved whole. This is a field catalogue with hundreds of entries;
+        // the useful work happens offline against the file, the same way
+        // the Race's table was built.
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(dir);
+        const QString name = QStringLiteral("descriptors-%1.bin").arg(logbookId);
+        QFile dump(dir + QStringLiteral("/") + name);
+        if (dump.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            dump.write(reinterpret_cast<const char *>(data.data()),
+                        static_cast<int>(data.size()));
+            dump.close();
+        }
+
+        // How many <PTH> entries it carries is the quickest sanity check
+        // that this is a field catalogue and not something else.
+        int paths = 0;
+        const char marker[] = "<PTH>";
+        for (size_t i = 0; i + 5 <= data.size(); ++i) {
+            if (std::memcmp(data.data() + i, marker, 5) == 0)
+                ++paths;
+        }
+        emit logbookTestResult(tr("Descriptors: %1 bytes, %2 field paths, saved as %3")
+                                .arg(data.size()).arg(paths).arg(name));
+    });
+}
+
 void AppController::testHealthResourceFetch(const QString &kind)
 {
     if (!m_whiteboardReady) {
@@ -884,17 +957,17 @@ void AppController::testHealthResourceFetch(const QString &kind)
     // exists on the wire - it is an MDS-library abstraction on the Android
     // side, and the watch answered every spelling of it with the six-byte
     // f5 error.
-    QString resource, filename;
-    if (kind == QLatin1String("Sleep")) {
-        resource = QStringLiteral("/Daily/Sleep/Timeline/Data");
-        filename = QStringLiteral("mdsSlp.sbm");
-    } else {
-        // Seen in the same capture next to the sleep fetch. The filename is
-        // a guess by analogy and may well be wrong - if it is, the read
-        // will fail rather than return something misleading.
-        resource = QStringLiteral("/Activity/Moments/Sync/Data");
-        filename = QStringLiteral("mdsAct.sbm");
+    // Sleep is the only series that works this way. Daily activity was
+    // tried here too, against a guessed "mdsAct.sbm" - no such file exists,
+    // and libmds.so since showed activity is not a rendered file at all
+    // (see testActivityTrendFetch()). The guess is gone rather than left
+    // in as a menu entry that cannot succeed.
+    if (kind != QLatin1String("Sleep")) {
+        emit logbookTestResult(tr("No timeline file is known for %1.").arg(kind));
+        return;
     }
+    const QString resource = QStringLiteral("/Daily/Sleep/Timeline/Data");
+    const QString filename = QStringLiteral("mdsSlp.sbm");
 
     // A week back. The capture used roughly a day; a week is a harmless
     // widening for a probe and shows whether the cursor is honoured.
@@ -932,6 +1005,124 @@ void AppController::testHealthResourceFetch(const QString &kind)
         }
         emit logbookTestResult(tr("%1: %2 bytes\n%3\n\"%4\"")
                                 .arg(resource).arg(data.size()).arg(hex.trimmed(), ascii));
+    });
+}
+
+namespace {
+
+// The ways the /Activity/TrendData cursor could plausibly be encoded.
+// libmds.so pins the parameter down to one integer named "timestamp" whose
+// value is the app's NewerThan multiplied by 1000 - but the width and unit
+// it lands in on the wire are decided by the watch's own metadata, which
+// the JSON layer hides. Milliseconds first because that multiply says so;
+// seconds second because the neighbouring recovery resource uses them.
+//
+// There is no int32-milliseconds row: epoch milliseconds do not fit in 32
+// bits, so that combination could only ever send a truncated cursor. The
+// danger is not that it fails - it is that the watch might accept the
+// nonsense and answer, and the sweep would report a working encoding that
+// is silently asking for the wrong window.
+struct TrendCursorCandidate
+{
+    uint16_t typeCode;
+    bool milliseconds;
+    const char *label;
+};
+
+const TrendCursorCandidate kTrendCursorCandidates[] = {
+    { Mds::kParamInt64, true,  "int64 ms" },
+    { Mds::kParamInt64, false, "int64 s" },
+    { Mds::kParamInt32, false, "int32 s" },
+};
+
+// f5 01 00 80 00 00 - this protocol's rejection reply, confirmed against
+// two different resources (docs/watch-push-resources.md). Six bytes
+// starting f5 means "no", not "nothing to report".
+bool isRejection(const std::vector<uint8_t> &body)
+{
+    return body.size() <= 6 && !body.empty() && body[0] == 0xF5;
+}
+
+} // namespace
+
+void AppController::testActivityTrendFetch()
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+    m_logbookTestInFlight = true;
+    tryActivityTrendEncoding(0);
+}
+
+void AppController::tryActivityTrendEncoding(int index)
+{
+    const int count = static_cast<int>(sizeof(kTrendCursorCandidates)
+                                        / sizeof(kTrendCursorCandidates[0]));
+    if (index >= count) {
+        m_logbookTestInFlight = false;
+        emit logbookTestResult(tr("/Activity/TrendData rejected every cursor encoding tried. "
+                                   "The parameter is shaped differently than assumed."));
+        return;
+    }
+
+    const TrendCursorCandidate &candidate = kTrendCursorCandidates[index];
+    const QString path = QStringLiteral("/Activity/TrendData");
+
+    // Two days back. Long enough that a watch worn today must have
+    // something to say, short enough that a first reply stays readable.
+    const qint64 sinceMs = QDateTime::currentMSecsSinceEpoch() - 2LL * 24 * 3600 * 1000;
+    const qint64 value = candidate.milliseconds ? sinceMs : sinceMs / 1000;
+
+    m_whiteboardClient->fetchWithCursor(path, candidate.typeCode, value,
+            [this, index, candidate, path, value]
+            (bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        if (!ok) {
+            // A transport failure is not a verdict on the encoding, so the
+            // sweep stops rather than blaming the next candidate for it.
+            m_logbookTestInFlight = false;
+            emit logbookTestResult(tr("%1 (%2): %3")
+                                    .arg(path, QString::fromLatin1(candidate.label), error));
+            return;
+        }
+        if (isRejection(body)) {
+            tryActivityTrendEncoding(index + 1);
+            return;
+        }
+
+        m_logbookTestInFlight = false;
+
+        // The whole reply goes to a file, header included. The status word
+        // in that header is the point of the exercise: libmds treats 202 as
+        // "more fragments follow" and 200 as the last one, where every
+        // other paged resource here uses 100/200. Retyping a hex dump is
+        // not a substitute for having the bytes.
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(dir);
+        QFile dump(dir + QStringLiteral("/trenddata.bin"));
+        if (dump.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            dump.write(reinterpret_cast<const char *>(body.data()),
+                        static_cast<int>(body.size()));
+            dump.close();
+        }
+
+        QString status = QStringLiteral("?");
+        if (body.size() >= 8) {
+            status = QString::number(static_cast<uint16_t>(
+                    body[6] | (static_cast<uint16_t>(body[7]) << 8)));
+        }
+        QString hex;
+        for (size_t i = 0; i < body.size() && i < 64; ++i)
+            hex += QStringLiteral("%1 ").arg(body[i], 2, 16, QLatin1Char('0'));
+
+        emit logbookTestResult(tr("/Activity/TrendData accepted %1 (cursor %2)\n"
+                                   "%3 bytes, status %4, saved as trenddata.bin\n%5")
+                                .arg(QString::fromLatin1(candidate.label))
+                                .arg(value).arg(body.size()).arg(status, hex.trimmed()));
     });
 }
 
@@ -1092,7 +1283,7 @@ QByteArray AppController::buildUploadZip(const QString &key) const
             reinterpret_cast<const uint8_t *>(summary.constData()),
             reinterpret_cast<const uint8_t *>(summary.constData()) + summary.size());
     return buildSmlZip(dataVec, summaryVec, smlSourceFor(m_pairedWatch.name),
-                        startTime, stopTime);
+                        startTime, stopTime, m_descriptorTable);
 }
 
 int AppController::pendingWorkoutUploads() const
@@ -1214,6 +1405,10 @@ void AppController::uploadWorkoutToCloud(const QString &key)
             }
             m_workoutStore->markSmlUploaded(key, cloudKey, nullptr);
             emit workoutUploaded(key, true, tr("Uploaded to Suunto"));
+            // So the list's cloud marker changes over without waiting for
+            // the next sync. The batch path reloads once at the end; this
+            // one uploads a single workout, so it reloads here.
+            loadCachedWorkouts();
         });
     });
 }
@@ -1350,13 +1545,12 @@ void AppController::fetchWatchRecovery()
     // Seconds, not milliseconds - see fetchRecoveryMoments().
     m_whiteboardClient->fetchRecoveryMoments(since / 1000,
             [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
-        m_healthSyncInProgress = false;
-        emit healthSyncInProgressChanged();
-
         if (!ok) {
             // Sleep already succeeded by this point, so this is reported
-            // but not treated as a failed sync.
+            // but not treated as a failed sync - and daily activity is a
+            // third resource again, so it still gets its turn.
             emit errorOccurred(tr("Sleep synced. Recovery failed: %1").arg(error));
+            fetchWatchActivity();
             return;
         }
 
@@ -1364,6 +1558,7 @@ void AppController::fetchWatchRecovery()
         if (samples.empty()) {
             emit errorOccurred(tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
                                 .arg(data.size()));
+            fetchWatchActivity();
             return;
         }
 
@@ -1384,6 +1579,79 @@ void AppController::fetchWatchRecovery()
         QString storeError;
         if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save recovery data: %1").arg(storeError));
+            fetchWatchActivity();
+            return;
+        }
+        emit healthDataChanged();
+
+        // Daily activity: a third resource, a third mechanism. Chained
+        // rather than fired alongside, because the whiteboard link takes
+        // one request at a time.
+        fetchWatchActivity();
+    });
+}
+
+void AppController::fetchWatchActivity()
+{
+    qint64 since = m_healthStore->newestTimestamp(QStringLiteral("activity"));
+    if (since == 0)
+        since = QDateTime::currentMSecsSinceEpoch() - 14LL * 24 * 3600 * 1000;
+    // No +1 to skip the last stored bucket: the cursor is not a strict
+    // lower bound (see fetchActivityTrend()), so the watch may hand back
+    // earlier buckets regardless. Re-reading a few is free - the store
+    // upserts on (kind, timestamp).
+
+    m_healthSyncInProgress = true;
+    emit healthSyncInProgressChanged();
+
+    // Milliseconds here, where recovery counts seconds. libmds.so settles
+    // it: the official app multiplies its own NewerThan by 1000 before
+    // this fetch. See docs/watch-push-resources.md.
+    m_whiteboardClient->fetchActivityTrend(since,
+            [this](bool ok, const std::vector<ActivityTrend::Sample> &samples,
+                    const QString &error) {
+        m_healthSyncInProgress = false;
+        emit healthSyncInProgressChanged();
+
+        if (!ok) {
+            emit errorOccurred(tr("Sleep and recovery synced. Daily activity failed: %1")
+                                .arg(error));
+            return;
+        }
+        if (samples.empty()) {
+            // Not an error: an up-to-date watch legitimately has nothing
+            // newer than the last bucket already stored.
+            emit healthDataChanged();
+            return;
+        }
+
+        QVector<HealthEntry> entries;
+        entries.reserve(samples.size());
+        for (const ActivityTrend::Sample &sample : samples) {
+            QJsonObject o;
+            // The cloud's own field names and units, so a bucket read from
+            // the watch and the same bucket read from the cloud are the
+            // same row: energy unconverted, heart rate in hertz.
+            o.insert(QStringLiteral("energyConsumption"),
+                      static_cast<double>(sample.energy));
+            o.insert(QStringLiteral("stepCount"), sample.stepCount);
+            if (sample.heartRateBpm > 0) {
+                // Omitted rather than sent as zero when the watch measured
+                // none - the same lesson as the sleep upload, where a
+                // sentinel passed through as a real reading and the server
+                // rejected the lot.
+                o.insert(QStringLiteral("hr"), sample.heartRateBpm / 60.0);
+            }
+            HealthEntry entry;
+            entry.kind = QStringLiteral("activity");
+            entry.timestamp = sample.timestampMs;
+            entry.data = QJsonDocument(o).toJson(QJsonDocument::Compact);
+            entries.append(entry);
+        }
+
+        QString storeError;
+        if (!m_healthStore->upsert(entries, &storeError, true)) {
+            emit errorOccurred(tr("Could not save activity data: %1").arg(storeError));
             return;
         }
         emit healthDataChanged();
@@ -1882,7 +2150,72 @@ void AppController::syncWatchWorkouts()
         for (const LogEntries::Entry &entry : entries)
             logbookIds.append(QString::number(entry.id));
 
-        fetchWatchEntryAt(logbookIds, 0, 0, {});
+        // Read the watch's own field table first, once per watch: which
+        // chunk carries GPS or heart rate is per model, and decoding with
+        // the wrong table produces a workout of zeros rather than an
+        // error. See ensureDescriptors().
+        ensureDescriptors(logbookIds.first(), [this, logbookIds]() {
+            fetchWatchEntryAt(logbookIds, 0, 0, {});
+        });
+    });
+}
+
+void AppController::loadStoredDescriptors()
+{
+    const QString address = m_pairedWatch.address;
+    if (address.isEmpty() || m_descriptorAddress == address)
+        return;
+
+    // Read once per watch and kept: 25 kB over BLE on every sync would be
+    // wasteful, and the table only changes with a firmware update.
+    const QByteArray stored = m_pairedWatchStore->loadDescriptors(address);
+    if (stored.isEmpty())
+        return;
+
+    const std::vector<uint8_t> payload(stored.begin(), stored.end());
+    SbemDescriptors::Table table = SbemDescriptors::Table::parse(payload);
+    if (table.empty())
+        return;
+
+    m_descriptorTable = std::move(table);
+    m_descriptorLayout = SbemLayout::resolve(m_descriptorTable);
+    m_descriptorAddress = address;
+}
+
+void AppController::ensureDescriptors(const QString &logbookId,
+                                       const std::function<void()> &then)
+{
+    loadStoredDescriptors();
+
+    const QString address = m_pairedWatch.address;
+    if (address.isEmpty() || m_descriptorAddress == address) {
+        then();
+        return;
+    }
+
+    // The resource is addressed per workout, but the table it returns
+    // describes the watch, not that workout - any id will do.
+    const QString path = QStringLiteral("/Logbook/byId/%1/Descriptors").arg(logbookId);
+    m_whiteboardClient->fetchSummary(path,
+            [this, address, then](bool ok, const std::vector<uint8_t> &data, const QString &) {
+        if (ok) {
+            SbemDescriptors::Table table = SbemDescriptors::Table::parse(data);
+            if (!table.empty()) {
+                m_descriptorTable = std::move(table);
+                m_descriptorLayout = SbemLayout::resolve(m_descriptorTable);
+                m_descriptorAddress = address;
+                m_pairedWatchStore->saveDescriptors(
+                        address,
+                        QByteArray(reinterpret_cast<const char *>(data.data()),
+                                    static_cast<int>(data.size())),
+                        nullptr);
+            }
+        }
+        // Deliberately not an error if this failed: the built-in table is
+        // what every version before this used, so falling back to it is
+        // no worse than before. A watch it doesn't fit decodes to zeros,
+        // which is visible in the list rather than silent.
+        then();
     });
 }
 
@@ -1924,7 +2257,7 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         Workout w;
         std::vector<Logbook::TrackPoint> track;
         try {
-            const Logbook::DecodedWorkout decoded = Logbook::decode(data);
+            const Logbook::DecodedWorkout decoded = Logbook::decode(data, m_descriptorLayout);
             w = workoutFromDecoded(logbookId, decoded);
             track = decoded.track;
         } catch (const std::exception &e) {
@@ -1943,7 +2276,7 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 [this, logbookIds, index, succeeded, failuresCopy, logbookId, w, track, data]
                 (bool summaryOk, const std::vector<uint8_t> &payload, const QString &) mutable {
             if (summaryOk)
-                applySummary(&w, Summary::decode(payload));
+                applySummary(&w, Summary::decode(payload, m_descriptorLayout));
 
             QString storeError;
             if (m_workoutStore->upsert(w, &storeError)) {
@@ -1951,11 +2284,11 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
                 if (!track.empty())
                     m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
                 if (summaryOk)
-                    m_workoutStore->saveDetails(w.key, summaryDetailsJson(payload), nullptr);
-                const QByteArray seriesJson = buildSeriesJson(data);
+                    m_workoutStore->saveDetails(w.key, summaryDetailsJson(payload, m_descriptorTable), nullptr);
+                const QByteArray seriesJson = buildSeriesJson(data, m_descriptorTable);
                 if (!seriesJson.isEmpty())
                     m_workoutStore->saveSeries(w.key, seriesJson, nullptr);
-                const QByteArray lapsJson = buildLapsJson(data);
+                const QByteArray lapsJson = buildLapsJson(data, m_descriptorTable);
                 if (!lapsJson.isEmpty())
                     m_workoutStore->saveLaps(w.key, lapsJson, nullptr);
 

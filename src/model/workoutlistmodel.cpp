@@ -57,6 +57,8 @@ QVariant WorkoutListModel::data(const QModelIndex &index, int role) const
         return w.trainingLoad;
     case TrainingStressScoreRole:
         return w.trainingStressScore;
+    case UploadedToCloudRole:
+        return w.uploadedToCloud;
     default:
         return QVariant();
     }
@@ -84,6 +86,7 @@ QHash<int, QByteArray> WorkoutListModel::roleNames() const
         { MaxVo2Role, "maxVo2" },
         { TrainingLoadRole, "trainingLoad" },
         { TrainingStressScoreRole, "trainingStressScore" },
+        { UploadedToCloudRole, "uploadedToCloud" },
     };
 }
 

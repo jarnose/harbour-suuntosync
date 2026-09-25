@@ -42,4 +42,9 @@ struct Descriptor {
 // Returns nullptr for an id the captured table doesn't describe.
 const Descriptor *find(uint16_t id);
 
+// The whole built-in table, for code that has to walk it rather than look
+// one id up - SbemLayout::resolve() does, because it has to find which
+// group carries a field rather than being told.
+const Descriptor *all(size_t *count);
+
 } // namespace SbemDescriptors

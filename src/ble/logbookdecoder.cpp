@@ -1,4 +1,5 @@
 #include "logbookdecoder.h"
+#include "sbemlayout.h"
 #include "sbemcontainer.h"
 
 #include <algorithm>
@@ -35,27 +36,19 @@ constexpr int64_t kMaxSpeedGapMaxMs = 1500;
 // sentinel value.
 constexpr uint8_t kNoCadenceSentinel = 255;
 
-// Altitude, per docs/sbem-chunk-map.md (generated from the watch's own
-// descriptor table). Chunk 0x15 carries Sample.Altitude as an absolute
-// uint16 at byte 18; chunk 0x16 carries int8 deltas against it at byte 8.
-// Both decode with the schema's own <MOD> expression, raw/5 - 1000, so the
-// stored unit is 0.2 m steps offset by -1000 m.
-constexpr uint8_t kAltitudeAbsoluteChunk = 0x15;
-constexpr size_t kAltitudeAbsoluteOffset = 18;
-constexpr uint8_t kAltitudeDeltaChunk = 0x16;
-constexpr size_t kAltitudeDeltaOffset = 8;
+// Altitude decodes with the schema's own <MOD> expression, raw/5 - 1000,
+// so the stored unit is 0.2 m steps offset by -1000 m. Which chunk carries
+// it, and at what byte, comes from the watch's own table now (SbemLayout)
+// - a Race puts the absolute reading in chunk 0x15 and the deltas in 0x16,
+// a 9 Baro in 0x18 and 0x19.
 constexpr uint16_t kNoAltitudeSentinel = 65535; // the schema's nillable value
 
 double altitudeRawToMeters(int32_t raw) { return raw / 5.0 - 1000.0; }
 
-// Chunk 0x04 is an Altitude calibration event; byte 4 is a little-endian
-// int32 metre offset (descriptor 41, Altitude.AltitudeOffset). It corrects
-// the samples recorded *before* it - a workout whose barometer hadn't
-// settled yet starts hundreds of metres out and this is what pulls it back
-// (one real capture had -208 m).
-constexpr uint8_t kAltitudeEventChunk = 0x04;
-constexpr size_t kAltitudeEventOffsetField = 4;
-constexpr size_t kAltitudeEventMinSize = 12;
+// An Altitude calibration event carries a little-endian int32 metre offset
+// (Altitude.AltitudeOffset). It corrects the samples recorded *before* it
+// - a workout whose barometer hadn't settled yet starts hundreds of metres
+// out and this is what pulls it back (one real capture had -208 m).
 
 // Summing every 0.2 m step counts barometric noise as climb (3-4x over the
 // real totals on every workout checked). Only commit a rise or fall once it
@@ -101,6 +94,12 @@ struct CadencePoint
 
 DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
 {
+    return decode(mdsStrippedCompressed, SbemLayout::builtin());
+}
+
+DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed,
+                       const SbemLayout::Layout &layout)
+{
     const std::vector<uint8_t> decompressed = Sbem::heatshrinkDecompress(mdsStrippedCompressed);
     const std::vector<Sbem::Chunk> chunks = Sbem::parseContainer(decompressed);
 
@@ -126,22 +125,36 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
     size_t altitudeSamplesBeforeEvent = 0;
 
     for (const Sbem::Chunk &chunk : chunks) {
-        // Chunk 0x01 is the workout's own time base (descriptor 33,
-        // TimeISO8601 "baseonly", local64) - every other chunk's leading
+        const SbemLayout::Group *group = layout.group(static_cast<uint16_t>(chunk.id));
+
+        // Reading a field needs the group to carry it and the chunk to be
+        // long enough to hold it. Deliberately a lower bound, not an exact
+        // length: a 9 Baro's sample groups are shorter than a Race's
+        // because the Race appends running-dynamics fields after
+        // everything read here, and demanding an exact length is what made
+        // this decoder return zeros for every 9 Baro workout.
+        auto at = [&chunk](int offset, size_t width) {
+            return offset >= 0 && chunk.value.size() >= static_cast<size_t>(offset) + width;
+        };
+
+        // The time base group carries the workout's own clock
+        // (TimeISO8601 "baseonly", local64) - every other chunk's leading
         // int16 is a delta against it. Seeding from it matters for a
-        // workout that never got a GPS fix: chunk 0x0c was the only other
-        // anchor, so without this a short indoor session decoded with a
-        // start time of 0 and sorted to the bottom of the list as 1970.
-        if (chunk.id == 0x01 && chunk.value.size() == sizeof(uint64_t) && !haveCurrentMs) {
+        // workout that never got a GPS fix: the GPS chunk was the only
+        // other anchor, so without this a short indoor session decoded
+        // with a start time of 0 and sorted to the bottom of the list as
+        // 1970.
+        const bool isTimeBase = group && group->timeBase;
+        if (isTimeBase && chunk.value.size() == sizeof(uint64_t) && !haveCurrentMs) {
             uint64_t raw = 0;
             std::memcpy(&raw, chunk.value.data(), sizeof(uint64_t));
             currentMs = static_cast<uint64_t>(Sbem::decodeLocal64(raw));
             haveCurrentMs = true;
-        } else if (chunk.id == 0x0c && chunk.value.size() == 20) {
+        } else if (group && at(group->utc, sizeof(uint64_t))) {
             currentMs = 0;
-            std::memcpy(&currentMs, chunk.value.data() + 2, sizeof(uint64_t));
+            std::memcpy(&currentMs, chunk.value.data() + group->utc, sizeof(uint64_t));
             haveCurrentMs = true;
-        } else if (chunk.id != 0x01 && chunk.value.size() >= 2 && haveCurrentMs) {
+        } else if (!isTimeBase && chunk.value.size() >= 2 && haveCurrentMs) {
             currentMs = static_cast<uint64_t>(static_cast<int64_t>(currentMs) + leadingDelta(chunk.value));
         }
 
@@ -153,39 +166,42 @@ DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed)
             lastMs = currentMs;
         }
 
-        if (chunk.id == 0x0c && chunk.value.size() == 20) {
+        if (!group)
+            continue;
+
+        if (at(group->latitude, sizeof(int32_t)) && at(group->longitude, sizeof(int32_t))) {
             int32_t latRaw = 0, lonRaw = 0;
-            std::memcpy(&latRaw, chunk.value.data() + 10, sizeof(int32_t));
-            std::memcpy(&lonRaw, chunk.value.data() + 14, sizeof(int32_t));
+            std::memcpy(&latRaw, chunk.value.data() + group->latitude, sizeof(int32_t));
+            std::memcpy(&lonRaw, chunk.value.data() + group->longitude, sizeof(int32_t));
             gpsPoints.push_back({currentMs, latRaw / 1e7, lonRaw / 1e7});
             result.track.push_back({latRaw / 1e7, lonRaw / 1e7});
-        } else if (chunk.id == 0x12 && chunk.value.size() == 3) {
-            const uint8_t hr = chunk.value[2];
+        } else if (at(group->heartRate, 1)) {
+            const uint8_t hr = chunk.value[group->heartRate];
             if (hr > 0)
                 heartRateSamples.push_back(hr);
-        } else if (chunk.id == 0x08 && chunk.value.size() >= 3) {
-            result.activityId = chunk.value[2];
-        } else if (chunk.id == 0x16 && chunk.value.size() == 17) {
-            cadencePoints.push_back({currentMs, chunk.value[10]});
+        } else if (at(group->activityType, 1)) {
+            result.activityId = chunk.value[group->activityType];
+        } else if (group->altitudeDelta >= 0 && at(group->cadence, 1)) {
+            // Cadence is read from the delta group, which is the one that
+            // carries a per-sample reading for every sample. The absolute
+            // group has a cadence byte too, but far fewer of them.
+            cadencePoints.push_back({currentMs, chunk.value[group->cadence]});
         }
 
-        if (chunk.id == kAltitudeAbsoluteChunk
-                && chunk.value.size() >= kAltitudeAbsoluteOffset + sizeof(uint16_t)) {
+        if (at(group->altitudeAbsolute, sizeof(uint16_t))) {
             uint16_t raw = 0;
-            std::memcpy(&raw, chunk.value.data() + kAltitudeAbsoluteOffset, sizeof(uint16_t));
+            std::memcpy(&raw, chunk.value.data() + group->altitudeAbsolute, sizeof(uint16_t));
             if (raw != kNoAltitudeSentinel) {
                 currentAltitudeRaw = raw;
                 haveAltitudeRaw = true;
                 altitudeRaw.push_back(currentAltitudeRaw);
             }
-        } else if (chunk.id == kAltitudeDeltaChunk && haveAltitudeRaw
-                && chunk.value.size() > kAltitudeDeltaOffset) {
-            currentAltitudeRaw += static_cast<int8_t>(chunk.value[kAltitudeDeltaOffset]);
+        } else if (haveAltitudeRaw && at(group->altitudeDelta, 1)) {
+            currentAltitudeRaw += static_cast<int8_t>(chunk.value[group->altitudeDelta]);
             altitudeRaw.push_back(currentAltitudeRaw);
-        } else if (chunk.id == kAltitudeEventChunk && !haveAltitudeEvent
-                && chunk.value.size() >= kAltitudeEventMinSize) {
+        } else if (!haveAltitudeEvent && at(group->altitudeOffset, sizeof(int32_t))) {
             std::memcpy(&altitudeEventOffsetMeters,
-                        chunk.value.data() + kAltitudeEventOffsetField, sizeof(int32_t));
+                        chunk.value.data() + group->altitudeOffset, sizeof(int32_t));
             haveAltitudeEvent = true;
             altitudeSamplesBeforeEvent = altitudeRaw.size();
         }

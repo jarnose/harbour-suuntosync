@@ -78,6 +78,9 @@ add_executable(harbour-suuntosync
     src/ble/smldecoder.cpp
     src/ble/sleepdecoder.cpp
     src/ble/recoverydecoder.cpp
+    src/ble/sbemtable.cpp
+    src/ble/sbemlayout.cpp
+    src/ble/activitydecoder.cpp
     src/ble/heatshrink/heatshrink_decoder.c
     src/cloud/suuntoauth.cpp
     src/cloud/polyline.cpp

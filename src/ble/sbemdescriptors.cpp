@@ -418,4 +418,11 @@ const Descriptor *find(uint16_t id)
     return nullptr;
 }
 
+const Descriptor *all(size_t *count)
+{
+    if (count)
+        *count = sizeof(kDescriptors) / sizeof(kDescriptors[0]);
+    return kDescriptors;
+}
+
 } // namespace SbemDescriptors

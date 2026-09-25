@@ -252,6 +252,15 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
                            const std::string &source, int offsetMinutes,
                            int64_t fallbackTimeMs)
 {
+    return buildDocument(chunks, SbemDescriptors::Table::builtin(), source, offsetMinutes,
+                          fallbackTimeMs);
+}
+
+std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
+                           const SbemDescriptors::Table &table,
+                           const std::string &source, int offsetMinutes,
+                           int64_t fallbackTimeMs)
+{
     // One JSON sample per chunk, in payload order.
     struct Entry
     {
@@ -261,7 +270,7 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     };
     std::vector<Entry> entries(chunks.size());
 
-    Sml::decode(chunks, [&entries, offsetMinutes](const Sml::Reading &reading) {
+    Sml::decode(chunks, table, [&entries, offsetMinutes](const Sml::Reading &reading) {
         if (reading.chunkIndex >= entries.size() || !reading.descriptor)
             return;
         const char *name = reading.descriptor->name;

@@ -37,6 +37,9 @@ public:
         MaxVo2Role,             // ml/kg/min
         TrainingLoadRole,
         TrainingStressScoreRole, // cloud sync only
+        // Whether the cloud has taken this one. Only asked about watch
+        // workouts - see Workout::uploadedToCloud.
+        UploadedToCloudRole,
     };
     Q_ENUM(Roles)
 

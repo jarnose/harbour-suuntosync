@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../ble/sbemlayout.h"
 #include "../cloud/accountmeta.h"
 #include "../ble/bluezadapter.h"
 #include "../ble/pairedwatch.h"
@@ -9,6 +10,7 @@
 #include <QVariantList>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 
 class TokenVault;
 class CloudAccountStore;
@@ -152,6 +154,41 @@ public:
     //
     // `kind` is "Sleep" or "Activity".
     Q_INVOKABLE void testHealthResourceFetch(const QString &kind);
+
+    // Probe for daily activity, which is the last health series still
+    // missing. docs/watch-push-resources.md previously wrote /Activity/
+    // TrendData off as "a different structure, no unix timestamps in it";
+    // libmds.so says otherwise, and says exactly what it is - see that
+    // doc's 2026-09-25 section. In short: SDS::Activity::getFragment()
+    // builds "/net/<serial>/Activity/TrendData", passes one parameter
+    // named "timestamp", and parses an array of entries carrying
+    // Timestamp, Steps and Energy.
+    //
+    // What the disassembly does NOT say is the parameter's width or unit
+    // on the wire - the JSON layer hides both, and this project has
+    // already been caught once by a cursor that was seconds where the
+    // neighbouring resource used milliseconds. So the probe tries all four
+    // combinations in turn and stops at the first the watch doesn't
+    // reject, which settles it in one build instead of four.
+    Q_INVOKABLE void testActivityTrendFetch();
+
+    // Reads the connected watch's own field table off
+    // /Logbook/byId/<id>/Descriptors and saves it, because the compiled-in
+    // one (src/ble/sbemdescriptors.h, generated from a Suunto Race) turns
+    // out to be per-model.
+    //
+    // A Suunto 9 Baro transfers a workout perfectly - same Whiteboard
+    // protocol, same Heatshrink, same SBEM0103 container, parses into
+    // thousands of clean chunks - and then every field decodes to zero,
+    // because its chunk ids are not the Race's. The Race puts GPS in
+    // 0x0c and heart rate in 0x12; the 9 Baro's payload has no 0x0c or
+    // 0x12 at all, and its summary uses 0x1e/0x20 where the Race uses
+    // 0x1b/0x1d/0x158-0x167. Same protocol, different vocabulary.
+    //
+    // No new protocol code: /Descriptors is paged exactly like /Summary
+    // (see Mds::encodePagedReadRequest()), so this is fetchSummary() with
+    // a different path.
+    Q_INVOKABLE void testDescriptorsFetch(const QString &logbookId);
 
     // The real end-user "sync directly from the watch" action, now that
     // both halves are proven on real hardware:
@@ -386,6 +423,34 @@ private:
     // request. Sleep having already succeeded, a failure here is reported
     // rather than failing the whole sync.
     void fetchWatchRecovery();
+    // Chained after recovery - a third resource again, and the one that
+    // needed libmds.so to find at all. Same treatment: reported but not
+    // fatal, since sleep and recovery have already landed by then.
+    void fetchWatchActivity();
+
+    // The connected watch's own SBEM field table, and the field offsets
+    // resolved from it. Descriptor ids are per watch model, so decoding a
+    // Suunto 9 Baro's workout against a Race's table yields zeros for
+    // every field (docs/sbem-chunk-map.md). Defaults to the compiled-in
+    // Race table until the real one has been read off the watch.
+    SbemDescriptors::Table m_descriptorTable;
+    SbemLayout::Layout m_descriptorLayout;
+    // Whether m_descriptorTable came from the watch now connected, as
+    // opposed to being the compiled-in fallback.
+    QString m_descriptorAddress;
+
+    // Reads the watch's table if it isn't already in hand: from the local
+    // store first, and failing that off the watch itself, using any
+    // logbook id (the resource is per workout but the table is not).
+    // Calls `then` either way - a watch whose table cannot be read still
+    // gets decoded with the built-in one, which is no worse than before.
+    void ensureDescriptors(const QString &logbookId, const std::function<void()> &then);
+    // The store-only half, which needs no BLE and no callback. Called on
+    // startup and whenever the paired watch changes, so that an upload or
+    // a probe run before any sync this session still uses the right table.
+    void loadStoredDescriptors();
+    // One step of testActivityTrendFetch()'s encoding sweep.
+    void tryActivityTrendEncoding(int index);
     void uploadWorkoutAt(const QVector<QString> &keys, int index, int succeeded,
                           const QStringList &failures);
     // Builds the sml.zip for one workout from its stored raw payloads.

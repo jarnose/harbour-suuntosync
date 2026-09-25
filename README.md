@@ -1,7 +1,7 @@
 # Suunto Sync
 
-A native Sailfish OS app (C++/QML, Silica) that talks to a Suunto Race over
-Bluetooth LE and to the Suunto cloud over HTTPS — without the official
+A native Sailfish OS app (C++/QML, Silica) that talks to a Suunto watch
+over Bluetooth LE and to the Suunto cloud over HTTPS — without the official
 Android app in the loop.
 
 ## What works
@@ -16,10 +16,16 @@ Confirmed on real hardware, not just in tests:
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
   payload is converted to the JSON the cloud expects, zipped and posted. A
   workout recorded on the watch shows up in the official app afterwards.
+  The workout list marks which watch-recorded workouts the cloud has
+  taken, and which are still waiting.
 - **Sleep, recovery and daily activity.** Read from the cloud, and read
   *directly off the watch* — which matters, because a night that the watch
   has recorded but never uploaded is invisible to every other client.
-  Watch-sourced entries can be pushed up to the cloud too.
+  Watch-sourced entries can be pushed up to the cloud too. Daily activity
+  is ten-minute buckets of steps, energy and heart rate: a day read off the
+  watch summed to the same 1553 steps and 98 kcal the watch itself showed,
+  and every field was cross-checked against the cloud's own entries for the
+  same buckets.
 
 ## What doesn't, yet
 
@@ -29,7 +35,16 @@ Confirmed on real hardware, not just in tests:
 - **Weather and GPS-ephemeris updates to the watch.** Both are mapped;
   neither is implemented. They need the `0x0e` PUT verb, which this
   project does not encode yet.
-- Suunto 9 Baro. Only the Race has been tested.
+- **Suunto 9 Baro** — nearly. It pairs, connects, lists its logbook and
+  transfers a workout with every protocol layer working unchanged, but
+  every field decoded to zero: SBEM chunk ids turn out to be per watch
+  model (a Race puts GPS in chunk 0x0c and heart rate in 0x12, a 9 Baro
+  in 0x0d and 0x15), and the table compiled in here was a Race's. The fix
+  is in — the field table is now read off whichever watch is connected,
+  from `/Logbook/byId/<id>/Descriptors` — and it decodes that watch's
+  stored payloads correctly here, including a 553-point GPS track and a
+  plausible heart rate where there were zeros. It has not yet run on the
+  device. See `docs/sbem-chunk-map.md`.
 
 ## How it was built
 
@@ -41,7 +56,7 @@ dex. `docs/` carries the results:
 | document | what it covers |
 |---|---|
 | `logbook-data-format.md` | the BLE Whiteboard protocol, SBEM containers, the `/Data`, `/Entries` and `/Summary` transports |
-| `sbem-chunk-map.md` | the watch's own 359-field descriptor table, read out of the device |
+| `sbem-chunk-map.md` | the watch's own descriptor table, read out of the device — and why it is per watch model |
 | `workout-upload.md` | the cloud's multipart upload, and the health API |
 | `watch-push-resources.md` | sleep and activity timeline files, GPS ephemeris, weather |
 | `notifications.md` | why a sandboxed Sailfish app cannot observe notifications |
@@ -59,9 +74,14 @@ rather than from this code's own output.
 **Captured bytes beat inference.** Several times a plausible reading of the
 protocol turned out to be wrong and only a real capture settled it: the
 sleep resource path that does not exist on the wire, a parameter prefix
-that looked like a length and was a type code, and an upload that failed
-four times for four unrelated reasons. The commit messages record which
-guesses were wrong, deliberately.
+that looked like a length and was a type code, an upload that failed four
+times for four unrelated reasons, and a daily-activity resource written off
+as "a different structure" when the reply had simply been empty. The commit
+messages record which guesses were wrong, deliberately.
+
+**What is confirmed on hardware is said so, and what is not is not.** Two
+watches exist here and a third does not, so "identical on both" is written
+down as a measurement rather than promoted to a property of the format.
 
 ## Building
 

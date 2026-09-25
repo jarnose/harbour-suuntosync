@@ -1,7 +1,7 @@
 #pragma once
 
 #include "sbemcontainer.h"
-#include "sbemdescriptors.h"
+#include "sbemtable.h"
 
 #include <cstdint>
 #include <functional>
@@ -65,5 +65,12 @@ using ReadingCallback = std::function<void(const Reading &)>;
 // order. Chunks whose descriptor the table doesn't know, and children that
 // would run past the end of their chunk, are skipped rather than guessed at.
 void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callback);
+
+// The same, against a particular watch's field table rather than the
+// compiled-in Race one. Descriptor ids are per watch model (see
+// sbemtable.h), so a 9 Baro's payload decoded against a Race's table
+// yields nothing at all.
+void decode(const std::vector<Sbem::Chunk> &chunks, const SbemDescriptors::Table &table,
+             const ReadingCallback &callback);
 
 } // namespace Sml

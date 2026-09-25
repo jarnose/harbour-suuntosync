@@ -15,6 +15,134 @@ Decoding a raw value: apply `<MOD>`'s first expression (x = raw). `precision`
 is output formatting only, NOT a scale factor. `nillable=V` means raw==V is
 "no reading".
 
+## This table is a Race's, and that turns out to matter (2026-09-25)
+
+The title said "(Suunto Race)" from the start as provenance. It is not
+provenance - it is a constraint.
+
+A Suunto 9 Baro was paired and a workout synced from it. Every layer worked:
+the Whiteboard link, `/Logbook/Entries`, the bulk transfer, Heatshrink,
+and the SBEM0103 container, which parsed into 4342 clean chunks with no
+malformed bytes. Then every field decoded to zero, because **the ids are
+not the same ids**:
+
+| | Race | Suunto 9 Baro |
+|---|---|---|
+| `/Data` chunk ids | 0x0c, 0x0f, 0x12, 0x15, 0x16, 0x17, 0x18, 0x1f | 0x0d, 0x10, 0x15, 0x18, 0x19, 0x1a, 0x1b |
+| `/Summary` chunk ids | 0x1b, 0x1d, 0x20, 0x23, 0x158-0x167 | 0x1e, 0x20 |
+
+There is no constant offset to apply. The 20-byte GPS record is 0x0c on
+one and 0x0d on the other, the 3-byte record is 0x12 and 0x15, and the
+17-byte record has no 17-byte counterpart at all. Deriving a mapping from
+record sizes and counts would be guessing, and this project has a long
+enough record of what that costs.
+
+The right fix is the one the watch already offers: **read
+`/Logbook/byId/<id>/Descriptors` from the watch that is actually
+connected** and build the table from that, instead of compiling in one
+model's. That is how this file was produced in the first place.
+
+No new protocol code is needed - `/Descriptors` is paged exactly like
+`/Summary`. `AppController::testDescriptorsFetch()` fetches and saves it.
+What is still to do is the table-at-runtime part: `SbemDescriptors::find()`
+is a lookup into a generated array today, and would have to consult a
+per-watch table instead, with the generated one as the fallback for a watch
+that has not been read yet.
+
+### The 9 Baro's own table, read off the watch
+
+Fetched and parsed (`tools/parse_descriptors.py`, which is the step that
+produced this file for the Race and was not written down at the time).
+**265 descriptors against the Race's 359.** 211 of the definition texts are
+character-for-character identical between the two watches - and exactly
+**five of those share an id**. The numbering really is arbitrary per model.
+
+The table explains the Baro's payload exactly, which is the confirmation
+that mattered:
+
+| | Race | 9 Baro |
+|---|---|---|
+| GPS group (UTC, Lat, Lon, GPSAltitude) | 0x0c | 0x0d |
+| heart rate group | 0x12 | 0x15 |
+| absolute sample group | 0x15 | 0x18 |
+| delta sample group | 0x16 | 0x19 |
+| Header group | 0x1b | 0x1e |
+
+**What makes the fix small, and it is worth being precise about why this is
+not a guess.** Computing each field's byte offset from *each watch's own*
+table - not assuming, not pattern-matching - every offset the decoders
+actually read is the same on both:
+
+| field | offset | Race group size | Baro group size |
+|---|---|---|---|
+| `Sample.UTC` / `Latitude` / `Longitude` / `GPSAltitude` | 2 / 10 / 14 / 18 | 20 | 20 |
+| `Sample.HR` | 2 | 3 | 3 |
+| `Sample.Cadence` (delta group) | 10 | 17 | 11 |
+| `Sample.Altitude` (absolute group) | 18 | 35 | 23 |
+| `Header.DateTime` … `Header.EPOC` | 8, 16, 20, 24, 28, 36, 40, 48, 68, 72 | 454 | 319 |
+
+The groups are shorter on the 9 Baro because the Race carries extra
+running-dynamics and Header fields - but they are appended *after*
+everything this project reads, so the prefix is identical.
+
+So the decoders' hard-coded byte offsets are sound; what is hard-coded and
+wrong is the **group ids**, and `logbookdecoder.cpp`'s exact-size gates
+(`chunk.value.size() == 17`, `== 20`), which reject the Baro's shorter
+groups.
+
+That said, "identical across the two watches that exist here" is not
+"identical across all Suunto watches", so the offsets should be computed
+from the table too rather than kept as constants that happen to be right
+twice.
+
+**Privacy note**: a descriptor table contains the watch serial - the
+`Sample.Source` enum is literally `0=suunto-<serial>`. The 9 Baro's raw
+reply and parsed map are in `tests/fixtures/`, which is gitignored, and
+must stay out of the repository for the same reason the GPS tracks do.
+
+### Implemented: the table is read off the watch (2026-09-25)
+
+`SbemDescriptors::Table` (`src/ble/sbemtable.h`) parses a raw
+`/Descriptors` reply into the same shape the generated table has, and
+`SbemLayout::resolve()` (`src/ble/sbemlayout.h`) walks it asking, for every
+group, *which of the fields this project reads does this one carry, and at
+what offset*. `Logbook::decode()`, `Summary::decode()`, `Sml::decode()` and
+`SmlJson::buildDocument()` all take that instead of consulting a global.
+
+Three decisions worth keeping:
+
+- **Not "find the GPS group".** The 9 Baro has two groups carrying
+  latitude - 0x0d with GPS altitude and 0x13 without - and both are real.
+  Every group is described and the decoder reads whichever chunk it meets.
+- **Offsets are computed, not kept as constants.** They came out identical
+  on both watches, so constants would have worked; but "identical on the
+  two watches in this flat" is not a property of the format.
+- **Sizes are a lower bound, never an equality.** The old decoder gated on
+  `chunk.value.size() == 17`, and the 9 Baro's equivalent group is 11
+  bytes because the Race appends running-dynamics fields *after*
+  everything read here. That single `==` is most of why a 9 Baro workout
+  decoded to zeros instead of to something visibly wrong.
+
+An unrecognised `<MOD>` expression suppresses that one field's readings
+rather than failing the table - the 9 Baro brought one the Race never had,
+for a compass it has and the Race does not, and refusing a whole watch over
+a heading field would be absurd. An unknown `<FRM>` format is worse, since
+it makes the offsets after it unknowable, so offset arithmetic stops at
+that child and the fields before it keep working.
+
+The table is fetched once per watch, on the first sync, and kept in
+`watch_descriptors` keyed by Bluetooth address - so switching between two
+watches and back does not throw either one's away.
+
+`tests/test_sbemlayout.cpp` holds it in place from both ends: every offset
+the two decoders used to hard-code is asserted against the resolver's
+answer for the Race (those constants were validated against Jarno's own
+reported figures when they were written), and a real 9 Baro workout is
+decoded twice - once with its own layout, which yields a 553-point GPS
+track and a 110 bpm average, and once with the Race's, which yields
+nothing at all. The decoded clock is checked against the logbook entry id,
+which is independently known to be that workout's Unix start second.
+
 ## chunk 0x01 (1)
 
 - `33` TimeISO8601 — `local64,baseonly`

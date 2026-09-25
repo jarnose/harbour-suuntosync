@@ -545,6 +545,105 @@ void MdsWhiteboardClient::fetchRecoveryMoments(qint64 newerThanSeconds, DataCall
     });
 }
 
+void MdsWhiteboardClient::fetchWithCursor(const QString &path, uint16_t typeCode, qint64 value,
+                                           DataCallback callback)
+{
+    const size_t width = (typeCode == Mds::kParamInt32) ? 4 : 8;
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, typeCode, value, width, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        std::vector<uint8_t> cursor(width);
+        for (size_t i = 0; i < width; ++i)
+            cursor[i] = static_cast<uint8_t>((static_cast<uint64_t>(value) >> (8 * i)) & 0xFF);
+
+        getRaw([ackBody, typeCode, cursor](uint16_t requestId) {
+            return Mds::encodeParameterisedFetch(requestId, ackBody, { { typeCode, cursor } });
+        }, [path, callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+            if (!fetchOk) {
+                callback(false, {}, tr("Fetch on %1 failed: %2").arg(path, fetchError));
+                return;
+            }
+            callback(true, frame.body, QString());
+        });
+    });
+}
+
+namespace {
+
+// The watch's fragment marker. 200 is the last fragment, 202 means there
+// is more - the opposite convention to the 100/200 every other paged
+// resource here uses, which is exactly the kind of difference that would
+// otherwise show up as a short answer looking like a complete one.
+constexpr uint16_t kActivityStatusMore = 202;
+constexpr int kActivityStatusOffset = 6;
+
+// Two weeks of ten-minute buckets at roughly ten per fragment. The cap is
+// a guard against a watch that never stops saying 202, not a real limit on
+// how much history can be read.
+constexpr int kMaxActivityFragments = 250;
+
+} // namespace
+
+void MdsWhiteboardClient::fetchActivityTrend(qint64 newerThanMs, ActivityCallback callback)
+{
+    fetchActivityFragment(newerThanMs, {}, 0, callback);
+}
+
+void MdsWhiteboardClient::fetchActivityFragment(qint64 cursorMs,
+                                                 std::vector<ActivityTrend::Sample> collected,
+                                                 int fragments, ActivityCallback callback)
+{
+    const QString path = QStringLiteral("/Activity/TrendData");
+    fetchWithCursor(path, Mds::kParamInt64, cursorMs,
+            [this, cursorMs, collected, fragments, callback, path]
+            (bool ok, const std::vector<uint8_t> &body, const QString &error) mutable {
+        if (!ok) {
+            // Whatever was already read is worth keeping - this is a
+            // fragment loop, and losing eleven good fragments because the
+            // twelfth timed out helps nobody.
+            if (collected.empty())
+                callback(false, {}, error);
+            else
+                callback(true, collected, QString());
+            return;
+        }
+
+        const std::vector<ActivityTrend::Sample> fragment = ActivityTrend::decode(body);
+        uint16_t status = 0;
+        if (body.size() >= static_cast<size_t>(kActivityStatusOffset) + 2) {
+            status = static_cast<uint16_t>(body[kActivityStatusOffset]
+                    | (static_cast<uint16_t>(body[kActivityStatusOffset + 1]) << 8));
+        }
+
+        for (const ActivityTrend::Sample &sample : fragment)
+            collected.push_back(sample);
+
+        // The cursor is a timestamp, not a byte offset, so "no progress"
+        // is the loop's real stop condition: an empty fragment, a watch
+        // that stopped saying 202, or a cursor that didn't move.
+        const qint64 next = fragment.empty()
+                ? cursorMs
+                : fragment.back().rawTimestampMs + 1;
+        if (status != kActivityStatusMore || fragment.empty() || next <= cursorMs
+                || fragments + 1 >= kMaxActivityFragments) {
+            callback(true, collected, QString());
+            return;
+        }
+
+        fetchActivityFragment(next, collected, fragments + 1, callback);
+    });
+}
+
 void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallback callback)
 {
     // Two steps, as captured: GET /Dev/FileSystem/FileDelete for a handle,

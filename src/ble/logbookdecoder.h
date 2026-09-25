@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+namespace SbemLayout { struct Layout; }
+
 // Turns a fully-reassembled /Logbook/byId/<id>/Data payload into workout
 // summary fields, Qt-free (STL only) so it can be golden-vector-tested with
 // plain g++ before it's wired into a BLE-facing (Qt) class - same discipline
@@ -96,5 +98,13 @@ struct DecodedWorkout
 // Throws std::runtime_error if the Heatshrink stream or SBEM0103 container
 // doesn't parse (see Sbem::heatshrinkDecompress/parseContainer).
 DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed);
+
+// The same, against a particular watch's field table. Which chunk carries
+// GPS, heart rate, cadence and altitude is per watch model - 0x0c/0x12 on
+// a Suunto Race, 0x0d/0x15 on a Suunto 9 Baro - so a decoder that knows
+// only one of them decodes the other's workouts to all zeros, which is
+// exactly what happened. See sbemlayout.h.
+DecodedWorkout decode(const std::vector<uint8_t> &mdsStrippedCompressed,
+                       const SbemLayout::Layout &layout);
 
 } // namespace Logbook

@@ -386,8 +386,8 @@
     </message>
     <message>
         <location filename="../qml/pages/HealthPage.qml" line="87"/>
-        <source>Sync sleep from watch</source>
-        <translation>Synkronoi uni kellosta</translation>
+        <source>Sync health from watch</source>
+        <translation>Synkronoi terveysdata kellosta</translation>
     </message>
     <message>
         <location filename="../qml/pages/HealthPage.qml" line="92"/>
@@ -796,6 +796,11 @@
         <translation>esim. 1785740504</translation>
     </message>
     <message>
+        <location filename="../qml/pages/PairingPage.qml" line="97"/>
+        <source>Fetch descriptors</source>
+        <translation>Hae kenttäkuvaukset</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/PairingPage.qml" line="91"/>
         <source>Fetch and save</source>
         <translation>Hae ja tallenna</translation>
@@ -822,8 +827,8 @@
     </message>
     <message>
         <location filename="../qml/pages/PairingPage.qml" line="131"/>
-        <source>Fetch activity timeline</source>
-        <translation>Hae aktiivisuusaikajana</translation>
+        <source>Fetch activity trend</source>
+        <translation>Hae aktiivisuustrendi</translation>
     </message>
     <message>
         <location filename="../qml/pages/PairingPage.qml" line="159"/>

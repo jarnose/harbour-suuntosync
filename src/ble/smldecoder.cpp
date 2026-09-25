@@ -96,19 +96,25 @@ size_t fieldSize(const Descriptor &d, const uint8_t *data, size_t available)
 
 void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callback)
 {
+    decode(chunks, SbemDescriptors::Table::builtin(), callback);
+}
+
+void decode(const std::vector<Sbem::Chunk> &chunks, const SbemDescriptors::Table &table,
+             const ReadingCallback &callback)
+{
     // Running value per descriptor, in raw (pre-scaling) units - what a
     // differential field accumulates against.
     std::unordered_map<uint16_t, double> running;
 
     for (size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
         const Sbem::Chunk &chunk = chunks[chunkIndex];
-        const Descriptor *group = SbemDescriptors::find(chunk.id);
+        const Descriptor *group = table.find(chunk.id);
         if (!group || group->childCount == 0)
             continue;
 
         size_t offset = 0;
         for (uint16_t i = 0; i < group->childCount; ++i) {
-            const Descriptor *field = SbemDescriptors::find(group->children[i]);
+            const Descriptor *field = table.find(group->children[i]);
             if (!field)
                 break; // the rest of this chunk's layout is unknowable
 
@@ -152,7 +158,7 @@ void decode(const std::vector<Sbem::Chunk> &chunks, const ReadingCallback &callb
             // A differential reading belongs to whatever it's a delta of.
             const Descriptor *target = field;
             if (field->deltaOf != 0) {
-                const Descriptor *base = SbemDescriptors::find(field->deltaOf);
+                const Descriptor *base = table.find(field->deltaOf);
                 if (!base)
                     continue;
                 auto it = running.find(base->id);

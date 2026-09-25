@@ -2,6 +2,7 @@
 
 #include "pairedwatch.h"
 
+#include <QByteArray>
 #include <QString>
 
 // Local SQLite storage for the watch the user picked in PairingPage. Single
@@ -19,6 +20,15 @@ public:
     PairedWatch load(QString *error) const;
     bool save(const PairedWatch &watch, QString *error);
     bool clear(QString *error);
+
+    // The watch's own SBEM field table, as fetched from
+    // /Logbook/byId/<id>/Descriptors. Kept per address rather than on the
+    // single paired_watch row, so switching between two watches and back
+    // doesn't throw the other's table away - and because the table is what
+    // makes that watch's workouts decodable at all (see
+    // src/ble/sbemlayout.h).
+    bool saveDescriptors(const QString &address, const QByteArray &payload, QString *error);
+    QByteArray loadDescriptors(const QString &address) const;
 
 private:
     QString m_dbPath;

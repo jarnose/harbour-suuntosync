@@ -92,6 +92,17 @@ Page {
                     onClicked: AppController.testLogbookFetch(logbookIdField.text)
                 }
             }
+
+            Button {
+                // The watch's own field table. Needed per watch model: a
+                // Suunto 9 Baro transfers workouts perfectly and decodes
+                // them to all zeros, because the compiled-in table is a
+                // Race's. Takes any logbook id from this watch.
+                x: Theme.horizontalPageMargin
+                enabled: logbookIdField.text.length > 0
+                text: qsTr("Fetch descriptors")
+                onClicked: AppController.testDescriptorsFetch(logbookIdField.text)
+            }
         }
 
         PullDownMenu {
@@ -127,9 +138,15 @@ Page {
                 onClicked: AppController.testHealthResourceFetch("Sleep")
             }
             MenuItem {
+                // Daily activity. This used to ask for a rendered file
+                // called mdsAct.sbm, guessed by analogy with sleep - the
+                // capture showed no such file exists. libmds.so gave the
+                // real answer: /Activity/TrendData, one integer cursor,
+                // records straight in the reply. See
+                // AppController::testActivityTrendFetch().
                 visible: AppController.watchConnected
-                text: qsTr("Fetch activity timeline")
-                onClicked: AppController.testHealthResourceFetch("Activity")
+                text: qsTr("Fetch activity trend")
+                onClicked: AppController.testActivityTrendFetch()
             }
         }
 

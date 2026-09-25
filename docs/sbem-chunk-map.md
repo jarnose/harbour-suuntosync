@@ -100,7 +100,7 @@ twice.
 reply and parsed map are in `tests/fixtures/`, which is gitignored, and
 must stay out of the repository for the same reason the GPS tracks do.
 
-### Implemented: the table is read off the watch (2026-09-25)
+### Implemented and confirmed on both watches (2026-09-25)
 
 `SbemDescriptors::Table` (`src/ble/sbemtable.h`) parses a raw
 `/Descriptors` reply into the same shape the generated table has, and
@@ -133,6 +133,13 @@ that child and the fields before it keep working.
 The table is fetched once per watch, on the first sync, and kept in
 `watch_descriptors` keyed by Bluetooth address - so switching between two
 watches and back does not throw either one's away.
+
+On the device: the 9 Baro's own table was fetched and cached (25884 bytes),
+its workouts decoded correctly, and the three that had already been stored
+as rows of zeros were repaired from their stored bytes to 2352 s / 3594 m /
+4426 steps, 2051 s / 3394 m / 4103 steps and 1870 s / 2918 m / 3731 steps -
+matching, to the tenth, what the same payloads decoded to offline. All six
+Race workouts came through byte-identical.
 
 `tests/test_sbemlayout.cpp` holds it in place from both ends: every offset
 the two decoders used to hard-code is asserted against the resolver's

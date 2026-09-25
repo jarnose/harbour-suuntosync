@@ -11,6 +11,11 @@ Confirmed on real hardware, not just in tests:
 - **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
   each entry, and decodes it: route, heart rate, altitude, cadence, laps,
   per-sample charts and the watch's own summary totals.
+- **Two watch models, a Suunto Race and a Suunto 9 Baro.** SBEM chunk ids
+  are per model — a Race carries GPS in chunk 0x0c and heart rate in 0x12,
+  a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever
+  watch is connected (`/Logbook/byId/<id>/Descriptors`) rather than
+  compiled in. See `docs/sbem-chunk-map.md`.
 - **Workouts from the Suunto cloud**, with route, training metrics and
   sample data.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
@@ -35,17 +40,6 @@ Confirmed on real hardware, not just in tests:
 - **Weather and GPS-ephemeris updates to the watch.** Both are mapped;
   neither is implemented. They need the `0x0e` PUT verb, which this
   project does not encode yet.
-- **Suunto 9 Baro** — nearly. It pairs, connects, lists its logbook and
-  transfers a workout with every protocol layer working unchanged, but
-  every field decoded to zero: SBEM chunk ids turn out to be per watch
-  model (a Race puts GPS in chunk 0x0c and heart rate in 0x12, a 9 Baro
-  in 0x0d and 0x15), and the table compiled in here was a Race's. The fix
-  is in — the field table is now read off whichever watch is connected,
-  from `/Logbook/byId/<id>/Descriptors` — and on the device it decodes
-  that watch's workouts correctly. What is not yet confirmed is the
-  repair of the three workouts that were already stored, decoded wrongly
-  and then dropped off the watch's own list for good; see
-  `docs/sbem-chunk-map.md` and `logbook-data-format.md`.
 
 ## How it was built
 

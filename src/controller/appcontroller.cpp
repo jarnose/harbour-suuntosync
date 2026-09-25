@@ -1071,6 +1071,88 @@ QByteArray AppController::buildUploadZip(const QString &key) const
                         startTime, stopTime);
 }
 
+int AppController::pendingWorkoutUploads() const
+{
+    if (!m_cloudAccount.isSignedIn())
+        return 0;
+    return m_workoutStore->keysPendingUpload().size();
+}
+
+void AppController::uploadAllWorkouts()
+{
+    if (m_uploadInProgress) {
+        emit errorOccurred(tr("An upload is already in progress."));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    const QVector<QString> keys = m_workoutStore->keysPendingUpload();
+    if (keys.isEmpty()) {
+        emit errorOccurred(tr("Nothing to upload - every watch workout is already in the cloud."));
+        return;
+    }
+
+    m_uploadInProgress = true;
+    uploadWorkoutAt(keys, 0, 0, QStringList());
+}
+
+void AppController::uploadWorkoutAt(const QVector<QString> &keys, int index, int succeeded,
+                                     const QStringList &failures)
+{
+    if (index >= keys.size()) {
+        m_uploadInProgress = false;
+        emit workoutUploadProgress(keys.size(), keys.size());
+        if (failures.isEmpty()) {
+            emit errorOccurred(tr("Uploaded %1 workouts to Suunto.").arg(succeeded));
+        } else {
+            emit errorOccurred(tr("Uploaded %1 of %2 workouts. Failed: %3")
+                                .arg(succeeded).arg(keys.size())
+                                .arg(failures.join(QStringLiteral("; "))));
+        }
+        loadCachedWorkouts();
+        return;
+    }
+
+    emit workoutUploadProgress(index, keys.size());
+
+    const QString key = keys.at(index);
+    const QByteArray zip = buildUploadZip(key);
+    if (zip.isEmpty()) {
+        QStringList next = failures;
+        next.append(tr("%1: nothing to build an upload from").arg(key));
+        uploadWorkoutAt(keys, index + 1, succeeded, next);
+        return;
+    }
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, keys, index, succeeded, failures, key, zip]
+            (bool ok, const QByteArray &data, const QString &vaultError) {
+        if (!ok) {
+            QStringList next = failures;
+            next.append(tr("%1: %2").arg(key, vaultError));
+            uploadWorkoutAt(keys, index + 1, succeeded, next);
+            return;
+        }
+        m_cloudClient->uploadWorkout(QString::fromUtf8(data), zip,
+                [this, keys, index, succeeded, failures, key]
+                (bool uploadOk, const QString &cloudKey, const QString &error) {
+            QStringList next = failures;
+            int done = succeeded;
+            if (!uploadOk) {
+                next.append(tr("%1: %2").arg(key, error));
+            } else {
+                m_workoutStore->markSmlUploaded(key, cloudKey, nullptr);
+                ++done;
+                emit workoutUploaded(key, true, tr("Uploaded to Suunto"));
+            }
+            uploadWorkoutAt(keys, index + 1, done, next);
+        });
+    });
+}
+
 void AppController::uploadWorkoutToCloud(const QString &key)
 {
     if (m_uploadInProgress)

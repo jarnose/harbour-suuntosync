@@ -135,7 +135,7 @@
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="947"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1524"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1606"/>
         <source>Failed to save account: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -146,8 +146,9 @@
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="979"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1089"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1294"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1088"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1171"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1376"/>
         <source>Sign in to the Suunto cloud first.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -160,146 +161,174 @@
         <location filename="../src/controller/appcontroller.cpp" line="1012"/>
         <location filename="../src/controller/appcontroller.cpp" line="1023"/>
         <location filename="../src/controller/appcontroller.cpp" line="1027"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1342"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1352"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1813"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1135"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1145"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1424"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1434"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1895"/>
         <source>%1: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1081"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1084"/>
+        <source>An upload is already in progress.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1094"/>
+        <source>Nothing to upload - every watch workout is already in the cloud.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1109"/>
+        <source>Uploaded %1 workouts to Suunto.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1111"/>
+        <source>Uploaded %1 of %2 workouts. Failed: %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1125"/>
+        <source>%1: nothing to build an upload from</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1163"/>
         <source>Nothing to upload - sync this workout from the watch first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1085"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1167"/>
         <source>Already uploaded.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1099"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1604"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1181"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1686"/>
         <source>Could not read the stored session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1110"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1149"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1192"/>
         <source>Uploaded to Suunto</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1161"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1243"/>
         <source>Connect the watch first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1165"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1290"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1247"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1372"/>
         <source>A sync is already in progress.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1187"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1269"/>
         <source>Could not read sleep from the watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1194"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1276"/>
         <source>The watch returned %1 bytes but no readable nights.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1223"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1305"/>
         <source>Could not save sleep data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1253"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1335"/>
         <source>Sleep synced. Recovery failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1259"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1341"/>
         <source>Sleep synced. Recovery returned %1 bytes but no readable samples.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1280"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1362"/>
         <source>Could not save recovery data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1298"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1380"/>
         <source>Nothing to upload - everything the watch gave us is already in the cloud.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1314"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1396"/>
         <source>Uploaded %1 entries (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1317"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1399"/>
         <source>Uploaded %1 health entries to Suunto.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1465"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1547"/>
         <source>Failed to load workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1484"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1566"/>
         <source>Failed to load login session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1495"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1577"/>
         <source>Failed to sync workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1512"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1594"/>
         <source>Failed to save workout: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1583"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1665"/>
         <source>Sample data is only available for cloud workouts.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1610"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1692"/>
         <source>Could not download sample data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1628"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1710"/>
         <source>No charts found in %1 kB of sample data. Raw response saved to %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1631"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1713"/>
         <source>No charts found in the sample data, and it could not be saved.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1770"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1852"/>
         <source>Failed to list watch entries: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1791"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1873"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1825"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1907"/>
         <source>%1: decode failed (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1870"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1952"/>
         <source>%1: failed to save (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -515,78 +544,83 @@
 <context>
     <name>MainPage</name>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="21"/>
+        <location filename="../qml/pages/MainPage.qml" line="41"/>
         <source>%1h %2min</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="21"/>
+        <location filename="../qml/pages/MainPage.qml" line="41"/>
         <source>%1min</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="40"/>
+        <location filename="../qml/pages/MainPage.qml" line="60"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="46"/>
+        <location filename="../qml/pages/MainPage.qml" line="66"/>
         <source>Health</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="51"/>
-        <location filename="../qml/pages/MainPage.qml" line="57"/>
+        <location filename="../qml/pages/MainPage.qml" line="75"/>
+        <location filename="../qml/pages/MainPage.qml" line="82"/>
         <source>Syncing…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="51"/>
-        <source>Sync workouts</source>
+        <location filename="../qml/pages/MainPage.qml" line="75"/>
+        <source>Sync workouts from cloud</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="57"/>
-        <source>Sync from watch</source>
+        <location filename="../qml/pages/MainPage.qml" line="82"/>
+        <source>Sync from watch to phone</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="88"/>
+        <location filename="../qml/pages/MainPage.qml" line="91"/>
+        <source>Send %1 workouts from phone to cloud</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="122"/>
         <source>%1 · Connected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="89"/>
+        <location filename="../qml/pages/MainPage.qml" line="123"/>
         <source>%1 · Not connected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="99"/>
+        <location filename="../qml/pages/MainPage.qml" line="133"/>
         <source>Signed in as %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="138"/>
+        <location filename="../qml/pages/MainPage.qml" line="172"/>
         <source>watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="145"/>
+        <location filename="../qml/pages/MainPage.qml" line="179"/>
         <source>%1 km · %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="178"/>
+        <location filename="../qml/pages/MainPage.qml" line="212"/>
         <source>No workouts yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="180"/>
+        <location filename="../qml/pages/MainPage.qml" line="214"/>
         <source>Pull down and sync to fetch your workout history</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="181"/>
+        <location filename="../qml/pages/MainPage.qml" line="215"/>
         <source>Pair a Suunto watch or sign in to your Suunto account to get started</source>
         <translation type="unfinished"></translation>
     </message>

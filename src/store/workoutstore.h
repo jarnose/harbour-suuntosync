@@ -77,6 +77,11 @@ public:
     bool markSmlUploaded(const QString &key, const QString &cloudKey, QString *error);
     bool isSmlUploaded(const QString &key) const;
 
+    // Workouts that have a stored payload but no cloud key yet - i.e.
+    // synced from the watch and not yet uploaded. Oldest first, so a batch
+    // upload puts them in the cloud in the order they happened.
+    QVector<QString> keysPendingUpload() const;
+
 private:
     QString m_dbPath;
     QString m_connectionName;

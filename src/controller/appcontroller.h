@@ -282,6 +282,15 @@ public:
     // cloud hasn't already taken it, and we're signed in.
     Q_INVOKABLE bool canUploadWorkout(const QString &key) const;
 
+    // Uploads every watch-synced workout that the cloud hasn't taken yet,
+    // oldest first. Sequential rather than parallel: the server has no
+    // idempotency key, and a batch that half-succeeded would be harder to
+    // reason about than one that stops at the first failure.
+    Q_INVOKABLE void uploadAllWorkouts();
+    // How many are waiting, so the menu can say so and hide itself when
+    // there is nothing to do.
+    Q_INVOKABLE int pendingWorkoutUploads() const;
+
     // A BLE-synced workout's laps: { number, type, durationSeconds,
     // distanceMeters }, where type is the watch's own reason for the marker
     // (manual, auto-lap by distance, interval...). Empty when the workout
@@ -305,6 +314,7 @@ signals:
     void coverModeChanged();
     void syncOnConnectChanged();
     void workoutUploaded(const QString &key, bool ok, const QString &message);
+    void workoutUploadProgress(int done, int total);
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
@@ -376,6 +386,8 @@ private:
     // request. Sleep having already succeeded, a failure here is reported
     // rather than failing the whole sync.
     void fetchWatchRecovery();
+    void uploadWorkoutAt(const QVector<QString> &keys, int index, int succeeded,
+                          const QStringList &failures);
     // Builds the sml.zip for one workout from its stored raw payloads.
     QByteArray buildUploadZip(const QString &key) const;
 };

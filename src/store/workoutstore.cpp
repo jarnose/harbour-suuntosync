@@ -446,3 +446,21 @@ bool WorkoutStore::isSmlUploaded(const QString &key) const
     q.addBindValue(key);
     return q.exec() && q.next();
 }
+
+QVector<QString> WorkoutStore::keysPendingUpload() const
+{
+    QVector<QString> keys;
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    // Joined against workouts so the ordering is by when the workout
+    // happened rather than by key, which is only incidentally sortable.
+    if (!q.exec(QStringLiteral(
+            "SELECT s.key FROM workout_sml s"
+            " LEFT JOIN workouts w ON w.key = s.key"
+            " WHERE s.uploaded_key IS NULL AND s.data IS NOT NULL"
+            " ORDER BY w.start_time ASC"))) {
+        return keys;
+    }
+    while (q.next())
+        keys.append(q.value(0).toString());
+    return keys;
+}

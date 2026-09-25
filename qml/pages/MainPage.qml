@@ -5,6 +5,26 @@ import "ActivityTypes.js" as ActivityTypes
 Page {
     id: page
 
+    // How many watch-synced workouts the cloud hasn't taken yet. Not a
+    // binding: it changes only when a sync or an upload changes it.
+    property int pendingUploads: 0
+
+    function refreshPending() {
+        pendingUploads = AppController.pendingWorkoutUploads()
+    }
+
+    Component.onCompleted: refreshPending()
+
+    Connections {
+        target: AppController
+        onWorkoutSyncInProgressChanged: {
+            if (!AppController.workoutSyncInProgress)
+                page.refreshPending()
+        }
+        onWorkoutUploaded: page.refreshPending()
+        onCloudAccountChanged: page.refreshPending()
+    }
+
     property string lastError: ""
 
     // Both id vocabularies, complete, extracted from the official Android
@@ -46,17 +66,31 @@ Page {
                 text: qsTr("Health")
                 onClicked: pageStack.push(Qt.resolvedUrl("HealthPage.qml"))
             }
+            // The three transfers, named by direction. "Sync workouts" and
+            // "Sync from watch" said nothing about which way data moved,
+            // and with three of them that stopped being guessable.
             MenuItem {
                 visible: AppController.cloudSignedIn
-                text: AppController.workoutSyncInProgress ? qsTr("Syncing…") : qsTr("Sync workouts")
+                text: AppController.workoutSyncInProgress
+                      ? qsTr("Syncing…") : qsTr("Sync workouts from cloud")
                 enabled: !AppController.workoutSyncInProgress
                 onClicked: AppController.syncCloudWorkouts()
             }
             MenuItem {
                 visible: AppController.whiteboardReady
-                text: AppController.workoutSyncInProgress ? qsTr("Syncing…") : qsTr("Sync from watch")
+                text: AppController.workoutSyncInProgress
+                      ? qsTr("Syncing…") : qsTr("Sync from watch to phone")
                 enabled: !AppController.workoutSyncInProgress
                 onClicked: AppController.syncWatchWorkouts()
+            }
+            MenuItem {
+                // Hidden when there is nothing waiting rather than offered
+                // as a no-op, and it says how many - uploading creates real
+                // workouts on someone's account, so the count matters.
+                visible: AppController.cloudSignedIn && page.pendingUploads > 0
+                text: qsTr("Send %1 workouts from phone to cloud").arg(page.pendingUploads)
+                enabled: !AppController.workoutSyncInProgress
+                onClicked: AppController.uploadAllWorkouts()
             }
         }
 

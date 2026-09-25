@@ -501,3 +501,92 @@ that is *not* one of the watch's own record timestamps, the reply starts
 earlier probe with 09:54:10.530 got 09:00:00.480. Both round down to the
 hour, which is a guess from two samples and not worth relying on. Re-read
 buckets are harmless: `health_entries` upserts on (kind, timestamp).
+
+
+## The 9 Baro capture: the ephemeris push, in full (2026-09-25)
+
+Jarno's observation is what produced this: **the Suunto 9 Baro has no
+WiFi**, so it cannot do what the Race does. The data has to come over BLE,
+and that is the mechanism this project can actually implement.
+
+`libmds.so` names it before the capture even confirms it:
+`OBI2::LegacyDeviceGNSS::putEphemerisData` - "legacy device" being exactly
+this generation.
+
+The capture is `suuntosync-fixtures-private/btsnoop_9baro_sync_2026-09-25.log`
+(1.4 MB, 2490 Whiteboard frames on handles 0x000e/0x0010 - the Baro uses a
+different GATT layout from the Race's 0x0012/0x0015, so a capture holding
+both watches must be split by handle before anything is reassembled).
+
+**Not one `/Settings/Wifi/Cloud/*` path appears.** The whole
+fetch-it-yourself handshake the Race does is simply absent, replaced by:
+
+```
+GET  /Device/GNSS/ExtendedEphemerisData/Date     -> "N/A"
+GET  /Device/GNSS/NavigationSystem
+GET  /Device/GNSS/ExtendedEphemerisData/Format   -> enum value 2
+GET  /Device/GNSS/ExtendedEphemerisData/Upload/0 -> ack (handle)
+0x0e PUT, no parameters                              "begin"
+0x0e PUT x136, one chunk each
+GET  /Device/GNSS/ExtendedEphemerisData/Load     -> ack (handle)
+0x0e PUT, no parameters                          -> 202 Accepted
+```
+
+The `Date` read is the same freshness check the Race does, and this is what
+a stale watch answers: **`N/A`**. The Race answered with today's date and
+nothing followed. So the check is real and the push is conditional on it.
+
+`Format` is an enum whose four values the structure walk spells out -
+**SGEE, EPO, CEP, LLE** - and the watch answered **2**, which is `CEP` if
+the enum is numbered in the order enumerated. Worth confirming before
+relying on it; the value matters only for choosing what to fetch.
+
+### A wire type this project did not have
+
+The chunks carry parameter type code **`0x000D`**, a byte array. Until now
+only `0x0006` (int32), `0x0008` (int64) and `0x000C` (NUL-terminated
+string) had been seen.
+
+Each chunk PUT body is:
+
+```
+[ack body, 6 bytes]
+01            one parameter
+0d 00         type 0x000D, byte array
+02            tag, constant across all 136 chunks
+<u24 LE>      total transfer size - 61440 in every chunk
+<u24 LE>      bytes transferred including this chunk
+<u16 LE>      this chunk's length
+<data>
+```
+
+135 chunks of 453 bytes and a final one of 285. Verified rather than
+assumed: the length field equals the actual data length in every chunk, the
+cumulative field is the running sum in every chunk, and the last one's
+cumulative equals the total field exactly. 135 x 453 + 285 = 61440.
+
+### The payload
+
+**61440 bytes = 60 KiB exactly, of which the last 1605 are zero.** So the
+transfer pads to a fixed 60 KiB buffer rather than the file being that size
+by coincidence. Entropy 7.39 bits/byte - packed binary, not compressed
+text. Saved as `ephemeris_9baro_2026-09-25.bin` in the private fixtures.
+
+### What is still missing, and it is only one thing
+
+Where the phone gets those 61440 bytes. It is not in `libmds.so` - the blob
+arrives from the Java side through `suunto://MDS/GNSS/%s/EphemerisData` -
+and the URL is built at runtime, so it is not in the APK's string table
+either. The dex has exactly three strings containing "ephemeris", all of
+them resource paths.
+
+That needs an HTTPS capture during a sync of a watch whose ephemeris is
+stale. It was deliberately not attempted alongside this one: the mitmproxy
+CA has to be bind-mounted into Android 14's Conscrypt APEX again after every
+reboot, and a broken TLS setup would have meant no download, therefore no
+push, therefore no capture of the mechanism above - which is the half that
+cannot be obtained any other way.
+
+**Implementable today**: everything except the source of the bytes. The
+chunking, the framing, the byte-array type code and the begin/commit
+sequence are all pinned down.

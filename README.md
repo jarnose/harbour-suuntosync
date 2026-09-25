@@ -37,14 +37,16 @@ Confirmed on real hardware, not just in tests:
 - **Notifications to the watch.** The mechanism is understood (see
   `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
   costs Jolla Store eligibility — a decision, not a missing feature.
-- **Weather and GPS-ephemeris updates to the watch.** These turned out to
-  be one feature, not two: the phone writes a cloud URL and an
-  authorization string to the watch, and the watch fetches both over WiFi
-  itself — its own event log records "synced city:Tampere". So it is two
-  PUTs, which this project can already make. The blocker is the 16-
-  character token in that authorization string: it is not the account's
-  userKey and its origin is not yet known, so the handshake can be
-  replayed but not constructed. See `docs/watch-push-resources.md`.
+- **Weather and GPS-ephemeris updates to the watch.** There are two
+  mechanisms, one per watch generation, and both are now mapped. A Race
+  fetches over its own WiFi once the phone writes it a cloud URL and an
+  authorization string — two PUTs, blocked only by a 16-character token
+  whose origin is not yet known. A 9 Baro has no WiFi, so the phone pushes
+  the data: 61440 bytes in 453-byte chunks through
+  `/Device/GNSS/ExtendedEphemerisData/Upload/0`, then a commit. That
+  framing is pinned down byte for byte; what is missing is where the phone
+  downloads those bytes from, which needs one HTTPS capture. See
+  `docs/watch-push-resources.md`.
 
 ## How it was built
 

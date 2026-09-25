@@ -209,6 +209,11 @@ struct FetchParameter
 constexpr uint16_t kParamInt32 = 0x0006;
 constexpr uint16_t kParamInt64 = 0x0008;
 constexpr uint16_t kParamString = 0x000C;
+// A byte array, seen carrying the GPS ephemeris blob to a Suunto 9 Baro in
+// 453-byte chunks (docs/watch-push-resources.md). Nothing encodes one yet;
+// the constant is here so the number is written down where the other three
+// are rather than in a document only.
+constexpr uint16_t kParamBytes = 0x000D;
 
 std::vector<uint8_t> encodeParameterisedFetch(uint16_t requestId,
                                                 const std::vector<uint8_t> &ackBody,

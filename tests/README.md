@@ -54,6 +54,8 @@ To regenerate equivalents from your own watch, the paths are:
 | `descriptors_9baro.bin` | `/Logbook/byId/<id>/Descriptors` off a Suunto 9 Baro - the watch's own field table |
 | `logbook_data_9baro.bin` | a 9 Baro workout's `/Data`, for decoding against that table |
 | `logbook_summary_9baro.bin` | the same workout's `/Summary` |
+| `btsnoop_9baro_sync_2026-09-25.log` | a whole official-app sync with a 9 Baro - carries the GPS ephemeris push |
+| `ephemeris_9baro_2026-09-25.bin` | the 61440-byte blob reassembled out of that capture |
 | `cloud_247_v1_activity_trend.json` | the cloud's own entries for the same ten-minute buckets, the expected values for the above |
 | `cloud_sml_*.json` | the `sml.zip` part of a captured `POST /v1/workout` |
 | `cloud_247_v1_*.json` | a captured `POST` to `247.sports-tracker.com/v1/<kind>` |

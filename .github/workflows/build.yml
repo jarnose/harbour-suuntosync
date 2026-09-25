@@ -1,0 +1,101 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The Qt-free decoders compile and run with plain g++ on any machine,
+  # which is the whole reason they are Qt-free. Only the ones that need no
+  # fixture can run here: the golden-vector suites read real captures off
+  # Jarno's own watch and account, and those deliberately are not in this
+  # repository (see tests/README.md). So this job proves the code builds
+  # and the fixture-free checks hold - it is not the full suite, and
+  # nothing here should be read as if it were.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zlib
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Run the fixture-free test suites
+        working-directory: tests
+        run: |
+          set -e
+          run() {
+            name=$1; shift
+            echo "== $name"
+            g++ -std=c++17 -Wall -Wextra "$@" "test_$name.cpp" -o "/tmp/$name"
+            "/tmp/$name"
+          }
+          run logentriesdecoder ../src/ble/logentriesdecoder.cpp
+          run mdswirecodec      ../src/ble/mdswirecodec.cpp
+          run polyline          ../src/cloud/polyline.cpp
+          run suuntoauth        ../src/cloud/suuntoauth.cpp
+          run zipwriter         ../src/cloud/zipwriter.cpp -lz
+
+      # Catches the class of mistake that produced a blank screen once: a
+      # duplicate signal handler, which QML rejects at load time and which
+      # no C++ build would ever notice.
+      - name: Check the QML
+        run: python3 tools/check_qml.py
+
+      # The compiled-in descriptor table is generated, and a hand edit to
+      # it would be silently overwritten the next time anyone regenerates.
+      - name: Check the generated descriptor table is in sync
+        run: |
+          python3 tools/generate_sbem_tables.py
+          git diff --exit-code -- src/ble/sbemdescriptors.h src/ble/sbemdescriptors.cpp
+
+  rpm:
+    needs: tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # aarch64 is what this is developed and tested on; armv7hl covers
+        # the older devices and is built blind.
+        arch: [aarch64, armv7hl]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the RPM
+        uses: coderus/github-sfos-build@sfos5
+        with:
+          release: 5.1.0.11
+          arch: ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.arch }}
+          path: RPMS/*.rpm
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: rpm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rpm-*
+          merge-multiple: true
+          path: rpms
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: rpms/*.rpm
+          # Unsigned builds off a CI runner, not Store packages - say so
+          # where somebody downloading them will see it.
+          body: |
+            Unsigned RPMs built by GitHub Actions for Sailfish OS 5.1.0.11.
+
+            Install with `devel-su pkcon install-local <file>.rpm`, which
+            will warn that the package is untrusted.

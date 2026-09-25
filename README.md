@@ -83,9 +83,16 @@ down as a measurement rather than promoted to a property of the format.
 Sailfish SDK, CMake. `zlib` is the only dependency beyond Qt5 and
 sailfishapp.
 
+GitHub Actions builds unsigned RPMs for 5.1.0.11 on every push, aarch64
+and armv7hl, and attaches them to a release on a `v*` tag. They are CI
+builds, not Store packages: `pkcon install-local` will say the package is
+untrusted, and it is right.
+
 The golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See
-`tests/README.md`.
+`tests/README.md`. CI therefore runs only the suites that need no fixture,
+which is a minority of them; the rest run on the machine the captures live
+on.
 
 ## Licence
 

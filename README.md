@@ -41,10 +41,11 @@ Confirmed on real hardware, not just in tests:
   model (a Race puts GPS in chunk 0x0c and heart rate in 0x12, a 9 Baro
   in 0x0d and 0x15), and the table compiled in here was a Race's. The fix
   is in — the field table is now read off whichever watch is connected,
-  from `/Logbook/byId/<id>/Descriptors` — and it decodes that watch's
-  stored payloads correctly here, including a 553-point GPS track and a
-  plausible heart rate where there were zeros. It has not yet run on the
-  device. See `docs/sbem-chunk-map.md`.
+  from `/Logbook/byId/<id>/Descriptors` — and on the device it decodes
+  that watch's workouts correctly. What is not yet confirmed is the
+  repair of the three workouts that were already stored, decoded wrongly
+  and then dropped off the watch's own list for good; see
+  `docs/sbem-chunk-map.md` and `logbook-data-format.md`.
 
 ## How it was built
 

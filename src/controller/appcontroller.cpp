@@ -2180,6 +2180,72 @@ void AppController::loadStoredDescriptors()
     m_descriptorTable = std::move(table);
     m_descriptorLayout = SbemLayout::resolve(m_descriptorTable);
     m_descriptorAddress = address;
+
+    // Anything this watch's bytes could not be read with before, can be
+    // now. Cheap: almost always nothing to do.
+    redecodeStoredWorkouts();
+}
+
+int AppController::redecodeStoredWorkouts()
+{
+    int repaired = 0;
+    for (const QString &key : m_workoutStore->keysWithEmptyDecode()) {
+        QByteArray data, summary;
+        if (!m_workoutStore->loadSmlSources(key, &data, &summary) || data.isEmpty())
+            continue;
+
+        const std::vector<uint8_t> dataVec(
+                reinterpret_cast<const uint8_t *>(data.constData()),
+                reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
+
+        Workout w;
+        std::vector<Logbook::TrackPoint> track;
+        try {
+            const Logbook::DecodedWorkout decoded = Logbook::decode(dataVec, m_descriptorLayout);
+            // "ble_<id>" - the same derivation the sync uses, so the key
+            // this writes back is the key it read.
+            const QString logbookId = key.mid(4);
+            w = workoutFromDecoded(logbookId, decoded);
+            track = decoded.track;
+        } catch (const std::exception &) {
+            continue; // unchanged, same as before
+        }
+
+        std::vector<uint8_t> summaryVec;
+        if (!summary.isEmpty()) {
+            summaryVec.assign(reinterpret_cast<const uint8_t *>(summary.constData()),
+                               reinterpret_cast<const uint8_t *>(summary.constData())
+                                       + summary.size());
+            applySummary(&w, Summary::decode(summaryVec, m_descriptorLayout));
+        }
+
+        // Only a decode that actually produced something replaces the row.
+        // A workout belonging to a *different* watch decodes to zeros
+        // against this table, and leaving it alone is the right answer.
+        if (w.totalTime == 0 && w.totalDistance == 0 && w.avgHeartRate == 0)
+            continue;
+
+        if (!m_workoutStore->upsert(w, nullptr))
+            continue;
+        ++repaired;
+
+        if (!track.empty())
+            m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
+        if (!summaryVec.empty()) {
+            m_workoutStore->saveDetails(w.key, summaryDetailsJson(summaryVec, m_descriptorTable),
+                                         nullptr);
+        }
+        const QByteArray seriesJson = buildSeriesJson(dataVec, m_descriptorTable);
+        if (!seriesJson.isEmpty())
+            m_workoutStore->saveSeries(w.key, seriesJson, nullptr);
+        const QByteArray lapsJson = buildLapsJson(dataVec, m_descriptorTable);
+        if (!lapsJson.isEmpty())
+            m_workoutStore->saveLaps(w.key, lapsJson, nullptr);
+    }
+
+    if (repaired > 0)
+        loadCachedWorkouts();
+    return repaired;
 }
 
 void AppController::ensureDescriptors(const QString &logbookId,
@@ -2204,6 +2270,11 @@ void AppController::ensureDescriptors(const QString &logbookId,
                 m_descriptorTable = std::move(table);
                 m_descriptorLayout = SbemLayout::resolve(m_descriptorTable);
                 m_descriptorAddress = address;
+                const int repaired = redecodeStoredWorkouts();
+                if (repaired > 0) {
+                    emit errorOccurred(tr("Re-read %1 stored workouts with this watch's own "
+                                           "field table.").arg(repaired));
+                }
                 m_pairedWatchStore->saveDescriptors(
                         address,
                         QByteArray(reinterpret_cast<const char *>(data.data()),

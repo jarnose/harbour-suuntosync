@@ -77,6 +77,21 @@ public:
     bool markSmlUploaded(const QString &key, const QString &cloudKey, QString *error);
     bool isSmlUploaded(const QString &key) const;
 
+    // Watch workouts whose stored payload decoded to nothing at all - no
+    // duration, no distance, no heart rate - and which therefore have
+    // something to gain from being decoded again.
+    //
+    // This exists because the watch lists only entries it considers
+    // unsynchronised (docs/logbook-data-format.md), so a workout decoded
+    // wrongly once can never be re-listed and re-fetched. Its bytes are
+    // still here, which is the whole reason they are kept, so the repair
+    // is a re-decode rather than another trip to the watch.
+    //
+    // Deliberately narrow: a row with any figure in it is left alone, so
+    // re-decoding with the wrong watch's field table cannot overwrite a
+    // workout that already decoded correctly.
+    QVector<QString> keysWithEmptyDecode() const;
+
     // Workouts that have a stored payload but no cloud key yet - i.e.
     // synced from the watch and not yet uploaded. Oldest first, so a batch
     // upload puts them in the cloud in the order they happened.

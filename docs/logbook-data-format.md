@@ -1939,3 +1939,39 @@ workout), so the existing binary decoder doesn't apply directly - but the
 field names are the same `Header.*`/`Sample.*` paths, because the app
 produces it from the same data. That would give cloud workouts charts and
 laps too, and belongs behind an explicit action rather than a sync.
+
+## `/Logbook/Entries` lists only what the watch has not handed over yet
+
+Learned the hard way on 2026-09-25, and it changes what "re-sync it" can
+be expected to fix.
+
+A Suunto 9 Baro was paired and synced. The list came back with four
+entries and all four were fetched and stored - but decoded to rows of
+zeros, because the field table in use was a Race's (see
+`sbem-chunk-map.md`). Once that was fixed and the watch synced again, the
+list came back with **two** entries: the workout recorded since, and one
+that had been mid-recording during the first sync. The other three were
+gone from the list and have not come back.
+
+So the list is not "the watch's logbook". It is the entries the watch
+considers unsynchronised, and reading an entry's `/Data` is what takes it
+off that list. `libmds.so` carries the matching vocabulary -
+`/Logbook/UnsynchronisedLogs`, `SDS::Logbook::getSyncedState` and
+`putSyncedState` - though this project never calls the last of those, so
+the marking appears to be the watch's own doing.
+
+The obvious alternative, a time window, is ruled out by the first sync:
+those three workouts are from December and were listed then.
+
+**What follows from it.** A workout decoded wrongly cannot be repaired by
+syncing again, because it will never be offered again. The raw `/Data` and
+`/Summary` are kept locally for exactly this class of reason (see
+`WorkoutStore::saveSmlSources()`, which says so about a different bug), so
+the repair is a re-decode of bytes already in hand:
+`AppController::redecodeStoredWorkouts()` runs whenever a watch's field
+table changes, and touches only rows that decoded to nothing at all. That
+last restriction is what keeps it safe - a workout belonging to a
+different watch decodes to zeros against this table, and is left alone.
+
+It also means `/Data` is worth storing even for workouts that decoded
+perfectly, which is already what happens.

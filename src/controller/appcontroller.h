@@ -449,6 +449,21 @@ private:
     // startup and whenever the paired watch changes, so that an upload or
     // a probe run before any sync this session still uses the right table.
     void loadStoredDescriptors();
+
+    // Decodes again, from bytes already stored, any watch workout that
+    // decoded to nothing the first time.
+    //
+    // Needed because the watch lists only entries it considers
+    // unsynchronised: three Suunto 9 Baro workouts were fetched and stored
+    // while the decoder was still using a Race's field table, decoded to
+    // rows of zeros, and then vanished from /Logbook/Entries for good. No
+    // amount of syncing brings them back. Their bytes are still here,
+    // which is exactly why they are kept, so the repair is local.
+    //
+    // Runs whenever a watch's field table changes, and only touches rows
+    // that have nothing in them - see WorkoutStore::keysWithEmptyDecode().
+    // Returns how many rows it actually improved.
+    int redecodeStoredWorkouts();
     // One step of testActivityTrendFetch()'s encoding sweep.
     void tryActivityTrendEncoding(int index);
     void uploadWorkoutAt(const QVector<QString> &keys, int index, int succeeded,

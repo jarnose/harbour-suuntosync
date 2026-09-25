@@ -454,6 +454,23 @@ bool WorkoutStore::isSmlUploaded(const QString &key) const
     return q.exec() && q.next();
 }
 
+QVector<QString> WorkoutStore::keysWithEmptyDecode() const
+{
+    QVector<QString> keys;
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    if (!q.exec(QStringLiteral(
+            "SELECT w.key FROM workouts w"
+            " JOIN workout_sml s ON s.key = w.key"
+            " WHERE w.source = 'ble' AND s.data IS NOT NULL"
+            "   AND w.total_time = 0 AND w.total_distance = 0 AND w.avg_heart_rate = 0"
+            " ORDER BY w.start_time ASC"))) {
+        return keys;
+    }
+    while (q.next())
+        keys.append(q.value(0).toString());
+    return keys;
+}
+
 QVector<QString> WorkoutStore::keysPendingUpload() const
 {
     QVector<QString> keys;

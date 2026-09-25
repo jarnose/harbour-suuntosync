@@ -25,6 +25,13 @@ off a real watch and a real account, and they are personal data:
   unavoidably, in a descriptor table, whose `Sample.Source` enum is
   literally `0=suunto-<serial>`.
 
+One inconsistency, deliberate rather than an oversight: the Race's serial
+*is* in `docs/sbem-chunk-map.md` and in two source comments, because that
+document was generated from a real capture before this rule was written
+down. It was left there on purpose - scrubbing it would mean rewriting
+every commit, for an identifier that discloses very little. New captures
+keep their serials out.
+
 They are kept on the machine they were captured on. The repository carries
 the decoders, the documentation and the reasoning; it does not carry
 somebody's movements and heart rate.

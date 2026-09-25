@@ -1940,38 +1940,52 @@ field names are the same `Header.*`/`Sample.*` paths, because the app
 produces it from the same data. That would give cloud workouts charts and
 laps too, and belongs behind an explicit action rather than a sync.
 
-## `/Logbook/Entries` lists only what the watch has not handed over yet
+## What `/Logbook/Entries` lists - a wrong answer, corrected
 
-Learned the hard way on 2026-09-25, and it changes what "re-sync it" can
-be expected to fix.
+**This section said, on 2026-09-25, that the watch lists only entries it
+considers unsynchronised and that reading an entry's `/Data` takes it off
+that list. A capture taken the same evening disproves it, and the retraction
+is more useful than the claim was.**
 
-A Suunto 9 Baro was paired and synced. The list came back with four
-entries and all four were fetched and stored - but decoded to rows of
-zeros, because the field table in use was a Race's (see
-`sbem-chunk-map.md`). Once that was fixed and the watch synced again, the
-list came back with **two** entries: the workout recorded since, and one
-that had been mid-recording during the first sync. The other three were
-gone from the list and have not come back.
+What prompted the claim: a Suunto 9 Baro listed four entries on one sync
+and two on the next, and the three that vanished were ones already read.
+`libmds.so` carries matching vocabulary - `/Logbook/UnsynchronisedLogs`,
+`SDS::Logbook::getSyncedState`, `putSyncedState` - which made the story fit
+too comfortably.
 
-So the list is not "the watch's logbook". It is the entries the watch
-considers unsynchronised, and reading an entry's `/Data` is what takes it
-off that list. `libmds.so` carries the matching vocabulary -
-`/Logbook/UnsynchronisedLogs`, `SDS::Logbook::getSyncedState` and
-`putSyncedState` - though this project never calls the last of those, so
-the marking appears to be the watch's own doing.
+What the capture shows. A Suunto Race sync on 2026-09-25, decoded from
+btsnoop: `/Logbook/Entries` returned **six** entries, count field and all,
+and those six are exactly the six Race workouts this project has in its
+database - including ones it fetched days earlier. So reading `/Data` does
+not remove an entry from the list, at least not on a Race.
 
-The obvious alternative, a time window, is ruled out by the first sync:
-those three workouts are from December and were listed then.
+```
+reply 170 bytes = 26-byte header + 6 x 24-byte records
+count field (payload+4) = 6
+ids 1788194033, 1790079628, 1790102165, 1790185427, 1790186340, 1790186916
+```
 
-**What follows from it.** A workout decoded wrongly cannot be repaired by
-syncing again, because it will never be offered again. The raw `/Data` and
-`/Summary` are kept locally for exactly this class of reason (see
-`WorkoutStore::saveSmlSources()`, which says so about a different bug), so
-the repair is a re-decode of bytes already in hand:
-`AppController::redecodeStoredWorkouts()` runs whenever a watch's field
-table changes, and touches only rows that decoded to nothing at all. That
-last restriction is what keeps it safe - a workout belonging to a
-different watch decodes to zeros against this table, and is left alone.
+That also re-validates `LogEntries::decode()` against a second, independent
+capture: its constants put the count at the right offset and the records at
+26, and every byte of the reply is accounted for.
 
-It also means `/Data` is worth storing even for workouts that decoded
-perfectly, which is already what happens.
+`/Logbook/UnsynchronisedLogs` *is* fetched during a sync, and is a separate
+resource from `/Logbook/Entries`. Conflating them was the mistake.
+
+**Still unexplained**: why the 9 Baro listed four entries and then two. It
+is not a decoder bug - `LogEntries::decode()` reads the watch's own count
+field and returns nothing rather than a truncated list if the body is short,
+so two means the watch said two. Candidates, none of them established: the
+9 Baro prunes its logbook as it fills, its firmware generation answers
+`/Logbook/Entries` differently, or something else removed them. The cheap
+test is to look at the watch's own logbook screen and see whether those
+December workouts are still on it.
+
+**What survives regardless.** A workout stored from a wrong decode cannot
+always be repaired by syncing again, whatever the reason the entry stops
+being listed - and on the 9 Baro it did stop. The raw `/Data` and
+`/Summary` are kept locally (see `WorkoutStore::saveSmlSources()`), so
+`AppController::redecodeStoredWorkouts()` repairs from bytes already in
+hand, and did: three workouts went from rows of zeros to full data without
+the watch present. The mechanism was right; the reason given for needing it
+was not.

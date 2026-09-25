@@ -408,3 +408,96 @@ What would unblock it, in rough order of effort:
 Until then this is scouting, not a plan. Worth saying plainly: items 4-6
 were the ones I could make least progress on tonight, and it is the capture
 that is missing rather than the analysis.
+
+
+## The 2026-09-25 capture: items 4 and 5 settled, and three decoders checked
+
+A btsnoop log taken on the S7 during one ordinary Suunto-app sync with the
+Race. 1325 Whiteboard frames, 49 GET paths, 159 PUTs. The watch showed
+"syncing SuuntoPlus", "optimizing GPS performance", "syncing activities"
+and "weather" in that order, so the whole sequence is in there.
+
+The log is **not** in this repository - it carries the account's
+STTAuthorization value in clear. It is in `suuntosync-fixtures-private/`
+as `btsnoop_race_sync_2026-09-25.log`, and `tools/` has no reader for it
+because the analysis was ad hoc; the framing is in this document.
+
+### Item 4: the ephemeris handshake, in full
+
+Both values the earlier note had truncated:
+
+```
+GET  /Settings/Wifi/Cloud/OfflineMaps/Url
+0x0e "https://api.sports-tracker.com/apiserver/"     (the whole value)
+GET  /Device/GNSS/ExtendedEphemerisData/Date
+GET  /Settings/Wifi/Cloud/STTAuthorization
+0x0e "WatchUserKey <16 characters>"
+```
+
+So implementing this is two `putString()` calls, which already exist.
+
+**Open**: where the 16-character token comes from. It is not the account's
+userKey - that is 32 characters and a different value - and it does not
+appear in the 2026-09-22 HTTPS capture. Until that is known, this cannot
+be implemented for a fresh account, only replayed. The next HTTPS capture
+during a watch sync should show which endpoint mints it.
+
+### Item 5: the watch fetches its own weather
+
+`GET /Weather/Sync` again produced an ack, a `0x10` stream start and a
+short `0x08` reply - **no forecast payload**, on a second capture now. What
+settles the mechanism is the watch's own event log, read back over
+`/Analytics/Data` during the same sync:
+
+```
+Weather sync TO
+Weather sync ok d:0 f:0
+Weather sync ok d:60 f:0
+Weather sync ok d:1500 f:0
+Weather sync ok d:3600 f:0
+Weather sync ok d:5640 f:1
+Weather sync ok d:17760 f:5
+synced city:Tampere
+```
+
+The watch logs its own weather syncs, knows the city name, and records
+timeouts - which is not the shape of a phone pushing it a blob. Same
+pattern as the ephemeris: the phone hands over cloud credentials and the
+watch fetches over WiFi. `d:` and `f:` are unidentified; the increasing
+`d:` values look like the age of the forecast being replaced.
+
+This means weather and GPS are **one feature, not two**: write the URL and
+the STTAuthorization, and the watch does the rest. It also means the
+16-character token above is the blocker for both.
+
+### The health requests, checked byte for byte
+
+The same capture carries the official app's own requests for the three
+resources this project implemented from inference. Every one matches:
+
+| resource | type code | unit | matches |
+|---|---|---|---|
+| `/Activity/TrendData` | `0x0008` int64 | **milliseconds** | `fetchActivityTrend()` |
+| `/Activity/Moments/Sync/Data` | `0x0008` int64 | **seconds** | `fetchRecoveryMoments()` |
+| `/Daily/Sleep/Timeline/Data` | `0x0008` int64 + `0x000c` string | milliseconds + `mdsSlp.sbm` | `fetchTimelineFile()` |
+
+The same type code carrying seconds for one resource and milliseconds for
+its neighbour is not a misreading after all - the app does exactly that.
+
+### And the activity pagination, confirmed
+
+The app made **29** consecutive `/Activity/TrendData` fetches, each reply
+426 bytes: a 26-byte header, ten 40-byte records, status **202**. Every
+cursor after the first is the previous reply's **last record's raw
+timestamp**, jitter included - `...800090`, `...800270`, `...800100`.
+
+The cursor is **exclusive**: with cursor 19:30:00.090 the next reply starts
+at 19:40:00.340, one interval later. This project passes last + 1 ms, which
+lands in the same place, so the extra millisecond costs nothing.
+
+One thing the first request shows that the others do not: given a cursor
+that is *not* one of the watch's own record timestamps, the reply starts
+*before* it - 18:20:00.000 returned records from 18:00:00.740, and an
+earlier probe with 09:54:10.530 got 09:00:00.480. Both round down to the
+hour, which is a guess from two samples and not worth relying on. Re-read
+buckets are harmless: `health_entries` upserts on (kind, timestamp).

@@ -37,9 +37,14 @@ Confirmed on real hardware, not just in tests:
 - **Notifications to the watch.** The mechanism is understood (see
   `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
   costs Jolla Store eligibility — a decision, not a missing feature.
-- **Weather and GPS-ephemeris updates to the watch.** Both are mapped;
-  neither is implemented. They need the `0x0e` PUT verb, which this
-  project does not encode yet.
+- **Weather and GPS-ephemeris updates to the watch.** These turned out to
+  be one feature, not two: the phone writes a cloud URL and an
+  authorization string to the watch, and the watch fetches both over WiFi
+  itself — its own event log records "synced city:Tampere". So it is two
+  PUTs, which this project can already make. The blocker is the 16-
+  character token in that authorization string: it is not the account's
+  userKey and its origin is not yet known, so the handshake can be
+  replayed but not constructed. See `docs/watch-push-resources.md`.
 
 ## How it was built
 

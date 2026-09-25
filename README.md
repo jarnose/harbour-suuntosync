@@ -40,11 +40,11 @@ Confirmed on real hardware, not just in tests:
 - **GPS-ephemeris updates to the watch.** The push is decoded byte for
   byte and confirmed on hardware: 61440 bytes in 453-byte chunks through
   `/Device/GNSS/ExtendedEphemerisData/Upload/0`, after which a 9 Baro's
-  ephemeris date went from `N/A` to the day's own. What is missing is the
-  URL the phone downloads those bytes from, which needs one HTTPS capture
-  of a sync where a watch genuinely needs them. A Race accepts the same
-  upload resource, so one mechanism may serve both — untested. See
-  `docs/watch-push-resources.md`.
+  ephemeris date went from `N/A` to the day's own. Missing is the URL the
+  phone downloads those bytes from, which needs one HTTPS capture. A Race
+  asks for a different format and the official app never fetches that one,
+  so a Race has to keep using its own WiFi — which is blocked on a
+  16-character token of unknown origin. See `docs/watch-push-resources.md`.
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.

@@ -684,57 +684,64 @@ official app's choice is a curiosity rather than a blocker. What is still
 needed either way is the source of the 61440 bytes.
 
 
-## Format is not a per-model capability - a claim retracted the same hour
+## The two watches report different formats, and the app fetches only one
 
-**The section this replaces said a 9 Baro wants CEP and a Race wants LLE,
-so no single route could serve both. That was wrong, and it was wrong
-because a number was read once and treated as a constant.**
-
-What was read during the capture, before anything was pushed:
+Jarno's question was whether a Race with WiFi switched off would have the
+ephemeris pushed to it instead. Reading `Format` on both watches answers it
+without a capture.
 
 ```
-9 Baro  /Device/GNSS/ExtendedEphemerisData/Format -> 2
+/Device/GNSS/ExtendedEphemerisData/Format   Suunto 9 Baro -> 2
+                                            Suunto Race   -> 3
 ```
 
-What the same watch answers now, after the push, on the same handle with
-the same request:
+The 9 Baro reads 2 both in the capture (before anything was pushed) and
+afterwards, so the value is stable and is a property of the watch rather
+than of what it currently holds - which is worth stating, because it was
+briefly doubted on a mistyped byte and the doubt is what the value being
+read twice, hours apart, disposes of.
 
-```
-9 Baro  -> 3        Suunto Race -> 3
-```
+The enum the watches spell out is `SGEE, EPO, CEP, LLE`. **Which name each
+number is remains an assumption**: the schema walk returns the four names
+each with an identical `08 00 00 00` marker and no visible index, so
+"numbered in the order enumerated" - making these CEP and LLE - is a
+reading, not a reading-off. What does not depend on the assumption is that
+the two values differ.
 
-So the value changed. It is not "which format this model wants"; it tracks
-something that the push altered. The obvious reading - both watches now
-hold valid data and both say 3, the Baro said 2 when it held none - is
-consistent with everything seen, but it is a reading of two samples and is
-not asserted here.
+And the app can only ever obtain one format. Its string table has exactly
+one field of that family - `cepUrl`, alongside `cepBinary`,
+`cepBinaryPath` and `cep_lastModified`. There is no `lleUrl`, no
+`sgeeUrl`, no `epoUrl`; `LLE` appears as a standalone word only inside the
+enum the watch itself sends. The file on disk is called `cep_binary`.
 
-The enum the watch spells out is still `SGEE, EPO, CEP, LLE`. What the
-numbers map to is **not established**: the schema walk returns the four
-names, each with an identical `08 00 00 00` marker and no visible index,
-so nothing in the capture says which name is 2 or 3. Assuming they were
-numbered in the order enumerated is exactly the step that produced the
-retracted claim.
+**So the app has nothing to push to a Race, whatever its WiFi is doing.**
+The fallback does not exist, and the reason is not a branch on WiFi
+availability - it is that only one format is ever fetched and a Race does
+not ask for it. A Race with WiFi off simply goes without fresh ephemeris.
 
-**What does survive**, and it is the part that matters:
+That the Race's firmware *accepts* `.../Upload/0` - it acks with 200, with
+the same handle bytes the Baro gives - stays true and stays separate. The
+firmware can be pushed to; the app has nothing to push it.
 
-- **The push works.** The 9 Baro's `Date` read `N/A` before and
-  `2026-09-25T00:00:00Z` after. 61440 bytes went over, the watch took
-  them, and its ephemeris is current. The whole mechanism is confirmed end
-  to end, not just decoded.
-- **The app only ever fetches one format.** `cepUrl`, `cepBinary`,
-  `cepBinaryPath`, `cep_lastModified` and no `lleUrl`, `sgeeUrl` or
-  `epoUrl` anywhere in its string table. Whatever the numbers mean, the
-  app deals in CEP and nothing else.
-- **A Race accepts `.../Upload/0`** - it acks with 200, same handle bytes
-  as the Baro.
+### The push itself is confirmed, end to end
 
-Which leaves Jarno's original question genuinely open rather than answered
-in the negative: if the app only ever holds a CEP file, and a Race accepts
-the upload resource, then one file and one mechanism may well serve both
-watches. The way to find out is to push the file this project already has
-to a Race and read `Date` back - the same test the Baro just passed, and
-one that needs no capture and no cloud.
+Independently of all of the above: the 9 Baro's `Date` read **`N/A`**
+before the sync and **`2026-09-25T00:00:00Z`** after it. 61440 bytes went
+across in 453-byte chunks, the watch took them, and its ephemeris is
+current. The mechanism is not merely decoded, it is known to work.
+
+### What this means for implementing it here
+
+- **A 9 Baro can be served.** Format 2, and this project holds a real
+  61440-byte file byte-identical to the one the official app pushed, with
+  the framing known exactly. The only missing piece is `cepUrl`, so the
+  file can be refreshed rather than replayed.
+- **A Race cannot**, not by pushing - it asks for a different format and
+  nothing here has a source for one. Its route stays the WiFi handshake,
+  blocked on the 16-character token instead.
+
+Two watches, two blockers, and both are "where do the bytes come from"
+rather than anything about the protocol.
 
 ## Item 5 closed: weather is never pushed to either watch
 

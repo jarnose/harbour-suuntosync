@@ -19,6 +19,11 @@ constexpr int64_t kLatestPlausible   = 4000000000; // 2096
 // reply, and used to find where the records begin.
 constexpr uint32_t kSampleIntervalSeconds = 1800;
 
+// A run may skip samples, but not by an arbitrary amount. A week is
+// generous for "the watch was off"; the bogus records this guards against
+// jumped by years.
+constexpr uint32_t kMaxGapSeconds = 7 * 24 * 3600;
+
 } // namespace
 
 namespace {
@@ -66,18 +71,45 @@ std::vector<Sample> decode(const std::vector<uint8_t> &payload)
 {
     std::vector<Sample> out;
     const size_t start = findRecordStart(payload);
+
+    // Stop at the first record that doesn't fit the pattern, rather than
+    // skipping it and carrying on.
+    //
+    // This matters, and the first version got it wrong: the record array
+    // ends before the payload does, and reading to the end produced 196
+    // bogus samples alongside 50 real ones - balances of 180 %, stress
+    // states of 216, timestamps in 2017 and 2096. Whatever follows the
+    // array is not records, so the honest thing is to stop when the run
+    // stops looking like one.
+    uint32_t previous = 0;
     for (size_t pos = start; pos + kRecordSize <= payload.size(); pos += kRecordSize) {
         const uint32_t seconds = timestampAt(payload, pos);
         if (!plausibleTimestamp(seconds))
-            continue;
+            break;
+
+        const int balance = payload[pos + 4];
+        if (balance > 100)
+            break; // a percentage cannot exceed 100
+
+        if (previous != 0) {
+            // Samples are half an hour apart. Gaps happen - the watch is
+            // taken off - so a multiple is allowed, but an arbitrary jump
+            // means the array has ended.
+            const uint32_t gap = seconds - previous;
+            if (seconds <= previous || gap % kSampleIntervalSeconds != 0
+                    || gap > kMaxGapSeconds) {
+                break;
+            }
+        }
 
         Sample sample;
         sample.timestampMs = static_cast<int64_t>(seconds) * 1000;
-        sample.balancePercent = payload[pos + 4];
+        sample.balancePercent = balance;
         sample.stressState = payload[pos + 5];
         // Bytes 6 and 7 are left alone: they vary between records and this
         // project has no evidence for what they mean.
         out.push_back(sample);
+        previous = seconds;
     }
 
     std::sort(out.begin(), out.end(), [](const Sample &a, const Sample &b) {

@@ -96,3 +96,91 @@ optional daemon package** that the user installs from Chum only if they
 want that feature. That is more packaging work, and the two reference apps
 did not do it - but neither of them had a working Store-eligible app to
 protect when they made the call.
+
+## What the watch actually wants (2026-09-26, from libmds.so)
+
+The sandboxing question was settled long ago; what a notification *is* on
+the wire never was. `libmds.so` has a whole class for it,
+`OBI2::ANCSNotification`, and its method names give the shape:
+
+```
+put  del  doOp  getConnectionType  parseSerial
+wbNotif  legacyNotif
+truncateContentIfNeeded  truncateUtf8String
+```
+
+**Two branches again**, chosen by `getConnectionType` - the same split the
+GPS ephemeris turned out to have, and presumably the same two generations.
+
+- **`wbNotif`** builds `/net/<serial>/…` and performs `add` or `delete`,
+  matching the resources `/Device/Connectivity/Ble/Ancs/Notification/Add`
+  and `/Del`. ANCS is Apple's Notification Center Service; Suunto's
+  version rides over Whiteboard rather than over the standard GATT
+  service, but the vocabulary is borrowed.
+- **`legacyNotif`** builds an SML tree under the prefix
+  `sml.UserNotification.` and hands it to `convertNotificationToSml`,
+  which fails with "Failed to generate a string from the notification
+  tree". So for the older generation a notification is an SML structure,
+  not an ANCS-style record.
+
+Field names visible in the string table: `notificationId`,
+`notificationType`, `categoryId`, `requestData`, `Subheader`, `Body`,
+`Timestamp`. Not a complete list and not typed - the useful ones are
+obvious but their order and encoding are not.
+
+And `truncateContentIfNeeded` with `truncateUtf8String` beside it says
+there is a length limit, enforced on a UTF-8 boundary rather than a byte
+one. Whatever it is, it is worth respecting rather than discovering.
+
+**What is still missing** is the same thing that was missing for
+`/Logbook/Entries` before it was cracked: the structure of the request. It
+is not in the watch's SBEM descriptor tables - those describe workout
+data, and neither watch's table mentions notifications at all.
+
+Two ways to get it, in increasing order of cost:
+
+1. **Ask the watch.** `AppController::probePath()` on
+   `/Device/Connectivity/Ble/Ancs/Notification/Add` says immediately
+   whether a given watch has that resource, which also settles which
+   branch each generation uses. If it exists, the schema walk the official
+   app performs before a PUT would name the fields - and this project has
+   never implemented that walk, always shortcutting past it.
+2. **Capture one.** An Android sync with a real notification arriving,
+   the same btsnoop route everything else here came from.
+
+The first costs two taps and narrows the second.
+
+## The daemon, if it happens: who owns the link
+
+The constraint that shapes everything: **Whiteboard is strictly one
+request, one response, with matched request ids.** Two processes writing
+to the same watch corrupt each other. So exactly one of them may hold a
+Whiteboard session at a time - and note that this is about the session,
+not the Bluetooth connection. BlueZ refcounts the connection; handing over
+means `MdsWhiteboardClient::detach()` and `attachToDevice()`, which exist.
+
+Two shapes were considered.
+
+**The daemon owns the link whenever it is running**, and the app talks to
+the watch through it. This is what Amazfish and Vapaamin do. It means the
+app needs a second, complete implementation of every watch operation as a
+D-Bus client, *and* keeps the direct one for when no daemon is installed -
+because a Store-eligible app that stops working without a Chum package is
+not what was wanted. More code, two paths to keep in step, and the daemon
+becomes a dependency of the thing it was supposed to stay out of.
+
+**The app wins ties; the daemon holds the link the rest of the time.**
+The app is unchanged except for claiming the link when it needs one and
+releasing it after. The daemon holds it otherwise and sends notifications.
+A D-Bus name with `AllowReplacement` and `ReplaceExisting` is the whole
+mechanism: the app takes the name, the daemon gets `NameLost` and
+detaches; the app finishes, the daemon gets the name back and reattaches.
+
+The second is recommended. Its cost is real and worth stating: **a
+notification arriving while a sync is running is delayed** until the sync
+finishes, or dropped if the daemon does not queue. A sync is minutes. The
+consolation is that the app holding the link means somebody is looking at
+the phone.
+
+Nothing here is worth building before the payload is known, because a
+daemon that can arbitrate perfectly and send nothing is not a daemon.

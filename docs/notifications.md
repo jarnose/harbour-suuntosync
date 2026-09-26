@@ -141,14 +141,40 @@ Two ways to get it, in increasing order of cost:
 
 1. **Ask the watch.** `AppController::probePath()` on
    `/Device/Connectivity/Ble/Ancs/Notification/Add` says immediately
-   whether a given watch has that resource, which also settles which
-   branch each generation uses. If it exists, the schema walk the official
-   app performs before a PUT would name the fields - and this project has
-   never implemented that walk, always shortcutting past it.
+   whether a given watch has that resource.
 2. **Capture one.** An Android sync with a real notification arriving,
    the same btsnoop route everything else here came from.
 
-The first costs two taps and narrows the second.
+### What the probe answered
+
+Both watches have it, and both refuse to be read without arguments:
+
+```
+9 Baro  f0 12 03 01 80 00  90 01  00 00
+Race    f0 12 04 01 80 00  90 01  00 00
+```
+
+`0x0190` is **400**. The GET resolved a handle - that is why the resource
+counts as present - and the zero-parameter fetch was rejected, which is
+what a resource that exists to be written to should do.
+
+So **one code path covers both watches**, and the generation split that
+`wbNotif`/`legacyNotif` implies is not a split between these two.
+`getConnectionType` is more likely choosing by transport than by model;
+whatever `legacyNotif` is for, it is not the 9 Baro.
+
+That leaves only the field list, and 400 does not name it. The schema walk
+the official app runs before its PUTs would - but that walk is
+`protocol_v9`'s structure traversal, which took a Ghidra pass to
+understand and has been shortcut past everywhere else in this project
+precisely because the watch does not require it. Implementing it to read a
+schema, when a capture shows the finished bytes directly, is the more
+expensive of the two routes.
+
+**So: capture one.** The rig is already there - btsnoop runs permanently
+on the S7, the Race is paired to it, and no mitmproxy is needed because
+none of this touches HTTPS. Turn notifications on in the official app,
+make the phone produce one, and the bytes are in the log.
 
 ## The daemon, if it happens: who owns the link
 

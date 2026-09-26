@@ -131,6 +131,16 @@ public:
     //
     // `offsetMinutes` stamps the timestamps; the cloud's own entries carry
     // a local offset rather than UTC.
+    // GPS assist data for a watch, from the same host the official app
+    // uses. Unauthenticated on purpose rather than by omission: the
+    // endpoints ignore the appkey the app sends, tested four ways
+    // (docs/watch-push-resources.md), so nothing here needs a session or
+    // an account. `formatIndex` is what the watch answered for
+    // /Device/GNSS/ExtendedEphemerisData/Format.
+    using RawDownloadCallback = std::function<void(bool ok, const QByteArray &data,
+                                                     const QString &error)>;
+    void downloadEphemeris(int formatIndex, RawDownloadCallback callback);
+
     using SimpleCallback = std::function<void(bool ok, const QString &error)>;
     void uploadHealthEntries(const QString &sessionKey, const QString &kind,
                               const QVector<HealthEntry> &entries, int offsetMinutes,

@@ -86,6 +86,29 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("PairingPage.qml"))
             }
 
+            Button {
+                // The one watch-side feature that needs no account: the
+                // assist-data endpoints take no credential at all.
+                x: Theme.horizontalPageMargin
+                visible: AppController.whiteboardReady
+                enabled: !AppController.gpsUpdateInProgress
+                text: AppController.gpsUpdateInProgress
+                      ? qsTr("Updating GPS data…")
+                      : qsTr("Update GPS data")
+                onClicked: AppController.updateWatchGps()
+            }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: AppController.whiteboardReady
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: qsTr("Downloads the satellite predictions the watch uses to get a fix "
+                           + "quickly, and writes them to it. Needs no Suunto account.")
+            }
+
             TextSwitch {
                 text: qsTr("Sync when the watch connects")
                 description: qsTr("Off by default: a sync is minutes of radio time, "

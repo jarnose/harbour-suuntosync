@@ -47,6 +47,7 @@ class AppController : public QObject
     // What the cover shows. Stored in QSettings; see coverMode().
     Q_PROPERTY(QString coverMode READ coverMode WRITE setCoverMode NOTIFY coverModeChanged)
     Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
+    Q_PROPERTY(bool gpsUpdateInProgress READ isGpsUpdateInProgress NOTIFY gpsUpdateInProgressChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -61,6 +62,7 @@ public:
     bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
+    bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
 
     // One of "latest", "totals", "sleep" or "nothing" - what the cover
     // page draws. A plain string rather than an enum so QML can pass it
@@ -199,6 +201,21 @@ public:
     // Read-only by construction: a GET resolves a handle, and nothing here
     // follows it with the PUT that would write anything.
     Q_INVOKABLE void probePath(const QString &path);
+
+    // Refreshes the watch's GPS assist data, which is what makes it find
+    // satellites in seconds instead of minutes. Asks the watch which of
+    // four formats it wants, downloads that one, and writes it across in
+    // 453-byte chunks (docs/watch-push-resources.md).
+    //
+    // The one feature here that needs no Suunto account: the assist-data
+    // endpoints ignore the appkey the official app sends, so nothing in
+    // this path touches a session or a login.
+    //
+    // Confirmed working on a Suunto 9 Baro, which has no WiFi of its own
+    // and so has no other way to get this. A Race answers the same
+    // resources but has never been given a blob by anything - it normally
+    // fetches its own over WiFi - so that case is genuinely untried.
+    Q_INVOKABLE void updateWatchGps();
 
     // The real end-user "sync directly from the watch" action, now that
     // both halves are proven on real hardware:
@@ -357,6 +374,7 @@ signals:
     void workoutDetailsChanged(const QString &key);
     void cloudSamplesInProgressChanged();
     void healthSyncInProgressChanged();
+    void gpsUpdateInProgressChanged();
     void healthDataChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
@@ -423,6 +441,7 @@ private:
 
     HealthStore *m_healthStore;
     bool m_healthSyncInProgress = false;
+    bool m_gpsUpdateInProgress = false;
     // The sequential per-kind loop behind syncHealthData(), same shape as
     // fetchWatchEntryAt(): four requests one after another rather than four
     // at once, so a failure can name which kind failed and the tally stays
@@ -459,6 +478,9 @@ private:
     // startup and whenever the paired watch changes, so that an upload or
     // a probe run before any sync this session still uses the right table.
     void loadStoredDescriptors();
+    // Clears the in-progress flag and reports, from every exit of
+    // updateWatchGps()'s callback chain.
+    void finishGpsUpdate(const QString &message);
 
     // Decodes again, from bytes already stored, any watch workout that
     // decoded to nothing the first time.

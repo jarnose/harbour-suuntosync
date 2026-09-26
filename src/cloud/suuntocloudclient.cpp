@@ -56,6 +56,48 @@ QNetworkRequest SuuntoCloudClient::authorizedRequest(const QString &url,
     return request;
 }
 
+namespace {
+
+// One endpoint per assist-data format, in the order the watch's own
+// Format enum lists them: SGEE, EPO, CEP, LLE. All five URLs are literals
+// in the official app; EPO is the odd one out, arriving in two indexed
+// parts, and is left unimplemented because no watch here asks for it.
+const char *const kEphemerisUrls[] = {
+    "https://devices.suunto-operations.com/devices/gpsorbit/binary",
+    nullptr, // EPO: mtk3day, two parts - no watch here reports format 1
+    "https://devices.suunto-operations.com/devices/gpsorbit/sony",
+    "https://devices.suunto-operations.com/devices/gpsorbit/sonylle",
+};
+
+} // namespace
+
+void SuuntoCloudClient::downloadEphemeris(int formatIndex, RawDownloadCallback callback)
+{
+    const int count = static_cast<int>(sizeof(kEphemerisUrls) / sizeof(kEphemerisUrls[0]));
+    if (formatIndex < 0 || formatIndex >= count || kEphemerisUrls[formatIndex] == nullptr) {
+        callback(false, QByteArray(),
+                  tr("This watch asks for GPS assist format %1, which isn't implemented")
+                          .arg(formatIndex));
+        return;
+    }
+
+    QNetworkRequest request{QUrl(QString::fromLatin1(kEphemerisUrls[formatIndex]))};
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QByteArray(), reply->errorString());
+            return;
+        }
+        const QByteArray body = reply->readAll();
+        if (body.isEmpty()) {
+            callback(false, QByteArray(), tr("The assist-data server returned nothing"));
+            return;
+        }
+        callback(true, body, QString());
+    });
+}
+
 void SuuntoCloudClient::login(const QString &email, const QString &password,
                                LoginCallback callback)
 {

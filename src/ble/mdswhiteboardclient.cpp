@@ -675,6 +675,112 @@ void MdsWhiteboardClient::fetchActivityFragment(qint64 cursorMs,
     });
 }
 
+namespace {
+// What the official app sends. Nothing in the framing requires it - each
+// chunk declares its own length - but staying with the observed value
+// keeps this as close to a replay as it can be.
+constexpr size_t kEphemerisChunkSize = 453;
+constexpr const char *kEphemerisUploadPath = "/Device/GNSS/ExtendedEphemerisData/Upload/0";
+constexpr const char *kEphemerisLoadPath = "/Device/GNSS/ExtendedEphemerisData/Load";
+} // namespace
+
+void MdsWhiteboardClient::putEphemeris(const std::vector<uint8_t> &blob,
+                                        ProgressCallback progress, SimpleCallback callback)
+{
+    if (blob.empty()) {
+        callback(false, tr("No ephemeris data to send"));
+        return;
+    }
+
+    const QString uploadPath = QString::fromLatin1(kEphemerisUploadPath);
+    getRaw([uploadPath](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, uploadPath.toStdString());
+    }, [this, blob, progress, callback, uploadPath]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(uploadPath, error));
+            return;
+        }
+        if (ack.body.size() < 6 || ack.body[0] == 0xF5) {
+            callback(false, tr("This watch does not accept an ephemeris upload"));
+            return;
+        }
+
+        const std::vector<uint8_t> ackBody = ack.body;
+        const auto shared = std::make_shared<const std::vector<uint8_t>>(blob);
+        // The "begin": a PUT with no parameters at all, on the same handle.
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodePut(requestId, ackBody, {});
+        }, [this, ackBody, shared, progress, callback]
+                (bool beginOk, const Mds::Frame &, const QString &beginError) {
+            if (!beginOk) {
+                callback(false, tr("The watch refused to start the upload: %1").arg(beginError));
+                return;
+            }
+            sendEphemerisChunk(ackBody, shared, 0, progress, callback);
+        });
+    });
+}
+
+void MdsWhiteboardClient::sendEphemerisChunk(
+        const std::vector<uint8_t> &ackBody,
+        const std::shared_ptr<const std::vector<uint8_t>> &blob, size_t offset,
+        ProgressCallback progress, SimpleCallback callback)
+{
+    if (offset >= blob->size()) {
+        commitEphemeris(callback);
+        return;
+    }
+
+    const size_t length = std::min(kEphemerisChunkSize, blob->size() - offset);
+    const size_t through = offset + length;
+    const uint32_t total = static_cast<uint32_t>(blob->size());
+
+    getRaw([ackBody, blob, offset, length, through, total](uint16_t requestId) {
+        return Mds::encodeEphemerisChunk(requestId, ackBody, total,
+                                           static_cast<uint32_t>(through),
+                                           blob->data() + offset, length);
+    }, [this, ackBody, blob, through, progress, callback]
+            (bool ok, const Mds::Frame &, const QString &error) {
+        if (!ok) {
+            callback(false, tr("Upload stopped after %1 of %2 bytes: %3")
+                              .arg(through).arg(blob->size()).arg(error));
+            return;
+        }
+        if (progress)
+            progress(static_cast<int>(through), static_cast<int>(blob->size()));
+        sendEphemerisChunk(ackBody, blob, through, progress, callback);
+    });
+}
+
+void MdsWhiteboardClient::commitEphemeris(SimpleCallback callback)
+{
+    const QString loadPath = QString::fromLatin1(kEphemerisLoadPath);
+    getRaw([loadPath](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, loadPath.toStdString());
+    }, [this, loadPath, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("Data sent, but GET %1 failed: %2").arg(loadPath, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("Data sent, but %1 acked oddly").arg(loadPath));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodePut(requestId, ackBody, {});
+        }, [callback](bool putOk, const Mds::Frame &, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("Data sent, but the watch would not load it: %1")
+                                  .arg(putError));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallback callback)
 {
     // Two steps, as captured: GET /Dev/FileSystem/FileDelete for a handle,

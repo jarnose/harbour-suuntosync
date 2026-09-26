@@ -929,6 +929,21 @@
         <translation>Parita kello</translation>
     </message>
     <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="0"/>
+        <source>Update GPS data</source>
+        <translation>Päivitä GPS-data</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="0"/>
+        <source>Updating GPS data…</source>
+        <translation>Päivitetään GPS-dataa…</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="0"/>
+        <source>Downloads the satellite predictions the watch uses to get a fix quickly, and writes them to it. Needs no Suunto account.</source>
+        <translation>Lataa satelliittiennusteet joilla kello saa paikannuksen nopeasti, ja kirjoittaa ne kelloon. Ei vaadi Suunto-tiliä.</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/SettingsPage.qml" line="90"/>
         <source>Sync when the watch connects</source>
         <translation>Synkronoi kun kello yhdistyy</translation>

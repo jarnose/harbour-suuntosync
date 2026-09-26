@@ -975,6 +975,121 @@ void AppController::probePath(const QString &path)
     });
 }
 
+namespace {
+
+// A scalar resource's reply is [handle 6][status 2][type code 2][value].
+// The type code is the same vocabulary the fetch parameters use - 0x0003
+// for the small enum Format returns, 0x000C for the NUL-terminated string
+// Date returns.
+bool scalarPayload(const std::vector<uint8_t> &body, uint16_t *typeCode,
+                    const uint8_t **value, size_t *length)
+{
+    if (body.size() < 10)
+        return false;
+    *typeCode = static_cast<uint16_t>(body[8] | (static_cast<uint16_t>(body[9]) << 8));
+    *value = body.data() + 10;
+    *length = body.size() - 10;
+    return true;
+}
+
+QString scalarString(const std::vector<uint8_t> &body)
+{
+    uint16_t typeCode = 0;
+    const uint8_t *value = nullptr;
+    size_t length = 0;
+    if (!scalarPayload(body, &typeCode, &value, &length))
+        return QString();
+    const void *nul = std::memchr(value, 0, length);
+    const size_t end = nul ? static_cast<size_t>(static_cast<const uint8_t *>(nul) - value)
+                            : length;
+    return QString::fromLatin1(reinterpret_cast<const char *>(value), static_cast<int>(end));
+}
+
+constexpr const char *kEphemerisFormatPath = "/Device/GNSS/ExtendedEphemerisData/Format";
+constexpr const char *kEphemerisDatePath = "/Device/GNSS/ExtendedEphemerisData/Date";
+
+} // namespace
+
+void AppController::updateWatchGps()
+{
+    if (!m_whiteboardReady) {
+        emit errorOccurred(tr("Connect the watch first."));
+        return;
+    }
+    if (m_gpsUpdateInProgress || m_workoutSyncInProgress || m_healthSyncInProgress) {
+        emit errorOccurred(tr("Something else is using the watch connection."));
+        return;
+    }
+
+    m_gpsUpdateInProgress = true;
+    emit gpsUpdateInProgressChanged();
+
+    // Ask the watch which of the four formats it wants rather than
+    // deciding from the model name. That is what makes one code path serve
+    // watches this project has never seen.
+    m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisFormatPath),
+            [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        if (!ok) {
+            finishGpsUpdate(tr("Could not ask the watch which GPS data it wants: %1")
+                                      .arg(error));
+            return;
+        }
+        uint16_t typeCode = 0;
+        const uint8_t *value = nullptr;
+        size_t length = 0;
+        if (!scalarPayload(body, &typeCode, &value, &length) || length < 1) {
+            finishGpsUpdate(tr("The watch's GPS format answer was unreadable."));
+            return;
+        }
+        const int format = value[0];
+
+        m_cloudClient->downloadEphemeris(format,
+                [this, format](bool downloadOk, const QByteArray &data, const QString &dlError) {
+            if (!downloadOk) {
+                finishGpsUpdate(tr("Could not download GPS data: %1").arg(dlError));
+                return;
+            }
+
+            const std::vector<uint8_t> blob(
+                    reinterpret_cast<const uint8_t *>(data.constData()),
+                    reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
+            emit errorOccurred(tr("Sending %1 kB of GPS data to the watch…")
+                                .arg(blob.size() / 1024));
+
+            m_whiteboardClient->putEphemeris(blob, nullptr,
+                    [this, format](bool putOk, const QString &putError) {
+                if (!putOk) {
+                    finishGpsUpdate(putError);
+                    return;
+                }
+                // Read the date back rather than trusting the ack: this is
+                // the field that said "N/A" before a 9 Baro was written to
+                // and the day's own date after, and it is the only
+                // independent evidence the watch kept what it was sent.
+                m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisDatePath),
+                        [this, format](bool dateOk, const std::vector<uint8_t> &dateBody,
+                                        const QString &) {
+                    const QString date = dateOk ? scalarString(dateBody) : QString();
+                    if (date.isEmpty()) {
+                        finishGpsUpdate(tr("GPS data sent (format %1). The watch did not "
+                                                  "report a date back.").arg(format));
+                    } else {
+                        finishGpsUpdate(tr("GPS data updated - the watch now reports %1.")
+                                                .arg(date));
+                    }
+                });
+            });
+        });
+    });
+}
+
+void AppController::finishGpsUpdate(const QString &message)
+{
+    m_gpsUpdateInProgress = false;
+    emit gpsUpdateInProgressChanged();
+    emit errorOccurred(message);
+}
+
 void AppController::testHealthResourceFetch(const QString &kind)
 {
     if (!m_whiteboardReady) {

@@ -236,6 +236,24 @@ std::vector<uint8_t> encodePut(uint16_t requestId, const std::vector<uint8_t> &a
 std::vector<uint8_t> encodePutString(uint16_t requestId, const std::vector<uint8_t> &ackBody,
                                       const std::string &value);
 
+// One chunk of a GPS ephemeris upload, for /Device/GNSS/
+// ExtendedEphemerisData/Upload/<n>. The parameter is a byte array (type
+// 0x000D) whose first nine bytes are the transfer's own bookkeeping:
+//
+//   [0]     0x02, constant in all 136 captured chunks
+//   [1..3]  total bytes in the whole transfer, LE
+//   [4..6]  bytes transferred including this chunk, LE
+//   [7..8]  this chunk's own length, LE
+//
+// The official app sends 453 bytes per chunk and a shorter final one, but
+// nothing in the framing requires that size - the length travels with each
+// chunk. Confirmed byte-for-byte against a real Suunto 9 Baro upload; see
+// docs/watch-push-resources.md.
+std::vector<uint8_t> encodeEphemerisChunk(uint16_t requestId,
+                                            const std::vector<uint8_t> &ackBody,
+                                            uint32_t totalBytes, uint32_t bytesThroughThisChunk,
+                                            const uint8_t *data, size_t length);
+
 // The sleep/activity timeline fetch: asks the watch to render everything
 // newer than `newerThanMs` into `filename` on its own filesystem, which is
 // then read back through /Dev/FileSystem/Stream. See

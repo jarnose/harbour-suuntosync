@@ -194,6 +194,28 @@ std::vector<uint8_t> encodePutString(uint16_t requestId, const std::vector<uint8
     return encodePut(requestId, ackBody, { { kParamString, bytes } });
 }
 
+std::vector<uint8_t> encodeEphemerisChunk(uint16_t requestId,
+                                            const std::vector<uint8_t> &ackBody,
+                                            uint32_t totalBytes, uint32_t bytesThroughThisChunk,
+                                            const uint8_t *data, size_t length)
+{
+    if (length > 0xFFFF)
+        throw std::invalid_argument("encodeEphemerisChunk: chunk longer than a 16-bit length");
+
+    std::vector<uint8_t> payload;
+    payload.reserve(9 + length);
+    payload.push_back(0x02);
+    for (int i = 0; i < 3; ++i)
+        payload.push_back(static_cast<uint8_t>((totalBytes >> (8 * i)) & 0xFF));
+    for (int i = 0; i < 3; ++i)
+        payload.push_back(static_cast<uint8_t>((bytesThroughThisChunk >> (8 * i)) & 0xFF));
+    payload.push_back(static_cast<uint8_t>(length & 0xFF));
+    payload.push_back(static_cast<uint8_t>((length >> 8) & 0xFF));
+    payload.insert(payload.end(), data, data + length);
+
+    return encodePut(requestId, ackBody, { { kParamBytes, payload } });
+}
+
 std::vector<uint8_t> encodeTimelineFileFetch(uint16_t requestId,
                                                const std::vector<uint8_t> &ackBody,
                                                int64_t newerThanMs,

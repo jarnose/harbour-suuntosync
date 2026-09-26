@@ -9,6 +9,7 @@
 #include <QString>
 #include <QTimer>
 #include <functional>
+#include <memory>
 #include <vector>
 
 // Speaks the Movesense/Suunto Whiteboard protocol (see mdswirecodec.h for
@@ -139,6 +140,23 @@ public:
     // A PUT with no value - used for the "do this now" resources, and for
     // deleting a rendered file once its name has been written.
     void putEmpty(const QString &path, SimpleCallback callback);
+
+    // Writes a GPS ephemeris blob to the watch, which is how a watch with
+    // no WiFi of its own gets assisted GPS (docs/watch-push-resources.md).
+    // Five steps, all confirmed against a real Suunto 9 Baro upload:
+    //
+    //   1. GET /Device/GNSS/ExtendedEphemerisData/Upload/0 for a handle
+    //   2. a PUT with no parameters - the "begin"
+    //   3. one PUT per chunk, each carrying its own length and the running
+    //      total (Mds::encodeEphemerisChunk)
+    //   4. GET /Device/GNSS/ExtendedEphemerisData/Load for a handle
+    //   5. a PUT with no parameters - the commit, answered with 202
+    //
+    // `progress` is called with (bytes sent, total) after each chunk, since
+    // 60 kB at 453 bytes a time over BLE is not instant.
+    using ProgressCallback = std::function<void(int sent, int total)>;
+    void putEphemeris(const std::vector<uint8_t> &blob, ProgressCallback progress,
+                       SimpleCallback callback);
 
     // Removes a file the watch rendered for us. fetchTimelineFile() calls
     // this itself once the data is read.
@@ -274,6 +292,15 @@ private:
     // One step of fetchActivityTrend()'s fragment loop.
     void fetchActivityFragment(qint64 cursorMs, std::vector<ActivityTrend::Sample> collected,
                                 int fragments, ActivityCallback callback);
+    // One step of putEphemeris()'s chunk loop, and its commit.
+    // The blob travels as a shared_ptr through the chunk loop: it is 60 kB
+    // and there are 136 hops, and capturing it by value in each step's
+    // lambda would copy it every time.
+    void sendEphemerisChunk(const std::vector<uint8_t> &ackBody,
+                             const std::shared_ptr<const std::vector<uint8_t>> &blob,
+                             size_t offset, ProgressCallback progress,
+                             SimpleCallback callback);
+    void commitEphemeris(SimpleCallback callback);
     void readPages(PageRequestEncoder encoder, uint32_t offset,
                     std::vector<uint8_t> collected, DataCallback callback);
 

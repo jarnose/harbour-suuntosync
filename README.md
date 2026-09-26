@@ -37,18 +37,19 @@ Confirmed on real hardware, not just in tests:
 - **Notifications to the watch.** The mechanism is understood (see
   `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
   costs Jolla Store eligibility — a decision, not a missing feature.
-- **GPS-ephemeris updates to the watch** — fully mapped, nothing unknown
-  left, not yet written. The watch says which of four assist formats it
-  wants, each has its own download endpoint, and the bytes are pushed to
-  it verbatim in 453-byte chunks. Confirmed end to end on a 9 Baro: the
-  file downloaded over HTTPS is byte-identical to what went over BLE, and
-  the watch's ephemeris date went from `N/A` to the day's own. A Race
-  wants a different format with its own endpoint; its firmware accepts the
-  same upload resource, which is not the same as having been tried. The
-  download endpoints turn out to need no credential at all — the `appkey`
-  the official app sends is not checked — so this is the one watch-side
-  feature that will work without a Suunto account. See
-  `docs/watch-push-resources.md`.
+- **GPS-ephemeris updates to the watch** — written, and not yet run on a
+  watch. Settings has an "Update GPS data" button: it asks the watch which
+  of four assist formats it wants, downloads that one, and writes it
+  across in 453-byte chunks. The protocol underneath is confirmed end to
+  end from a capture — the file the official app downloaded is
+  byte-identical to what it pushed, and the watch's date went from `N/A`
+  to the day's own — and the chunk encoder reproduces two real captured
+  chunks byte for byte in `tests/test_ephemerischunk.cpp`. What has never
+  happened is this code talking to a watch. A Race in particular answers
+  the same resources but has never been given a blob by anything, since it
+  normally fetches its own over WiFi. The download endpoints need no
+  credential, so this is the one watch-side feature that works without a
+  Suunto account. See `docs/watch-push-resources.md`.
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.

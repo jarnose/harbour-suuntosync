@@ -481,6 +481,11 @@ private:
     // Clears the in-progress flag and reports, from every exit of
     // updateWatchGps()'s callback chain.
     void finishGpsUpdate(const QString &message);
+    // After the commit the watch validates the data on its own time - a
+    // Race is done in about three seconds, a 9 Baro takes minutes for
+    // nearly three times as much. So the date is polled rather than read
+    // once after a fixed wait that would be wrong for one of them.
+    void pollEphemerisDate(int format, int attempt);
 
     // Decodes again, from bytes already stored, any watch workout that
     // decoded to nothing the first time.

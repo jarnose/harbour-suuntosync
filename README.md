@@ -26,12 +26,12 @@ Confirmed on real hardware, not just in tests:
 - **GPS assist data to the watch**, which is what makes it find satellites
   in seconds. Settings has an "Update GPS data" button: it asks the watch
   which of four formats it wants, downloads that one and writes it across
-  in 453-byte chunks. Confirmed on a Suunto Race, whose ephemeris date
-  moved to the current day — so the WiFi handshake the official app uses
-  for that watch, and the credential it needs, are not required at all.
-  The same path on a 9 Baro sends cleanly and the watch has not yet shown
-  the data taking effect; that one is still being chased. **Needs no
-  Suunto account** — the assist-data endpoints take no credential.
+  in 453-byte chunks. Confirmed on both watches: each one's ephemeris date
+  moved to the current day. So the WiFi handshake the official app uses
+  for a Race, and the credential it needs, are not required at all. The
+  watch validates the data on its own time — seconds on a Race, minutes on
+  a 9 Baro — so the date is polled rather than read once. **Needs no
+  Suunto account**: the assist-data endpoints take no credential.
 - **Sleep, recovery and daily activity.** Read from the cloud, and read
   *directly off the watch* — which matters, because a night that the watch
   has recorded but never uploaded is invisible to every other client.

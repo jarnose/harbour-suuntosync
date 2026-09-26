@@ -880,7 +880,7 @@ That removes the last blocker on the Race side, and it removes it
 permanently: nothing in the working path touches an account, a session or
 a credential.
 
-### The 9 Baro, unresolved
+### And a 9 Baro does too - it just takes its time
 
 The same code against a 9 Baro sends all 61440 bytes with every chunk
 acked, the commit accepted, and then `Date` still reads `N/A` three
@@ -892,8 +892,20 @@ for the Race, 61440 in 136 for the Baro. The official app pushes the
 larger one through the same single `/Upload/0` and the watch takes it, so
 the index is not it and the size is not inherently it.
 
-The open question is whether three seconds is simply not long enough for
-the watch to validate nearly three times as much data. That is answered
-without a rebuild: read `Date` again a few minutes later with the path
-probe. An updated date means the wait was too short; `N/A` still means the
-watch rejected the content and the difference is in what was sent.
+It was the wait. Reading `Date` again a few minutes later with the path
+probe gave `2026-09-26T00:00:00Z` - the watch had taken the data all
+along and was still working through it when the code gave up on it.
+
+So **both watches accept a pushed ephemeris**, and the only difference is
+how long the older one needs: a Race is done in about three seconds, a 9
+Baro takes minutes for nearly three times as much data on older hardware.
+
+A fixed wait is the wrong shape for that - whatever value is picked is too
+long for one watch and too short for the other. `Date` is polled instead,
+every three seconds for up to three minutes, and answers as soon as the
+watch does. `N/A` means "holds no ephemeris", which is also what a watch
+says while it is busy replacing one, so it is a reason to keep waiting
+rather than a verdict.
+
+That the first version reported failure on a watch that was merely still
+working is worth keeping in mind for the next thing that answers 202.

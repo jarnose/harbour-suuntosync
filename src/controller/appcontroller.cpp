@@ -1008,11 +1008,15 @@ QString scalarString(const std::vector<uint8_t> &body)
 constexpr const char *kEphemerisFormatPath = "/Device/GNSS/ExtendedEphemerisData/Format";
 constexpr const char *kEphemerisDatePath = "/Device/GNSS/ExtendedEphemerisData/Date";
 
-// How long to let the watch chew on the data before asking what date it
-// now holds. The commit is answered with 202, so some work follows it;
-// three seconds is a guess, and the message says so when the answer comes
-// back unchanged.
-constexpr int kEphemerisSettleMs = 3000;
+// The commit is answered with 202 Accepted, and the watch then validates
+// the data on its own time. A Suunto Race has a new date about three
+// seconds later; a 9 Baro, older hardware handed nearly three times as
+// much data, takes minutes. So this polls instead of waiting once for a
+// fixed time that would be wrong for one of them - which is exactly the
+// mistake the first version made, reporting failure on a watch that was
+// merely still working.
+constexpr int kEphemerisPollMs = 3000;
+constexpr int kEphemerisPollAttempts = 60; // three minutes
 
 } // namespace
 
@@ -1075,25 +1079,41 @@ void AppController::updateWatchGps()
                 // moment first. Read it anyway if the wait is wrong: a
                 // stale answer is information too, and it is reported as
                 // what it is rather than as a failure.
-                QTimer::singleShot(kEphemerisSettleMs, this, [this, format]() {
-                    m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisDatePath),
-                            [this, format](bool dateOk, const std::vector<uint8_t> &dateBody,
-                                            const QString &) {
-                        const QString date = dateOk ? scalarString(dateBody) : QString();
-                        if (date.isEmpty()) {
-                            finishGpsUpdate(tr("GPS data sent (format %1), but the watch did "
-                                                "not report a date back.").arg(format));
-                        } else if (date == QLatin1String("N/A")) {
-                            finishGpsUpdate(tr("GPS data sent (format %1), but the watch still "
-                                                "reports no date. It may still be processing, "
-                                                "or it rejected the data.").arg(format));
-                        } else {
-                            finishGpsUpdate(tr("GPS data updated - the watch now reports %1.")
-                                                    .arg(date));
-                        }
-                    });
-                });
+                pollEphemerisDate(format, 0);
             });
+        });
+    });
+}
+
+void AppController::pollEphemerisDate(int format, int attempt)
+{
+    m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisDatePath),
+            [this, format, attempt](bool ok, const std::vector<uint8_t> &body, const QString &) {
+        const QString date = ok ? scalarString(body) : QString();
+
+        // "N/A" is the watch saying it holds no ephemeris - which is also
+        // what it says while it is busy replacing one, so it is a reason
+        // to wait rather than a verdict.
+        if (!date.isEmpty() && date != QLatin1String("N/A")) {
+            const int seconds = attempt * kEphemerisPollMs / 1000;
+            finishGpsUpdate(seconds > 5
+                    ? tr("GPS data updated - the watch reports %1, after %2 s of processing.")
+                              .arg(date).arg(seconds)
+                    : tr("GPS data updated - the watch now reports %1.").arg(date));
+            return;
+        }
+
+        if (attempt + 1 >= kEphemerisPollAttempts) {
+            finishGpsUpdate(tr("GPS data sent (format %1) and accepted, but the watch still "
+                                "reports no date after %2 minutes. Check it again later - "
+                                "older watches take a while.")
+                              .arg(format)
+                              .arg(kEphemerisPollAttempts * kEphemerisPollMs / 60000));
+            return;
+        }
+
+        QTimer::singleShot(kEphemerisPollMs, this, [this, format, attempt]() {
+            pollEphemerisDate(format, attempt + 1);
         });
     });
 }

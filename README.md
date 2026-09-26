@@ -44,7 +44,10 @@ Confirmed on real hardware, not just in tests:
   file downloaded over HTTPS is byte-identical to what went over BLE, and
   the watch's ephemeris date went from `N/A` to the day's own. A Race
   wants a different format with its own endpoint; its firmware accepts the
-  same upload resource, which is not the same as having been tried. See
+  same upload resource, which is not the same as having been tried. The
+  download endpoints turn out to need no credential at all — the `appkey`
+  the official app sends is not checked — so this is the one watch-side
+  feature that will work without a Suunto account. See
   `docs/watch-push-resources.md`.
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is

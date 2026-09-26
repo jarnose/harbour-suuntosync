@@ -791,9 +791,28 @@ devices/gpsorbit/sonylle?appkey=<64 chars>
 ```
 
 The `appkey` is one static value shared by all five, sitting in the dex
-string table - an application credential, not anything belonging to an
-account. It is deliberately not reproduced in this repository; it is four
-lines from `strings` on the APK for anyone repeating the work.
+string table. **The server does not check it.** Tested four ways against
+`/gpsorbit/sony`:
+
+| request | result |
+|---|---|
+| no `appkey` parameter at all | 200, 61440 bytes |
+| `appkey=` (empty) | 200, 61440 bytes |
+| `appkey=xxxxxxxxxxxxxxxx` | 200, 61440 bytes |
+| the real key (control) | 200, 61440 bytes |
+
+And not merely the same length - the file fetched with no key at all is
+SHA-256-identical to the one fetched with it, for both `/sony` and
+`/sonylle`. A plain GET with no `User-Agent` and no headers works too.
+
+So there is no credential to carry, and the key is not reproduced here
+because there is no reason to.
+
+**This has a consequence worth stating plainly: keeping a watch's GPS
+current needs no Suunto account.** Every other watch-side feature in this
+project either reads the cloud or writes to it; this one touches an open
+static-file endpoint and the watch. Someone who never signs in still gets
+working assisted GPS.
 
 **And that settles the enum.** `Format` offers `SGEE, EPO, CEP, LLE`, the
 endpoints are `binary`, `mtk3day`, `sony`, `sonylle`, and the 9 Baro -

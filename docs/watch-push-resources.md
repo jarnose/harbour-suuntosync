@@ -757,3 +757,81 @@ So a 9 Baro has no weather, and no mechanism exists to give it one over
 BLE. There is nothing here left to implement: for a Race it is the same
 WiFi handshake the ephemeris uses, and for a Baro the feature is simply
 absent.
+
+
+## The blob's source, and both watches unblocked (2026-09-26)
+
+One sync of the 9 Baro with mitmproxy up, the day after its ephemeris was
+last written, and the download appeared:
+
+```
+GET https://devices.suunto-operations.com/devices/gpsorbit/sony?appkey=<64 chars>
+    200, 61440 bytes, application/octet-stream
+    Last-Modified: Sat, 26 Sep 2026 00:00:19 GMT
+```
+
+**The bytes are pushed verbatim.** The same capture carries the BLE side,
+and the 61440 bytes that went over in 453-byte chunks are byte-identical
+to what came down over HTTPS. Nothing is transformed, unwrapped or
+re-framed in between - the app downloads a file and hands it to the watch.
+
+The file changes daily: today's differs from yesterday's in 45050 of its
+61440 bytes, while the first 88 are identical and the 1605-byte zero tail
+is unchanged. So the padding to 60 KiB is a property of the transfer, not
+a coincidence of one file.
+
+### All five endpoints are literals in the APK
+
+```
+devices/gpsorbit/binary?appkey=<64 chars>
+devices/gpsorbit/mtk3day?index=1&appkey=<64 chars>
+devices/gpsorbit/mtk3day?index=2&appkey=<64 chars>
+devices/gpsorbit/sony?appkey=<64 chars>
+devices/gpsorbit/sonylle?appkey=<64 chars>
+```
+
+The `appkey` is one static value shared by all five, sitting in the dex
+string table - an application credential, not anything belonging to an
+account. It is deliberately not reproduced in this repository; it is four
+lines from `strings` on the APK for anyone repeating the work.
+
+**And that settles the enum.** `Format` offers `SGEE, EPO, CEP, LLE`, the
+endpoints are `binary`, `mtk3day`, `sony`, `sonylle`, and the 9 Baro -
+which reports Format **2** - is the watch whose sync fetched `/sony`. Two
+lists of four, in the same order, with the third member observed rather
+than assumed:
+
+| Format | name | endpoint | bytes |
+|---|---|---|---|
+| 0 | SGEE | `binary` | 71603 |
+| 1 | EPO | `mtk3day` (two parts) | - |
+| 2 | CEP | `sony` | 61440 |
+| 3 | LLE | `sonylle` | 22836 |
+
+The sizes come from fetching each once. So the "numbered in the order
+enumerated" assumption this document has carried since yesterday, hedged
+every time it was used, turns out to have been right - and it is no longer
+an assumption.
+
+### What this unblocks
+
+**Both watches, and neither needs the WiFi handshake.**
+
+- A 9 Baro reports Format 2, so `/gpsorbit/sony`, 61440 bytes, pushed in
+  453-byte chunks - the exact path already confirmed working end to end.
+- A Race reports Format 3, so `/gpsorbit/sonylle`, 22836 bytes. Its
+  firmware acks `.../Upload/0` with the same handle bytes the Baro gives.
+
+So the 16-character `WatchUserKey` token, and the whole
+`/Settings/Wifi/Cloud/*` route, stop being on the critical path. They are
+how the *official app* keeps a WiFi watch fed; they are not the only way
+to feed one.
+
+Reading `Format` first and choosing the endpoint from it is what makes
+this general rather than a pair of special cases - and it is one request,
+which `readValue()` already makes.
+
+**Still untested**: that a Race actually accepts a pushed blob. Its
+firmware answers the GET, which is not the same as taking the data. That
+test needs no capture and no cloud - fetch `sonylle`, push it, read `Date`
+back, exactly as the Baro has now done twice.

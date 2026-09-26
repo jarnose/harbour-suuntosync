@@ -1008,6 +1008,12 @@ QString scalarString(const std::vector<uint8_t> &body)
 constexpr const char *kEphemerisFormatPath = "/Device/GNSS/ExtendedEphemerisData/Format";
 constexpr const char *kEphemerisDatePath = "/Device/GNSS/ExtendedEphemerisData/Date";
 
+// How long to let the watch chew on the data before asking what date it
+// now holds. The commit is answered with 202, so some work follows it;
+// three seconds is a guess, and the message says so when the answer comes
+// back unchanged.
+constexpr int kEphemerisSettleMs = 3000;
+
 } // namespace
 
 void AppController::updateWatchGps()
@@ -1062,21 +1068,30 @@ void AppController::updateWatchGps()
                     finishGpsUpdate(putError);
                     return;
                 }
-                // Read the date back rather than trusting the ack: this is
-                // the field that said "N/A" before a 9 Baro was written to
-                // and the day's own date after, and it is the only
-                // independent evidence the watch kept what it was sent.
-                m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisDatePath),
-                        [this, format](bool dateOk, const std::vector<uint8_t> &dateBody,
-                                        const QString &) {
-                    const QString date = dateOk ? scalarString(dateBody) : QString();
-                    if (date.isEmpty()) {
-                        finishGpsUpdate(tr("GPS data sent (format %1). The watch did not "
-                                                  "report a date back.").arg(format));
-                    } else {
-                        finishGpsUpdate(tr("GPS data updated - the watch now reports %1.")
-                                                .arg(date));
-                    }
+                // The commit answers 202 Accepted, which is the watch
+                // saying it has taken the data - not that it has finished
+                // validating 60 kB of orbit predictions. Reading the date
+                // straight away catches it mid-thought, so give it a
+                // moment first. Read it anyway if the wait is wrong: a
+                // stale answer is information too, and it is reported as
+                // what it is rather than as a failure.
+                QTimer::singleShot(kEphemerisSettleMs, this, [this, format]() {
+                    m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisDatePath),
+                            [this, format](bool dateOk, const std::vector<uint8_t> &dateBody,
+                                            const QString &) {
+                        const QString date = dateOk ? scalarString(dateBody) : QString();
+                        if (date.isEmpty()) {
+                            finishGpsUpdate(tr("GPS data sent (format %1), but the watch did "
+                                                "not report a date back.").arg(format));
+                        } else if (date == QLatin1String("N/A")) {
+                            finishGpsUpdate(tr("GPS data sent (format %1), but the watch still "
+                                                "reports no date. It may still be processing, "
+                                                "or it rejected the data.").arg(format));
+                        } else {
+                            finishGpsUpdate(tr("GPS data updated - the watch now reports %1.")
+                                                    .arg(date));
+                        }
+                    });
                 });
             });
         });

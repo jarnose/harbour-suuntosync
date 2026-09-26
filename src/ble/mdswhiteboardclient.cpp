@@ -680,6 +680,22 @@ namespace {
 // chunk declares its own length - but staying with the observed value
 // keeps this as close to a replay as it can be.
 constexpr size_t kEphemerisChunkSize = 453;
+// What the watch answers to each chunk's PUT, in the status halfword at
+// body offset 6 - the same 100-means-more/200-means-last convention the
+// paged reads use, confirmed across all 136 captured chunks. The commit
+// answers 202 Accepted, which is the watch saying it has taken the data
+// and not that it has finished with it.
+constexpr uint16_t kPutStatusContinue = 100;
+constexpr uint16_t kPutStatusOk = 200;
+constexpr uint16_t kPutStatusAccepted = 202;
+
+uint16_t statusOf(const Mds::Frame &frame)
+{
+    if (frame.body.size() < 8)
+        return 0;
+    return static_cast<uint16_t>(frame.body[6] | (static_cast<uint16_t>(frame.body[7]) << 8));
+}
+
 constexpr const char *kEphemerisUploadPath = "/Device/GNSS/ExtendedEphemerisData/Upload/0";
 constexpr const char *kEphemerisLoadPath = "/Device/GNSS/ExtendedEphemerisData/Load";
 } // namespace
@@ -741,10 +757,19 @@ void MdsWhiteboardClient::sendEphemerisChunk(
                                            static_cast<uint32_t>(through),
                                            blob->data() + offset, length);
     }, [this, ackBody, blob, through, progress, callback]
-            (bool ok, const Mds::Frame &, const QString &error) {
+            (bool ok, const Mds::Frame &frame, const QString &error) {
         if (!ok) {
             callback(false, tr("Upload stopped after %1 of %2 bytes: %3")
                               .arg(through).arg(blob->size()).arg(error));
+            return;
+        }
+        // The watch says 100 while it wants more and 200 on the last one.
+        // Anything else is a refusal, and saying which byte it happened at
+        // is the difference between a bug report and a shrug.
+        const uint16_t status = statusOf(frame);
+        if (status != kPutStatusContinue && status != kPutStatusOk) {
+            callback(false, tr("The watch rejected the upload at %1 of %2 bytes (status %3)")
+                              .arg(through).arg(blob->size()).arg(status));
             return;
         }
         if (progress)
@@ -770,10 +795,16 @@ void MdsWhiteboardClient::commitEphemeris(SimpleCallback callback)
         const std::vector<uint8_t> ackBody = ack.body;
         getRaw([ackBody](uint16_t requestId) {
             return Mds::encodePut(requestId, ackBody, {});
-        }, [callback](bool putOk, const Mds::Frame &, const QString &putError) {
+        }, [callback](bool putOk, const Mds::Frame &frame, const QString &putError) {
             if (!putOk) {
                 callback(false, tr("Data sent, but the watch would not load it: %1")
                                   .arg(putError));
+                return;
+            }
+            const uint16_t status = statusOf(frame);
+            if (status != kPutStatusOk && status != kPutStatusAccepted) {
+                callback(false, tr("Data sent, but the watch refused to load it (status %1)")
+                                  .arg(status));
                 return;
             }
             callback(true, QString());

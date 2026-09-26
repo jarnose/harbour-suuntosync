@@ -210,3 +210,65 @@ the phone.
 
 Nothing here is worth building before the payload is known, because a
 daemon that can arbitrate perfectly and send nothing is not a daemon.
+
+
+## The captured notification (2026-09-26)
+
+One calendar alert from the S7 to a Race - the watch showed "Testi" and
+"8:49 PM" beneath it. The whole thing is a single `0x0e` PUT of 153 bytes,
+preceded by the schema walk the official app always does, and that walk
+names every field:
+
+```
+/Device/Connectivity/Ble/Ancs/Notification/Add
+  notificationId
+  requestData : AncsRequestData
+      modifyExisting  categoryId  categoryCount  eventFlags  date
+      appId  title  subtitle  message
+      positiveLabel : LabelData { label, supportsReply }
+      negativeLabel : LabelData { label, supportsReply }
+
+AncsCategory:  IncomingCall MissedCall Voicemail Social Schedule Email
+               News HealthAndFitness BusinessAndFinance Location Entertainment
+```
+
+Those are ANCS's own category names, so the vocabulary is Apple's even
+though the transport is not.
+
+### What the bytes say so far
+
+The PUT body is `[handle 6][count=2][type 0x0007][notificationId][type][structure]`,
+and the structure is a fixed part followed by a string pool starting at
+byte 86.
+
+**Strings are referenced by 32-bit offsets relative to byte 18**, which is
+where the structure's own body begins. Every string in the capture checks
+out:
+
+| at | value | string |
+|---|---|---|
+| 30 | 68 | `org.lineageos.etar` — `appId` |
+| 38 | 87 | `Testi` — `title` |
+| 54 | 93 | `8:49 PM` — `subtitle` |
+| 122 | 120 | `Dismiss` — `positiveLabel.label` |
+| 130 | 128 | `Snooze` — `negativeLabel.label` |
+
+And **byte 22 is a unix timestamp in seconds**: 1790444940 is 20:49 local
+on the day of the capture, which is the time the watch displayed. That is
+`date`, confirmed against a clock rather than assumed.
+
+`tests/fixtures/notification_add_body.bin` holds the 153 bytes.
+
+### What is not pinned down
+
+Which of the remaining uint32s are `modifyExisting`, `categoryId`,
+`categoryCount`, `eventFlags` and the two `supportsReply` flags, and
+whether `message` was empty or is one of the strings already assigned.
+Several of them read 0 or 1 in this capture, which is exactly the
+situation where guessing looks easy and is not.
+
+The cheap way through is differential rather than analytical: **capture two
+or three more notifications that differ in one thing each** - a longer
+title, a different app, an email rather than a calendar alert, one with no
+action buttons. Bytes that move identify themselves. The rig needs nothing
+new; btsnoop is always running and no HTTPS is involved.

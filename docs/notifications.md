@@ -272,3 +272,61 @@ or three more notifications that differ in one thing each** - a longer
 title, a different app, an email rather than a calendar alert, one with no
 action buttons. Bytes that move identify themselves. The rig needs nothing
 new; btsnoop is always running and no HTTPS is involved.
+
+
+## Three notifications, differentially (2026-09-26)
+
+Two more, from a test app rather than the calendar:
+
+| | app | title | subtitle | buttons | bytes |
+|---|---|---|---|---|---|
+| A | `org.lineageos.etar` | Testi | 8:49 PM | Dismiss, Snooze | 153 |
+| B | `com.mand.notitest` | Testi ilmoitus | Alarivin teksti | Dismiss | 154 |
+| C | `com.mand.notitest` | 69-character title | 53-character subtitle | Dismiss | 246 |
+
+**Nothing is truncated on the wire.** C's full 69- and 53-character
+strings crossed intact, so `truncateContentIfNeeded` did not fire at these
+lengths and what the watch showed cut short was its own screen. Where the
+limit actually is remains unknown, and is now known not to be near here.
+
+### The fixed part, field by field
+
+Offsets are into the PUT body; string references are 32-bit and relative
+to byte 18.
+
+| at | A | B | C | reading |
+|---|---|---|---|---|
+| 18 | 0x02010000 | 0x02010000 | 0x02010**1** | low byte varies - the only thing that changed is that C followed B from the same app, so `modifyExisting` fits |
+| 22 | 1790444940 | 1790445756 | 1790445859 | **`date`**, unix seconds, matched against the clock |
+| 26 | 0x21018001 | same | same | constant across all three |
+| 30 | 68 | 68 | 68 | **`appId`** offset |
+| 38 | 87 | 86 | 86 | **`title`** offset |
+| 54 | 93 | 101 | 156 | **`subtitle`** offset |
+| 78 | **2** | **1** | **1** | **number of labels** - A had two buttons, B and C one |
+| 82 | 104 | 120 | 212 | offset to the label array |
+| 34, 46, 50, 62, 74 | 1, 1, 1, 42, 1 | same | same | unidentified and constant |
+| 42, 58, 66, 70 | 0 | same | same | unidentified and zero |
+
+### LabelData, and a trap in it
+
+Each entry is **eight bytes: a 32-bit label offset, one byte
+`supportsReply`, and three bytes of padding** - and the padding is
+uninitialised. A carries `4b 01 00` there and B carries `73 73 00`, which
+is `ss` left over from a previous `Dismiss`. C happened to get zeros.
+
+Reading those three bytes as anything would be reading somebody else's
+stale buffer. They are skipped on the way in and should be written as zero
+on the way out.
+
+### What is left
+
+`categoryId` is among the constants, and it did not move between a
+calendar alert and a test app - so both were filed the same way, and
+separating it needs a notification whose category genuinely differs: an
+SMS, or an incoming call. `message` was empty in all three, so whichever
+offset holds it has never been exercised.
+
+One more capture would settle both: **a notification with all three of
+title, subtitle and message, and one from a different category.** After
+that the encoder can be written against three golden vectors instead of
+guessed at.

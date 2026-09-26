@@ -854,3 +854,46 @@ which `readValue()` already makes.
 firmware answers the GET, which is not the same as taking the data. That
 test needs no capture and no cloud - fetch `sonylle`, push it, read `Date`
 back, exactly as the Baro has now done twice.
+
+
+## A Race takes a pushed ephemeris (2026-09-26)
+
+The question a capture could not answer, answered by writing the code and
+running it: **a Suunto Race accepts GPS assist data pushed over BLE by a
+third-party client.**
+
+```
+Race, before:  /Device/GNSS/ExtendedEphemerisData/Date -> 2026-09-25T00:00:00Z
+                                                Format -> 3
+             this project pushes /gpsorbit/sonylle, 22836 bytes
+Race, after:   Date -> 2026-09-26T00:00:00Z
+```
+
+So the mapping Format 3 -> `sonylle` is right, confirmed by the watch
+taking the file rather than by reading a list. And the WiFi handshake -
+`/Settings/Wifi/Cloud/OfflineMaps/Url`, `STTAuthorization`, and the
+16-character token whose origin was never found - **is not needed at
+all**. It is how the official app keeps a WiFi watch fed. It is not the
+only way, and this project does not have to use it.
+
+That removes the last blocker on the Race side, and it removes it
+permanently: nothing in the working path touches an account, a session or
+a credential.
+
+### The 9 Baro, unresolved
+
+The same code against a 9 Baro sends all 61440 bytes with every chunk
+acked, the commit accepted, and then `Date` still reads `N/A` three
+seconds later. No chunk was refused - a refusal now fails loudly with its
+status and byte offset, and none happened.
+
+What differs between the two runs is the file: 22836 bytes in 51 chunks
+for the Race, 61440 in 136 for the Baro. The official app pushes the
+larger one through the same single `/Upload/0` and the watch takes it, so
+the index is not it and the size is not inherently it.
+
+The open question is whether three seconds is simply not long enough for
+the watch to validate nearly three times as much data. That is answered
+without a rebuild: read `Date` again a few minutes later with the path
+probe. An updated date means the wait was too short; `N/A` still means the
+watch rejected the content and the difference is in what was sent.

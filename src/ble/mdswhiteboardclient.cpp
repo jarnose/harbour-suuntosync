@@ -998,7 +998,7 @@ void MdsWhiteboardClient::finishBulkFetch(bool ok, const QString &error)
 }
 
 namespace {
-// The Add and Remove resources, each with its own handle. Naming them here
+// The Add and Del resources, each with its own handle. Naming them here
 // keeps the one place that writes to a watch's notification queue narrow -
 // the same reason putString() makes callers name a path.
 constexpr const char *kNotificationAddPath = "/Device/Connectivity/Ble/Ancs/Notification/Add";

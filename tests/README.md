@@ -36,6 +36,16 @@ They are kept on the machine they were captured on. The repository carries
 the decoders, the documentation and the reasoning; it does not carry
 somebody's movements and heart rate.
 
+## One suite carries its vectors inline
+
+`test_notificationcodec.cpp` embeds its three captured requests as hex
+rather than reading `fixtures/`. They hold an app id, the word "Testi" and
+some Finnish filler - no GPS, no heart rate, no serial - so the reason the
+other fixtures stay out does not apply to them, and keeping them in the
+file means CI can run the suite. It is the newest encoder and the one
+whose failure would be quietest, so it is the one worth running on every
+push.
+
 ## What that means if you cloned this
 
 The golden-vector tests will not run - they read files that are not here.

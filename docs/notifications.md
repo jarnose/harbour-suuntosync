@@ -282,9 +282,9 @@ Two more, from a test app rather than the calendar:
 |---|---|---|---|---|---|
 | A | `org.lineageos.etar` | Testi | 8:49 PM | Dismiss, Snooze | 153 |
 | B | `com.mand.notitest` | Testi ilmoitus | Alarivin teksti | Dismiss | 154 |
-| C | `com.mand.notitest` | 69-character title | 53-character subtitle | Dismiss | 246 |
+| C | `com.mand.notitest` | 69-character title | 54-character message | Dismiss | 246 |
 
-**Nothing is truncated on the wire.** C's full 69- and 53-character
+**Nothing is truncated on the wire.** C's full 69- and 54-character
 strings crossed intact, so `truncateContentIfNeeded` did not fire at these
 lengths and what the watch showed cut short was its own screen. Where the
 limit actually is remains unknown, and is now known not to be near here.
@@ -545,3 +545,53 @@ nothing in it touches the radio.
 `com.android.shell` and sets no category, so it can only ever produce 0.
 The test app that produced captures B and C is the cheaper place to add one
 `setCategory` call.
+
+
+## The encoder (2026-09-30)
+
+`src/ble/notificationcodec.h`/`.cpp`, Qt-free, and
+`tests/test_notificationcodec.cpp` rebuilds all three captured requests
+**byte for byte** - not "the constants replayed", the whole body computed
+from an app id, a title, a message, a date and a list of buttons.
+
+Three things had to be understood first that the differential pass had not
+reached:
+
+**Byte 15 is a length.** It reads 136, 137 and 229 in the three captures,
+which is each body's total minus 17, every time. So the structure is
+length-prefixed and the prefix has to be computed; replaying it would have
+worked only for a notification the same size as the captured one. Five
+more structure-carrying writes elsewhere in the same log follow the same
+rule, so it is not a coincidence of these three.
+
+It is **one byte**, which caps the whole request at 272 bytes - and C, at
+246, was already close. `truncateToFit()` shortens the message and then
+the title on UTF-8 boundaries; `encodeAdd()` refuses rather than letting
+the length wrap.
+
+**The parameter's type code is not a constant.** It reads `0x1209` here,
+and its high byte is the ack body's second byte in all six structure
+writes in the capture - `0xa4` with an `0xa4` handle, `0x31` with `0x31`,
+and so on. A 9 Baro hands out its own handles, so this is computed from
+the ack rather than compiled in. The low byte, `0x09`, identifies
+`AncsRequestData` within that family and is still only known from a Race.
+
+**`notificationId` is derivable.** `AncsMessage.createId()` is
+`abs(((sourceId * 31 + categoryId) * 31 + appId.hashCode()))` clamped at
+zero, and it reproduces both captured ids exactly - Etar's notification 1
+and the test app's notification 0. That matters because a removal, and an
+update, address a notification by this number.
+
+The string pool's own rules fell out of the three captures agreeing: it
+starts at a fixed offset 68 from the structure body, holds appId, title
+and message in that order, then pads to a four-byte boundary for the label
+array, whose entries are an offset, a `supportsReply` byte and three bytes
+of padding the watch never initialises.
+
+### Not yet confirmed
+
+Nothing here has been sent to a watch. Three captured requests reproduced
+byte for byte is a strong check on the layout and no check at all on
+whether the watch accepts one we composed. The 9 Baro is a second
+question again: its handle differs, and the structure's low type byte
+might.

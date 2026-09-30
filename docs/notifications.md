@@ -330,3 +330,30 @@ One more capture would settle both: **a notification with all three of
 title, subtitle and message, and one from a different category.** After
 that the encoder can be written against three golden vectors instead of
 guessed at.
+
+## The encoder can be written now, without decoding the rest
+
+The constant block - offsets 26, 34, 42, 46, 50, 58, 62, 66, 70 and 74 -
+is **byte-identical across all three captures**, which between them differ
+in app, title, subtitle, button count and total length (153 against 246
+bytes). Nothing about the content moves them.
+
+That is evidence rather than hope, and it has a practical consequence:
+those bytes can be replayed verbatim. An encoder that writes the constant
+block as captured and fills in only the parts that were observed to
+vary - `date`, the three string offsets, the label count, the offset to
+the label array, and the string pool itself - should produce a
+notification the watch accepts, without anyone knowing which of those
+constants is `categoryId`.
+
+So the daemon is not blocked on finishing the decode. What it gives up is
+category: every notification would arrive filed the way a calendar alert
+and a test app were both filed, because that is the value being replayed.
+Sorting mail from messages can come later, and needs exactly one capture
+whose category genuinely differs.
+
+The risk worth naming: if one of those constants were secretly a length
+or a count, replaying it would break as soon as our strings differed from
+the captured ones. B and C differ by 92 bytes of string and the constants
+did not move, so that is ruled out for everything except a field that
+happens to be constant for both a calendar and a test app.

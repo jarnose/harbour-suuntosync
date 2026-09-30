@@ -164,8 +164,10 @@ public:
     //   GET  /Device/Connectivity/Ble/Ancs/Notification/Add    for a handle
     //   PUT  through it, carrying the notification id and the structure
     //
-    // and /Remove the same way, with only the id. The watch answers a PUT
-    // with status 200; removing an id it has never seen answers 403, which
+    // and .../Notification/Del the same way, with only the id - Del, not
+    // Remove, which is the sort of thing only a capture tells you. The
+    // watch answers a PUT with status 200; deleting an id it has never
+    // seen answers 403, which
     // is reported rather than swallowed because it is the difference
     // between "gone" and "never arrived".
     //

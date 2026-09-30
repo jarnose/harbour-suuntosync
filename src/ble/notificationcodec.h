@@ -6,7 +6,7 @@
 
 // Encoder for a phone notification pushed to the watch over Whiteboard:
 // PUT /Device/Connectivity/Ble/Ancs/Notification/Add, and its matching
-// /Remove.
+// .../Notification/Del.
 //
 // Qt-free (STL only), like every other decoder here, so it is testable with
 // plain g++ - see tests/test_notificationcodec.cpp, which rebuilds three
@@ -125,8 +125,8 @@ std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &a
                                 const Notification &notification);
 
 // The matching removal, for when the phone's notification is dismissed.
-// `removeAckBody` is the ack for .../Notification/Remove, a different
-// resource with its own handle.
+// `removeAckBody` is the ack for .../Notification/Del - Del, not Remove -
+// a different resource with its own handle.
 std::vector<uint8_t> encodeRemove(uint16_t requestId, const std::vector<uint8_t> &removeAckBody,
                                    uint32_t notificationId);
 

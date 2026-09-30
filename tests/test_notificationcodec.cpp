@@ -185,7 +185,7 @@ int main()
     const std::vector<uint8_t> remove =
             bodyOf(Ancs::encodeRemove(0x027a, removeAck, a.notificationId));
     check(toHex(remove) == "f012050180000107000ab4dd21",
-          "removal matches the captured /Notification/Remove body (" + toHex(remove) + ")");
+          "removal matches the captured /Notification/Del body (" + toHex(remove) + ")");
 
     // Long text must be cut rather than overflow the one-byte length.
     Ancs::Notification big = b;

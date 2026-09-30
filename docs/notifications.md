@@ -599,9 +599,13 @@ might.
 ### What the watch answers
 
 A PUT to `/Notification/Add` comes back as a `0x07` with status **200**,
-and so does a `/Notification/Remove` that found something. Removing an id
-the watch does not have answers **403** - measured, in a capture where the
-app removed a notification twice.
+and so does a delete that found something. Deleting an id the watch does
+not have answers **403** - measured, in a capture where the app removed a
+notification twice.
+
+The delete resource is `/Device/Connectivity/Ble/Ancs/Notification/Del` -
+`Del`, not `Remove`. The name appears only on the wire; the app builds the
+path at runtime, so nothing in the dex spells it out.
 
 That 403 is worth keeping rather than flattening into "failed": it is the
 difference between a notification the user dismissed on the watch and one

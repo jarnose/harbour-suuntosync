@@ -1002,7 +1002,7 @@ namespace {
 // keeps the one place that writes to a watch's notification queue narrow -
 // the same reason putString() makes callers name a path.
 constexpr const char *kNotificationAddPath = "/Device/Connectivity/Ble/Ancs/Notification/Add";
-constexpr const char *kNotificationRemovePath = "/Device/Connectivity/Ble/Ancs/Notification/Remove";
+constexpr const char *kNotificationDelPath = "/Device/Connectivity/Ble/Ancs/Notification/Del";
 
 // The watch's answer to a notification PUT. 200 on both an add and a
 // removal that found something; 403 on removing an id it does not have,
@@ -1058,7 +1058,7 @@ void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notificatio
 
 void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallback callback)
 {
-    const QString path = QString::fromLatin1(kNotificationRemovePath);
+    const QString path = QString::fromLatin1(kNotificationDelPath);
     getRaw([path](uint16_t requestId) {
         return Mds::encodeGetRequest(requestId, path.toStdString());
     }, [this, path, notificationId, callback](bool ok, const Mds::Frame &ack,

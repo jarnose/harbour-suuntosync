@@ -357,3 +357,191 @@ or a count, replaying it would break as soon as our strings differed from
 the captured ones. B and C differ by 92 bytes of string and the constants
 did not move, so that is ruled out for everything except a field that
 happens to be constant for both a calendar and a test app.
+
+
+## The fixed part, from the app's own code (2026-09-30)
+
+The differential capture above left two things open - which constant is
+`categoryId`, and whether `message` had ever been exercised. Both are now
+answered, and not by another capture: by decompiling the class that builds
+the request. That is cheaper than a capture and, unlike a capture, it says
+what the values *mean* rather than only what they were on one evening.
+
+`com.suunto.connectivity.notifications.MdsNotification$Companion.create()`
+builds a `MdsNotificationRequestData` - a Moshi data class, so its JSON
+keys are in the dex verbatim - out of an `AncsMessage`:
+
+```
+MdsNotificationRequestData(
+    modifyExisting,   // false from create(), true from createUpdate()
+    categoryId,       // AncsPackages.getCategory(...)
+    eventFlags,       // the literal constant 2
+    date,             // AncsMessage.timestamp / 1000
+    title, message,   // resolveTitleAndMessage()
+    categoryCount,    // the literal constant 1
+    appId,            // the posting package name
+    labels)           // null when the list is empty
+```
+
+There is **no `subtitle` key at all**, in the data class or in its
+generated adapter's `options`. The app never sends one.
+
+### Byte 18 is four fields, not one
+
+The walk's field order is `modifyExisting categoryId categoryCount
+eventFlags`, and those four are **one byte each**, at 18, 19, 20 and 21:
+
+| byte | field | A | B | C | why that value |
+|---|---|---|---|---|---|
+| 18 | `modifyExisting` | 0 | 0 | **1** | C followed B from the same app, so it was an update |
+| 19 | `categoryId` | 0 | 0 | 0 | see below - 0 is `Other`, and correct for all three |
+| 20 | `categoryCount` | 1 | 1 | 1 | a literal `1` in `AncsMessage.create()` |
+| 21 | `eventFlags` | 2 | 2 | 2 | a literal `2` in `MdsNotification.create()` |
+
+Four values, four independent reasons, all from the decompiled code rather
+than from the bytes - and they happen to be exactly the bytes
+`00 00 01 02`, which the differential table had recorded as one uint32
+`0x02010000` with only its low byte understood.
+
+`eventFlags = 2` is ANCS's `EventFlagImportant`. The app sets it on every
+notification and never anything else.
+
+### `categoryId` is the ANCS category, and how it is chosen
+
+`AncsPackages.getCategory(id, packageName, category)`, in order:
+
+1. `packageName` in `{com.google.android.dialer, com.sonymobile.android.dialer,
+   com.android.phone}`: `category == "call"` → 1; no category and
+   `id != 1` → 1; anything else → 2.
+2. First matching package set wins:
+   `com.android.providers.downloads`, `com.sec.android.providers.downloads`,
+   `com.android.vending`, `com.android.systemui`,
+   `com.sonyericsson.updatecenter`, `com.wssyncmldm`,
+   `com.samsung.android.themestore`, `android` → **-1**;
+   `com.android.dialer`, `com.android.incallui`, `com.asus.asusincallui`,
+   `com.samsung.android.incallui`, `com.samsung.android.dialer` → **1**;
+   `com.android.server.telecom` → **2**;
+   `com.sonyericsson.conversations`, `com.android.mms`, `com.htc.sense.mms`,
+   `com.pantech.app.mms`, `com.asus.message`, `com.android.contacts`,
+   `com.samsung.android.messaging`, `com.google.android.talk`,
+   `com.google.android.gm`, `ch.protonmail.android`,
+   `com.suunto.suuntoandroidtest` → **6**.
+3. Otherwise `Notification.category`: `email` → 6, `event` → 5,
+   `location_sharing` → 10, `msg` → 6, `reminder` → 5, `social` → 4,
+   `workout` → 8.
+4. Otherwise **0**.
+
+Those numbers are the standard ANCS `CategoryID`s, and they line up with
+the enum the schema walk printed, in its order: 1 IncomingCall,
+2 MissedCall, 3 Voicemail, 4 Social, 5 Schedule, 6 Email,
+7 News, 8 HealthAndFitness, 9 BusinessAndFinance, 10 Location,
+11 Entertainment, with 0 as `Other`. Two independent sources agreeing on
+eleven numbers is not a coincidence, so the vocabulary is settled.
+
+Note what the table means for SMS: a text message is filed as **Email**,
+because `com.samsung.android.messaging` and friends map to 6, the same
+value `category == "msg"` maps to. The watch has no separate message
+category and the app does not invent one.
+
+And note why all three captures read 0: `org.lineageos.etar` and
+`com.mand.notitest` are in none of those package sets, and neither set a
+`Notification.category` the table knows. Zero was the right answer, so the
+capture was never going to separate `categoryId` from the other constants
+by itself.
+
+**A falsifiable prediction**, which is the point of writing this down:
+post a notification from the same test app with
+`setCategory(Notification.CATEGORY_MESSAGE)` and byte 19 must read 6.
+Nothing else in the body should move.
+
+### Offset 54 is `message`, not `subtitle`
+
+Since the app sends no subtitle, the string at 54 - `8:49 PM` in A,
+`Alarivin teksti` in B - is `message`. Both were the notification's body
+text, which is what `resolveTitleAndMessage` returns as the second
+element. So `message` was exercised in all three captures after all, and
+the earlier "`message` was empty in all three" is withdrawn.
+
+`subtitle` is then one of the remaining constants, pointing at an empty
+string. Byte 19 is a zero byte, and a string offset of 1 relative to byte
+18 lands on it; offset 46 reads exactly 1 in all three captures, which
+fits, but a pointer into the middle of the header is odd enough that it is
+recorded as a fit rather than a finding.
+
+### How the app picks title and message
+
+`resolveTitleAndMessage(Notification, categoryId)` reads
+`EXTRA_TITLE`, then `EXTRA_TEXT`, then `EXTRA_SUB_TEXT`, treating an empty
+string as absent throughout, and falls back to `tickerText` and then
+`extras["android.infoText"]`. If nothing yields a title it logs the
+available extras and drops the notification.
+
+It also carries two special cases - `categoryId == 1` clears both strings
+and replaces an empty message with a single space, `categoryId == 2` turns
+an absent title into the literal `Unknown` - which appear to be
+unreachable, because every package that can produce those two ids is on the
+suppressed list below and never reaches this function. Recorded because
+they are in the binary, not because they were observed.
+
+### What arrives with its text stripped
+
+`shouldIgnoreNotification` does not discard anything. `create()` still
+builds a message and still sends it; it just sets title and message to
+empty strings, so the watch gets the category and the count and no text.
+That is the mechanism behind an incoming call: the watch renders its own
+call screen from `categoryId = 1` rather than from anything we wrote.
+
+Stripped:
+
+- any package in `CALL_PACKAGES`, which is the union of the three call sets
+  above - so **every dialer, in-call UI and telecom notification**
+- any package with `clock` in its name after the first dot
+- `com.miui.screenshot`, `com.miui.securitycenter`,
+  `com.mi.globalminusscreen`, `com.miui.cleaner`, `com.miui.gallery`
+- `Notification.visibility == VISIBILITY_SECRET`
+- `Notification.category` in `{alarm, err, navigation, progress, promo,
+  recommendation, status, service, stopwatch, sys, transport}`
+- channel id `channel_id_alarm`
+- `StatusBarNotification.getTag() == "MissedCallNotifier"`
+- `FLAG_LOCAL_ONLY`, `FLAG_ONGOING_EVENT` or `FLAG_GROUP_SUMMARY` set -
+  `com.tencent.mm` is exempt from the first two, by name, lowercased
+
+### What this leaves
+
+The encoder can now write `categoryId` as a real value rather than
+replaying a zero, which was the one thing the previous section said it
+would have to give up. What is still unidentified is which constants are
+`subtitle` and the two `LabelData` structs' fixed parts - and neither
+blocks anything, because both were constant across captures that differed
+by 92 bytes of string.
+
+No further capture is needed to build this. One would still be worth
+running as a check rather than as discovery: a notification with
+`CATEGORY_MESSAGE`, to confirm byte 19 reads 6.
+
+### Exercising a category without a SIM
+
+The S7 has no SIM, so neither a text message nor a call can arrive on it.
+Neither is needed. `getCategory` reads a package name and a string field;
+nothing in it touches the radio.
+
+- **`categoryId = 6`**, which is what a text message produces: post a
+  notification with `setCategory(Notification.CATEGORY_MESSAGE)` or
+  `CATEGORY_EMAIL` from any package. A mail app on an IMAP account does it
+  by itself, and so does any XMPP or Matrix client - none of which want a
+  phone number.
+- **`categoryId = 1` and `2`**, incoming and missed call: these come only
+  from the package name, so the notification has to be posted *by* a
+  dialer. A SIP client that registers with Telecom (Linphone with its
+  system-integration option on) makes `com.android.incallui` post the
+  ringing notification on a VoIP call, with no SIM involved. Both arrive
+  with their text stripped, per the section above, so the only thing to
+  check is byte 19.
+- **`categoryId = 5, 4, 8, 10`**: `event`/`reminder`, `social`, `workout`,
+  `location_sharing` respectively, all reachable from `setCategory` alone.
+
+`cmd notification post` over adb needs no SIM and no app, and its
+`-S bigtext` style will exercise a long `message`, but it posts as
+`com.android.shell` and sets no category, so it can only ever produce 0.
+The test app that produced captures B and C is the cheaper place to add one
+`setCategory` call.

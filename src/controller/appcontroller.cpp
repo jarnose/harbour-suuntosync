@@ -15,6 +15,7 @@
 #include "../ble/sleepdecoder.h"
 #include "../ble/recoverydecoder.h"
 #include "../ble/activitydecoder.h"
+#include "../ble/notificationcodec.h"
 #include "../cloud/polyline.h"
 #include "../cloud/smljson.h"
 #include "../cloud/zipwriter.h"
@@ -39,6 +40,10 @@
 #include <stdexcept>
 
 namespace {
+
+// What the watch shows as the sending application. The official app sends
+// the posting package's name here; ours is the only sender there is.
+const char *const kApplicationId = "io.github.jarnose.suuntosync";
 
 // Appends a probe result to a file next to the app's cache. See the
 // connect() in the constructor for why.
@@ -937,6 +942,82 @@ void AppController::testDescriptorsFetch(const QString &logbookId)
         }
         emit logbookTestResult(tr("Descriptors: %1 bytes, %2 field paths, saved as %3")
                                 .arg(data.size()).arg(paths).arg(name));
+    });
+}
+
+void AppController::testNotification(const QString &title, const QString &message,
+                                     int categoryId)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+
+    Ancs::Notification notification;
+    notification.appId = kApplicationId;
+    notification.title = title.toStdString();
+    notification.message = message.toStdString();
+    notification.categoryId = static_cast<uint8_t>(qBound(0, categoryId, 11));
+    notification.date = static_cast<uint32_t>(QDateTime::currentMSecsSinceEpoch() / 1000);
+
+    // A fixed source id, so every send from here addresses the same
+    // notification: the second one replaces the first rather than filling
+    // the watch's list.
+    notification.notificationId =
+            Ancs::notificationIdFor(1, notification.categoryId, notification.appId);
+    notification.modifyExisting = notification.notificationId == m_lastNotificationId;
+
+    // One button, as two of the three captures carried - it costs eight
+    // bytes and it exercises the label array, which is the one part of the
+    // layout with its own alignment rule.
+    Ancs::Label dismiss;
+    dismiss.text = "Dismiss";
+    notification.labels.push_back(dismiss);
+
+    const size_t before = Ancs::encodedSize(notification);
+    Ancs::truncateToFit(notification);
+    const bool trimmed = Ancs::encodedSize(notification) != before;
+
+    m_logbookTestInFlight = true;
+    m_lastNotificationId = notification.notificationId;
+    m_whiteboardClient->sendNotification(notification,
+            [this, trimmed](bool ok, const QString &error) {
+        m_logbookTestInFlight = false;
+        if (!ok) {
+            emit logbookTestResult(error);
+            return;
+        }
+        emit logbookTestResult(trimmed
+                ? tr("The watch took the notification, with the text trimmed to fit")
+                : tr("The watch took the notification"));
+    });
+}
+
+void AppController::testNotificationRemove()
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_lastNotificationId == 0) {
+        emit logbookTestResult(tr("Nothing has been sent from here yet"));
+        return;
+    }
+    if (m_logbookTestInFlight || m_workoutSyncInProgress) {
+        emit logbookTestResult(tr("Another fetch is already in progress"));
+        return;
+    }
+
+    m_logbookTestInFlight = true;
+    m_whiteboardClient->removeNotification(m_lastNotificationId,
+            [this](bool ok, const QString &error) {
+        m_logbookTestInFlight = false;
+        m_lastNotificationId = 0;
+        emit logbookTestResult(ok ? tr("The watch removed it") : error);
     });
 }
 

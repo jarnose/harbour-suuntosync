@@ -3,6 +3,7 @@
 #include "activitydecoder.h"
 #include "logentriesdecoder.h"
 #include "mdswirecodec.h"
+#include "notificationcodec.h"
 
 #include <QObject>
 #include <QQueue>
@@ -157,6 +158,22 @@ public:
     using ProgressCallback = std::function<void(int sent, int total)>;
     void putEphemeris(const std::vector<uint8_t> &blob, ProgressCallback progress,
                        SimpleCallback callback);
+
+    // Pushes a phone notification to the watch, and takes one back off.
+    //
+    //   GET  /Device/Connectivity/Ble/Ancs/Notification/Add    for a handle
+    //   PUT  through it, carrying the notification id and the structure
+    //
+    // and /Remove the same way, with only the id. The watch answers a PUT
+    // with status 200; removing an id it has never seen answers 403, which
+    // is reported rather than swallowed because it is the difference
+    // between "gone" and "never arrived".
+    //
+    // The notification must already fit - Ancs::truncateToFit() - or the
+    // encoder throws and this reports it. See src/ble/notificationcodec.h
+    // and docs/notifications.md.
+    void sendNotification(const Ancs::Notification &notification, SimpleCallback callback);
+    void removeNotification(quint32 notificationId, SimpleCallback callback);
 
     // Removes a file the watch rendered for us. fetchTimelineFile() calls
     // this itself once the data is read.

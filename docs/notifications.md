@@ -595,3 +595,25 @@ byte for byte is a strong check on the layout and no check at all on
 whether the watch accepts one we composed. The 9 Baro is a second
 question again: its handle differs, and the structure's low type byte
 might.
+
+### What the watch answers
+
+A PUT to `/Notification/Add` comes back as a `0x07` with status **200**,
+and so does a `/Notification/Remove` that found something. Removing an id
+the watch does not have answers **403** - measured, in a capture where the
+app removed a notification twice.
+
+That 403 is worth keeping rather than flattening into "failed": it is the
+difference between a notification the user dismissed on the watch and one
+that never arrived.
+
+### The probe
+
+`AppController::testNotification()`, on the pairing page, with fields for
+a title, a message and a category. It writes to the watch's notification
+queue, so unlike `probePath()` it is not read-only and is a button rather
+than anything automatic. "Take it back" removes the same id.
+
+The category picker is there because the category is the one field whose
+effect cannot be seen from this side at all - only the watch's own screen
+shows whether 6 is filed differently from 0.

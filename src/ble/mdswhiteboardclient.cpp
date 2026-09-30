@@ -996,3 +996,100 @@ void MdsWhiteboardClient::finishBulkFetch(bool ok, const QString &error)
     m_bulkBuffer.clear();
     callback(ok, data, error);
 }
+
+namespace {
+// The Add and Remove resources, each with its own handle. Naming them here
+// keeps the one place that writes to a watch's notification queue narrow -
+// the same reason putString() makes callers name a path.
+constexpr const char *kNotificationAddPath = "/Device/Connectivity/Ble/Ancs/Notification/Add";
+constexpr const char *kNotificationRemovePath = "/Device/Connectivity/Ble/Ancs/Notification/Remove";
+
+// The watch's answer to a notification PUT. 200 on both an add and a
+// removal that found something; 403 on removing an id it does not have,
+// which a capture measured rather than a document promised.
+constexpr uint16_t kNotificationOk = 200;
+constexpr uint16_t kNotificationNotFound = 403;
+} // namespace
+
+void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notification,
+                                            SimpleCallback callback)
+{
+    const QString path = QString::fromLatin1(kNotificationAddPath);
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, notification, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("The watch acked %1 with an unusably short body").arg(path));
+            return;
+        }
+
+        // The encoder refuses a notification longer than the structure's
+        // one-byte length can describe. Checking here keeps that from
+        // becoming an exception thrown inside a BLE callback - callers are
+        // expected to have run Ancs::truncateToFit() already.
+        if (Ancs::encodedSize(notification) > Ancs::maximumEncodedSize()) {
+            callback(false, tr("The notification is %1 bytes, and the watch takes at most %2")
+                              .arg(static_cast<int>(Ancs::encodedSize(notification)))
+                              .arg(static_cast<int>(Ancs::maximumEncodedSize())));
+            return;
+        }
+
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, notification](uint16_t requestId) {
+            return Ancs::encodeAdd(requestId, ackBody, notification);
+        }, [callback](bool putOk, const Mds::Frame &reply, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("The watch did not answer the notification: %1").arg(putError));
+                return;
+            }
+            const uint16_t status = statusOf(reply);
+            if (status != kNotificationOk) {
+                callback(false, tr("The watch refused the notification (status %1)").arg(status));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}
+
+void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallback callback)
+{
+    const QString path = QString::fromLatin1(kNotificationRemovePath);
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, notificationId, callback](bool ok, const Mds::Frame &ack,
+                                               const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("The watch acked %1 with an unusably short body").arg(path));
+            return;
+        }
+
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, notificationId](uint16_t requestId) {
+            return Ancs::encodeRemove(requestId, ackBody, notificationId);
+        }, [callback](bool putOk, const Mds::Frame &reply, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("The watch did not answer the removal: %1").arg(putError));
+                return;
+            }
+            const uint16_t status = statusOf(reply);
+            if (status == kNotificationNotFound) {
+                callback(false, tr("The watch has no notification with that id"));
+                return;
+            }
+            if (status != kNotificationOk) {
+                callback(false, tr("The watch refused the removal (status %1)").arg(status));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}

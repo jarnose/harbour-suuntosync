@@ -122,6 +122,75 @@ Page {
                 }
             }
 
+            // The notification encoder's first contact with a watch. Every
+            // byte of it was built against three captured requests and
+            // checked byte-for-byte against them, which says nothing about
+            // whether a watch accepts one we composed - that is what this
+            // is for. The category picker is here because it is the one
+            // field whose effect can only be seen on the watch's own
+            // screen: 0 arrives filed the way a calendar alert is, 6 the
+            // way a text message is.
+            Column {
+                visible: AppController.watchConnected
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                spacing: Theme.paddingSmall
+
+                TextField {
+                    id: notificationTitleField
+                    width: parent.width
+                    label: qsTr("Notification title")
+                    placeholderText: qsTr("Testi")
+                    EnterKey.iconSource: "image://theme/icon-m-enter-next"
+                    EnterKey.onClicked: notificationMessageField.focus = true
+                }
+
+                TextField {
+                    id: notificationMessageField
+                    width: parent.width
+                    label: qsTr("Notification message")
+                    placeholderText: qsTr("Alarivin teksti")
+                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                    EnterKey.onClicked: sendNotificationButton.clicked()
+                }
+
+                ComboBox {
+                    id: notificationCategoryBox
+                    width: parent.width
+                    label: qsTr("Category")
+                    currentIndex: 0
+                    menu: ContextMenu {
+                        MenuItem { text: qsTr("Other") }
+                        MenuItem { text: qsTr("Incoming call") }
+                        MenuItem { text: qsTr("Missed call") }
+                        MenuItem { text: qsTr("Social") }
+                        MenuItem { text: qsTr("Schedule") }
+                        MenuItem { text: qsTr("Email or message") }
+                    }
+                    // The ANCS ids behind those six, in order.
+                    property var ids: [0, 1, 2, 4, 5, 6]
+                }
+
+                Row {
+                    spacing: Theme.paddingSmall
+
+                    Button {
+                        id: sendNotificationButton
+                        enabled: notificationTitleField.text.length > 0
+                        text: qsTr("Send to watch")
+                        onClicked: AppController.testNotification(notificationTitleField.text,
+                                                                  notificationMessageField.text,
+                                                                  notificationCategoryBox.ids[
+                                                                      notificationCategoryBox.currentIndex])
+                    }
+
+                    Button {
+                        text: qsTr("Take it back")
+                        onClicked: AppController.testNotificationRemove()
+                    }
+                }
+            }
+
             Button {
                 // The watch's own field table. Needed per watch model: a
                 // Suunto 9 Baro transfers workouts perfectly and decodes

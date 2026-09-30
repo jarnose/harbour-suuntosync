@@ -202,6 +202,25 @@ public:
     // follows it with the PUT that would write anything.
     Q_INVOKABLE void probePath(const QString &path);
 
+    // Sends one notification to the watch, and reports what it said.
+    //
+    // The whole encoder was built against three captured requests and has
+    // never been sent to a watch; this is the gate for that. It writes to
+    // the watch's notification queue, which is not read-only the way
+    // probePath() is - so it is a deliberate button with typed-in text
+    // rather than anything automatic.
+    //
+    // The notification is filed under this app's own id, so sending it
+    // twice replaces rather than stacks, and `categoryId` is whatever was
+    // asked for: 0 files it the way a calendar alert was filed, 6 the way
+    // a text message is (see docs/notifications.md for the whole table).
+    Q_INVOKABLE void testNotification(const QString &title, const QString &message,
+                                       int categoryId);
+
+    // Takes that notification back off the watch. Answers "no notification
+    // with that id" if it was already dismissed there.
+    Q_INVOKABLE void testNotificationRemove();
+
     // Refreshes the watch's GPS assist data, which is what makes it find
     // satellites in seconds instead of minutes. Asks the watch which of
     // four formats it wants, downloads that one, and writes it across in
@@ -426,6 +445,9 @@ private:
     // would surface as a confusing "Another bulk fetch is already in
     // progress" error rather than actually retrying.
     bool m_logbookTestInFlight = false;
+    // The id of the last notification testNotification() sent, so that
+    // testNotificationRemove() can take that one back off.
+    quint32 m_lastNotificationId = 0;
 
     WorkoutStore *m_workoutStore;
     WorkoutListModel *m_workoutModel;

@@ -71,6 +71,17 @@ To regenerate equivalents from your own watch, the paths are:
 | `cloud_247_v1_*.json` | a captured `POST` to `247.sports-tracker.com/v1/<kind>` |
 | `workout_binary_*.bin` | the `workoutBinary` part of a phone-recorded upload |
 
+For the ones that come out of a btsnoop capture rather than off the live
+link, `tools/btsnoop_mds.py` is the extractor: it walks ACL/L2CAP/ATT,
+reassembles the SLIP framing per ATT handle - which matters, because a
+Race writes on 0x0012 and a 9 Baro on 0x000e - and prints or saves the
+Whiteboard bodies.
+
+```
+python3 tools/btsnoop_mds.py capture.log --path Ancs
+python3 tools/btsnoop_mds.py capture.log --type 0e --save out/
+```
+
 `docs/logbook-data-format.md` and `docs/watch-push-resources.md` describe
 each of those exchanges in enough detail to repeat them. The app's own
 probe actions (on the pairing page) write the raw payloads to the cache

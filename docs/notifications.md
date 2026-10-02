@@ -712,12 +712,27 @@ the holder dies, which a D-Bus name does not improve on.
 
 The two sides are deliberately asymmetric:
 
-- The **application** takes the lock when it attaches to the watch and holds
-  it until it detaches - and attaches whether or not it got it. It is the
-  side with a person waiting on it.
+- The **application** takes the lock when it attaches to the watch, waiting
+  up to five seconds in quarter-second steps for it, and holds it until it
+  detaches. It wins ties by only being willing to wait that long; after that
+  it attaches anyway, because a stuck daemon should not make the watch
+  unusable from the app.
 - The **daemon** attaches only while it holds the lock, sends what is
   queued, and lets go immediately. So "the app is open" means notifications
   wait, and nothing else does.
+
+**Corrected 2026-10-02.** The application used to attach *regardless*, at
+once, on the reasoning that it is the side with a person waiting on it. That
+reasoning is wrong in its consequence: barging in puts two writers on one
+Whiteboard session, the framing corrupts, and the symptom is the watch never
+acknowledging the session handshake - a true error message about a
+self-inflicted problem, and one that reads exactly like a broken watch. It
+was reported that way. Waiting costs nothing, because a second or two is all
+the daemon ever holds the lock for.
+
+It also explains why the notification switch had nothing to show: reading
+the watch's setting needs a working session, the session never came up, and
+the switch had no way to say so.
 
 The cost, stated plainly: each notification the daemon sends pays for an
 attach - StartNotify plus the session handshake, a second or two. On a wrist

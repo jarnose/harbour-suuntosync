@@ -1112,6 +1112,55 @@ void AppController::releaseWatchLink()
     m_watchLink.release();
 }
 
+namespace {
+// The watch's own notification switch. The official app reads it on every
+// connection; the value is what decides whether a notification PUT is
+// accepted or refused with 400.
+const char *const kAncsEnabledPath = "/Settings/Ble/AncsEnabled";
+} // namespace
+
+void AppController::readWatchNotificationsEnabled()
+{
+    if (!m_whiteboardReady) {
+        emit watchNotificationsRead(-1);
+        return;
+    }
+    m_whiteboardClient->readValue(QString::fromLatin1(kAncsEnabledPath),
+            [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        if (!ok || body.size() < 2) {
+            qWarning() << "could not read the watch's notification setting:" << error;
+            emit watchNotificationsRead(-1);
+            return;
+        }
+        // The reply ends in the value as a 16-bit little-endian integer:
+        // ...c8 00 01 00 00 on a 9 Baro, ...c8 00 01 00 01 on a Race.
+        const int value = body[body.size() - 2] | (body[body.size() - 1] << 8);
+        emit watchNotificationsRead(value != 0 ? 1 : 0);
+    });
+}
+
+void AppController::setWatchNotificationsEnabled(bool enabled)
+{
+    if (!m_whiteboardReady) {
+        emit logbookTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    m_whiteboardClient->putSmallEnum(QString::fromLatin1(kAncsEnabledPath),
+                                      enabled ? 1 : 0,
+            [this, enabled](bool ok, const QString &error) {
+        if (!ok) {
+            emit logbookTestResult(error);
+            // Put the switch back where the watch has it.
+            readWatchNotificationsEnabled();
+            return;
+        }
+        emit logbookTestResult(enabled
+                ? tr("The watch will accept notifications now")
+                : tr("The watch will ignore notifications now"));
+        readWatchNotificationsEnabled();
+    });
+}
+
 void AppController::probePath(const QString &path)
 {
     if (!m_whiteboardReady) {

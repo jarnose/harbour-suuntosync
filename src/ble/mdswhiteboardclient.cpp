@@ -852,6 +852,34 @@ void MdsWhiteboardClient::putString(const QString &path, const QString &value,
     });
 }
 
+void MdsWhiteboardClient::putSmallEnum(const QString &path, quint8 value,
+                                        SimpleCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, value, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, value](uint16_t requestId) {
+            return Mds::encodePut(requestId, ackBody,
+                                   { { Mds::kParamSmallEnum, { value } } });
+        }, [path, callback](bool putOk, const Mds::Frame &, const QString &putError) {
+            if (!putOk) {
+                callback(false, tr("PUT %1 failed: %2").arg(path, putError));
+                return;
+            }
+            callback(true, QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::putEmpty(const QString &path, SimpleCallback callback)
 {
     getRaw([path](uint16_t requestId) {

@@ -205,6 +205,13 @@ struct FetchParameter
     std::vector<uint8_t> bytes;
 };
 
+// A small enum, one byte on the wire. Captured: the official app writing
+// /Settings/Unit/WeekType as [ack6][01][03 00][00] - one parameter, this
+// type, one byte of value. Every /Settings/... enum should look the same,
+// which is what reading /Settings/Ble/AncsEnabled back as a 16-bit 0 or 1
+// suggests.
+constexpr uint16_t kParamSmallEnum = 0x0003;
+
 // The three confirmed type codes.
 constexpr uint16_t kParamInt32 = 0x0006;
 constexpr uint16_t kParamInt64 = 0x0008;

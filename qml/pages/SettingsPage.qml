@@ -16,12 +16,26 @@ Page {
         knownWatches = AppController.knownWatches()
     }
 
-    Component.onCompleted: refreshKnownWatches()
+    Component.onCompleted: {
+        refreshKnownWatches()
+        if (AppController.whiteboardReady)
+            AppController.readWatchNotificationsEnabled()
+    }
+
+    // -1 until the watch has been asked, which only works while connected.
+    property int watchNotifications: -1
 
     Connections {
         target: AppController
         onErrorOccurred: page.lastError = message
         onPairedWatchChanged: page.refreshKnownWatches()
+        onWatchNotificationsRead: page.watchNotifications = value
+        onWhiteboardReadyChanged: {
+            if (AppController.whiteboardReady)
+                AppController.readWatchNotificationsEnabled()
+            else
+                page.watchNotifications = -1
+        }
     }
 
     SilicaFlickable {
@@ -143,6 +157,23 @@ Page {
             }
 
             RemorsePopup { id: forgetRemorse }
+
+            TextSwitch {
+                // The watch's own switch, not a preference of this app's: a
+                // watch with this off refuses a notification with 400, which
+                // is exactly what a 9 Baro did while its own menu said
+                // notifications were on. Hidden until the watch has
+                // answered, because a switch showing a guess is worse than
+                // no switch.
+                visible: page.watchNotifications >= 0
+                text: qsTr("Accept notifications on the watch")
+                description: qsTr("The setting on the watch itself. Needed before "
+                                   + "the notification daemon can send anything.")
+                automaticCheck: false
+                checked: page.watchNotifications === 1
+                onClicked: AppController.setWatchNotificationsEnabled(
+                               page.watchNotifications !== 1)
+            }
 
             Button {
                 // The one watch-side feature that needs no account: the

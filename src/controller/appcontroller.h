@@ -233,6 +233,20 @@ public:
     // with that id" if it was already dismissed there.
     Q_INVOKABLE void testNotificationRemove();
 
+    // Reads and writes /Settings/Ble/AncsEnabled on the watch - the switch
+    // the official app flips when you turn notifications on for a watch.
+    //
+    // This is why a 9 Baro answered a perfectly good notification with 400:
+    // the setting read 0 on the Baro and 1 on the Race in captures taken the
+    // same evening, and the watch's own menu does not appear to be the same
+    // switch. The resource exists on both watches either way, so probing it
+    // said nothing; only the value did.
+    //
+    // The answer arrives as watchNotificationsRead(); writing reports
+    // through logbookTestResult() like the other watch-side actions.
+    Q_INVOKABLE void readWatchNotificationsEnabled();
+    Q_INVOKABLE void setWatchNotificationsEnabled(bool enabled);
+
     // Refreshes the watch's GPS assist data, which is what makes it find
     // satellites in seconds instead of minutes. Asks the watch which of
     // four formats it wants, downloads that one, and writes it across in
@@ -406,6 +420,8 @@ signals:
     void healthDataChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
+    // -1 when the watch could not be asked at all, otherwise its own value.
+    void watchNotificationsRead(int value);
     void workoutUploaded(const QString &key, bool ok, const QString &message);
     void workoutUploadProgress(int done, int total);
 

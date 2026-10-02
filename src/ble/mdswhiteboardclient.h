@@ -142,6 +142,12 @@ public:
     // deleting a rendered file once its name has been written.
     void putEmpty(const QString &path, SimpleCallback callback);
 
+    // Writes a one-byte enum to a watch resource - which is what every
+    // /Settings/... toggle looks like on the wire. Confirmed against the
+    // official app writing /Settings/Unit/WeekType; see
+    // Mds::kParamSmallEnum.
+    void putSmallEnum(const QString &path, quint8 value, SimpleCallback callback);
+
     // Writes a GPS ephemeris blob to the watch, which is how a watch with
     // no WiFi of its own gets assisted GPS (docs/watch-push-resources.md).
     // Five steps, all confirmed against a real Suunto 9 Baro upload:

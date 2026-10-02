@@ -1029,6 +1029,8 @@ them is expensive:
    the 9 Baro may never have. The resource exists either way, which is why
    the handle resolved. `/Settings/Ble/AncsEnabled` is readable with the
    application's probe.
+
+   **This was it** - see below.
 2. **The structure's type byte or its form byte may differ.** `0x09` and
    `0x6a` are known from a Race and nothing else. The type's *high* byte is
    computed from the ack, so it is not a suspect. If this is the cause the
@@ -1039,6 +1041,49 @@ them is expensive:
 Worth stating because it is the opposite of a disappointment: the
 arbitration, the connect-on-demand, the queue and the lock all behaved
 exactly as designed against a watch that then said no.
+
+### `/Settings/Ble/AncsEnabled` is the answer, and it was in the captures
+
+Jarno checked the 9 Baro's own menu and notifications were on there, which
+ruled out the obvious reading of hypothesis 1 and not the hypothesis. The
+answer had been sitting in two week-old captures: the official app reads
+`/Settings/Ble/AncsEnabled` on every connection, and both replies are
+there.
+
+```
+9 Baro   f0 3b 05 01 80 00  c8 00  01 00 00     value 0
+Race     f0 3b 05 01 80 00  c8 00  01 00 01     value 1
+```
+
+Same handle, same 200, and the value - a 16-bit little-endian integer at
+the end - differs. **ANCS is off on the Baro and on on the Race**, at the
+protocol level, whatever the watch's own menu says about notifications.
+That is a 400 on a notification PUT, exactly.
+
+The probe could never have found this, and the earlier conclusion that
+"one code path covers both watches" was drawn from the resource *existing*
+on both. It does. Its value is what matters, and only reading it says so.
+
+### Writing it
+
+The official app's own write of a `/Settings/...` enum is in the same
+capture - `/Settings/Unit/WeekType`:
+
+```
+f0 39 02 01 80 00  01  03 00  00
+[ack handle    ]  [1] [type ] [value]
+```
+
+One parameter, type **0x0003**, one byte of value. So
+`Mds::kParamSmallEnum` and `MdsWhiteboardClient::putSmallEnum()`, and a
+switch in Settings that reads the watch's value and writes it. The switch is
+hidden until the watch has answered, because a switch showing a guess is
+worse than no switch - and it is labelled as the watch's own setting,
+because that is what it is.
+
+What is assumed rather than captured: that `AncsEnabled` takes the same
+type as `WeekType`. The read reply's shape agrees, and the cost of being
+wrong is a 400 and a switch that snaps back.
 
 ### A stale watch, found the same minute
 

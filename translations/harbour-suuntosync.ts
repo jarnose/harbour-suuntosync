@@ -4,171 +4,182 @@
 <context>
     <name>AppController</name>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="560"/>
-        <location filename="../src/controller/appcontroller.cpp" line="573"/>
-        <location filename="../src/controller/appcontroller.cpp" line="576"/>
-        <location filename="../src/controller/appcontroller.cpp" line="601"/>
+        <location filename="../src/controller/appcontroller.cpp" line="566"/>
+        <location filename="../src/controller/appcontroller.cpp" line="579"/>
+        <location filename="../src/controller/appcontroller.cpp" line="582"/>
+        <location filename="../src/controller/appcontroller.cpp" line="607"/>
         <source>Failed to open database: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="564"/>
+        <location filename="../src/controller/appcontroller.cpp" line="570"/>
         <source>Failed to load account: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="605"/>
+        <location filename="../src/controller/appcontroller.cpp" line="611"/>
         <source>Failed to load paired watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="618"/>
+        <location filename="../src/controller/appcontroller.cpp" line="624"/>
         <source>Failed to open secure storage: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="704"/>
+        <location filename="../src/controller/appcontroller.cpp" line="723"/>
         <source>Could not connect to watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="751"/>
+        <location filename="../src/controller/appcontroller.cpp" line="775"/>
         <source>Failed to save paired watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="795"/>
+        <location filename="../src/controller/appcontroller.cpp" line="819"/>
         <source>Could not read the remembered watches: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="804"/>
+        <location filename="../src/controller/appcontroller.cpp" line="828"/>
         <source>That watch is not remembered any more - pair it again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="811"/>
+        <location filename="../src/controller/appcontroller.cpp" line="835"/>
         <source>Failed to forget watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="826"/>
-        <location filename="../src/controller/appcontroller.cpp" line="852"/>
-        <location filename="../src/controller/appcontroller.cpp" line="911"/>
-        <location filename="../src/controller/appcontroller.cpp" line="953"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1001"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1052"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1076"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1261"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1366"/>
+        <location filename="../src/controller/appcontroller.cpp" line="851"/>
+        <location filename="../src/controller/appcontroller.cpp" line="877"/>
+        <location filename="../src/controller/appcontroller.cpp" line="936"/>
+        <location filename="../src/controller/appcontroller.cpp" line="978"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1026"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1077"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1145"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1167"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1352"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1457"/>
         <source>Whiteboard channel isn&apos;t ready yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="830"/>
+        <location filename="../src/controller/appcontroller.cpp" line="855"/>
         <source>A test request is already in flight</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="839"/>
+        <location filename="../src/controller/appcontroller.cpp" line="864"/>
         <source>Request failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="842"/>
+        <location filename="../src/controller/appcontroller.cpp" line="867"/>
         <source>OK - type=0x%1 requestId=%2 body=%3 bytes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="856"/>
-        <location filename="../src/controller/appcontroller.cpp" line="915"/>
+        <location filename="../src/controller/appcontroller.cpp" line="881"/>
+        <location filename="../src/controller/appcontroller.cpp" line="940"/>
         <source>A logbook fetch is already in flight</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="860"/>
-        <location filename="../src/controller/appcontroller.cpp" line="920"/>
+        <location filename="../src/controller/appcontroller.cpp" line="885"/>
+        <location filename="../src/controller/appcontroller.cpp" line="945"/>
         <source>A watch sync is already in progress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="873"/>
+        <location filename="../src/controller/appcontroller.cpp" line="898"/>
         <source>Fetch failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="883"/>
+        <location filename="../src/controller/appcontroller.cpp" line="908"/>
         <source>Decoded OK but failed to save: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="889"/>
+        <location filename="../src/controller/appcontroller.cpp" line="914"/>
         <source>OK - saved. %1 bytes compressed, activity=%2 duration=%3s distance=%4m maxSpeed=%5m/s avgHR=%6 maxHR=%7 steps=%8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="900"/>
+        <location filename="../src/controller/appcontroller.cpp" line="925"/>
         <source>Fetched %1 bytes but decoding failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="936"/>
+        <location filename="../src/controller/appcontroller.cpp" line="961"/>
         <source>/Entries fetch failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="944"/>
+        <location filename="../src/controller/appcontroller.cpp" line="969"/>
         <source>OK - %1 entries: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="957"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1005"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1060"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1080"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1265"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1370"/>
+        <location filename="../src/controller/appcontroller.cpp" line="982"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1030"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1085"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1171"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1356"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1461"/>
         <source>Another fetch is already in progress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="967"/>
+        <location filename="../src/controller/appcontroller.cpp" line="992"/>
         <source>Descriptors fetch failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="992"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1017"/>
         <source>Descriptors: %1 bytes, %2 field paths, saved as %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1044"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1069"/>
         <source>The watch took the notification, with the text trimmed to fit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1045"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1070"/>
         <source>The watch took the notification</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1056"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1081"/>
         <source>Nothing has been sent from here yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1069"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1094"/>
         <source>The watch removed it</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1091"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1158"/>
+        <source>The watch will accept notifications now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1159"/>
+        <source>The watch will ignore notifications now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="1182"/>
         <source>%1
 %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1103"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1194"/>
         <source>%1
 exists - %2 bytes
 %3
@@ -176,297 +187,297 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1160"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1251"/>
         <source>Something else is using the watch connection.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1173"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1264"/>
         <source>Could not ask the watch which GPS data it wants: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1181"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1272"/>
         <source>The watch&apos;s GPS format answer was unreadable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1189"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1280"/>
         <source>Could not download GPS data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1196"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1287"/>
         <source>Sending %1 kB of GPS data to the watch…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1230"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1321"/>
         <source>GPS data updated - the watch reports %1, after %2 s of processing.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1232"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1323"/>
         <source>GPS data updated - the watch now reports %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1237"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1328"/>
         <source>GPS data sent (format %1) and accepted, but the watch still reports no date after %2 minutes. Check it again later - older watches take a while.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1281"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1372"/>
         <source>No timeline file is known for %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1297"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1403"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1388"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1494"/>
         <source>%1 (%2): %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1321"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1412"/>
         <source>%1: %2 bytes
 %3
 &quot;%4&quot;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1383"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1474"/>
         <source>/Activity/TrendData rejected every cursor encoding tried. The parameter is shaped differently than assumed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1437"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1528"/>
         <source>/Activity/TrendData accepted %1 (cursor %2)
 %3 bytes, status %4, saved as trenddata.bin
 %5</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1457"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1548"/>
         <source>Cloud login failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1467"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1558"/>
         <source>Failed to store login session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1477"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2202"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1568"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2293"/>
         <source>Failed to save account: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1490"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1581"/>
         <source>Failed to clear account: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1509"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1618"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1701"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1983"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1600"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1709"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1792"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2074"/>
         <source>Sign in to the Suunto cloud first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1525"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1616"/>
         <source>Synced %1 health entries (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1542"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1553"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1557"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1665"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1675"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2031"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2041"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2627"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1633"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1644"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1648"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1756"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1766"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2122"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2132"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2718"/>
         <source>%1: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1614"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1705"/>
         <source>An upload is already in progress.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1624"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1715"/>
         <source>Nothing to upload - every watch workout is already in the cloud.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1639"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1730"/>
         <source>Uploaded %1 workouts to Suunto.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1641"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1732"/>
         <source>Uploaded %1 of %2 workouts. Failed: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1655"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1746"/>
         <source>%1: nothing to build an upload from</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1693"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1784"/>
         <source>Nothing to upload - sync this workout from the watch first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1697"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1788"/>
         <source>Already uploaded.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1711"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2282"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1802"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2373"/>
         <source>Could not read the stored session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1679"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1722"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1770"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1813"/>
         <source>Uploaded to Suunto</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1156"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1777"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1247"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1868"/>
         <source>Connect the watch first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1781"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1979"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1872"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2070"/>
         <source>A sync is already in progress.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1803"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1894"/>
         <source>Could not read sleep from the watch: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1810"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1901"/>
         <source>The watch returned %1 bytes but no readable nights.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1839"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1930"/>
         <source>Could not save sleep data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1867"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1958"/>
         <source>Sleep synced. Recovery failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1874"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1965"/>
         <source>Sleep synced. Recovery returned %1 bytes but no readable samples.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1896"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1987"/>
         <source>Could not save recovery data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1932"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2023"/>
         <source>Sleep and recovery synced. Daily activity failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1969"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2060"/>
         <source>Could not save activity data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1987"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2078"/>
         <source>Nothing to upload - everything the watch gave us is already in the cloud.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2003"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2094"/>
         <source>Uploaded %1 entries (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2006"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2097"/>
         <source>Uploaded %1 health entries to Suunto.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2143"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2234"/>
         <source>Failed to load workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2162"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2253"/>
         <source>Failed to load login session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2173"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2264"/>
         <source>Failed to sync workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2190"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2281"/>
         <source>Failed to save workout: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2261"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2352"/>
         <source>Sample data is only available for cloud workouts.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2288"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2379"/>
         <source>Could not download sample data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2306"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2397"/>
         <source>No charts found in %1 kB of sample data. Raw response saved to %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2309"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2400"/>
         <source>No charts found in the sample data, and it could not be saved.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2448"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2539"/>
         <source>Failed to list watch entries: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2579"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2670"/>
         <source>Re-read %1 stored workouts with this watch&apos;s own field table.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2605"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2696"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2639"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2730"/>
         <source>%1: decode failed (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2684"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2775"/>
         <source>%1: failed to save (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -776,247 +787,250 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="115"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="118"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="117"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="120"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="122"/>
         <source>Disconnected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="146"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="148"/>
         <source>Could not list GATT objects: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="184"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="186"/>
         <source>Whiteboard service found but write/notify characteristics are missing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="206"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="208"/>
         <source>Could not subscribe to watch notifications: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="218"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="220"/>
         <source>Could not send session handshake: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="224"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="229"/>
         <source>Watch didn&apos;t acknowledge the session handshake (TYPE=0x13) - GET requests would time out too</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="329"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="334"/>
         <source>Whiteboard channel isn&apos;t ready yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="348"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="353"/>
         <source>Write failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="358"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="363"/>
         <source>Timed out waiting for the watch to respond</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="365"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="370"/>
         <source>Another bulk fetch is already in progress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="373"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="405"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="438"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="464"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="525"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="554"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="588"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="717"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="830"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="856"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="888"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1022"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1067"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="378"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="410"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="443"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="469"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="530"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="559"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="593"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="722"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="835"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="862"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="889"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="921"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1055"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1100"/>
         <source>GET %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="384"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="389"/>
         <source>Stream-start trigger failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="394"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="399"/>
         <source>Could not build the stream-start trigger: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="415"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="420"/>
         <source>Entries fetch failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="420"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="425"/>
         <source>Entries response didn&apos;t decode to any entries (%1 byte body)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="427"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="432"/>
         <source>Could not build the entries fetch trigger: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="447"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="452"/>
         <source>Fetch failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="453"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="458"/>
         <source>Could not build the fetch trigger: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="468"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="473"/>
         <source>GET %1 was acked with an unusably short body</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="491"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="496"/>
         <source>Paged read at offset %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="495"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="500"/>
         <source>Paged read at offset %1 returned only %2 bytes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="529"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="592"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="834"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="860"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="892"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="534"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="597"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="839"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="866"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="893"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="925"/>
         <source>GET %1 acked with an unusably short body</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="563"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="568"/>
         <source>not on this watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="571"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="576"/>
         <source>Reading %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="604"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="609"/>
         <source>Fetch on %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="707"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="712"/>
         <source>No ephemeris data to send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="721"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="726"/>
         <source>This watch does not accept an ephemeris upload</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="733"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="738"/>
         <source>The watch refused to start the upload: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="762"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="767"/>
         <source>Upload stopped after %1 of %2 bytes: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="771"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="776"/>
         <source>The watch rejected the upload at %1 of %2 bytes (status %3)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="788"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="793"/>
         <source>Data sent, but GET %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="792"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="797"/>
         <source>Data sent, but %1 acked oddly</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="800"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="805"/>
         <source>Data sent, but the watch would not load it: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="806"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="811"/>
         <source>Data sent, but the watch refused to load it (status %1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="842"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="868"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="847"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="875"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="901"/>
         <source>PUT %1 failed: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="903"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="936"/>
         <source>Timeline render request failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="913"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="946"/>
         <source>GET /Dev/FileSystem/Stream failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="918"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="951"/>
         <source>Filesystem stream acked with a short body</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1026"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1071"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1059"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1104"/>
         <source>The watch acked %1 with an unusably short body</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1035"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1068"/>
         <source>The notification is %1 bytes, and the watch takes at most %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1046"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1079"/>
         <source>The watch did not answer the notification: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1051"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1084"/>
         <source>The watch refused the notification (status %1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1080"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1113"/>
         <source>The watch did not answer the removal: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1085"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1118"/>
         <source>The watch has no notification with that id</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1089"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1122"/>
         <source>The watch refused the removal (status %1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1182,147 +1196,157 @@ exists - %2 bytes
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="35"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="49"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="48"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="62"/>
         <source>Suunto account</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="55"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="69"/>
         <source>Not signed in. The app works without an account - signing in adds cloud workouts and lets you upload.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="65"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="79"/>
         <source>Sign out</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="65"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="79"/>
         <source>Sign in</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="75"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="89"/>
         <source>Watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="82"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="96"/>
         <source>No watch paired</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="84"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="98"/>
         <source>connected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="85"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="99"/>
         <source>connecting…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="86"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="100"/>
         <source>not connected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="107"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="121"/>
         <source>Switch watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="119"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="133"/>
         <source>%1 (in use)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="128"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="142"/>
         <source>Change watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="128"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="142"/>
         <source>Pair a watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="139"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="153"/>
         <source>Forget this watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="140"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="154"/>
         <source>Forgetting %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="155"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="169"/>
+        <source>Accept notifications on the watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="170"/>
+        <source>The setting on the watch itself. Needed before the notification daemon can send anything.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="186"/>
         <source>Update GPS data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="154"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="185"/>
         <source>Updating GPS data…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="166"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="197"/>
         <source>Downloads the satellite predictions the watch uses to get a fix quickly, and writes them to it. Needs no Suunto account.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="171"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="202"/>
         <source>Sync when the watch connects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="172"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="203"/>
         <source>Off by default: a sync is minutes of radio time, and the watch coming into range isn&apos;t always a reason to start one.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="180"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="211"/>
         <source>Cover</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="184"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="215"/>
         <source>Show</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="193"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="224"/>
         <source>Latest workout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="194"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="225"/>
         <source>Lifetime totals</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="195"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="226"/>
         <source>Last night&apos;s sleep</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="196"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="227"/>
         <source>Nothing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="205"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="236"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="210"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="241"/>
         <source>Syncs workouts and health data with a Suunto watch over Bluetooth, and with the Suunto cloud. Not affiliated with or endorsed by Suunto.</source>
         <translation type="unfinished"></translation>
     </message>

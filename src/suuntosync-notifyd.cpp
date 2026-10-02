@@ -1,6 +1,7 @@
 // The notification daemon. Separate from the application on purpose: see
 // src/notify/notifierdaemon.h and docs/notifications.md.
 
+#include "notify/filelogger.h"
 #include "notify/notifierdaemon.h"
 
 #include <QCoreApplication>
@@ -21,6 +22,7 @@ int main(int argc, char *argv[])
 
     bool dryRun = false;
     QString databasePath;
+    QString logPath;
     const QStringList arguments = app.arguments();
     for (int i = 1; i < arguments.size(); ++i) {
         const QString argument = arguments.at(i);
@@ -28,13 +30,26 @@ int main(int argc, char *argv[])
             dryRun = true;
         } else if (argument == QStringLiteral("--database") && i + 1 < arguments.size()) {
             databasePath = arguments.at(++i);
+        } else if (argument == QStringLiteral("--log") && i + 1 < arguments.size()) {
+            logPath = arguments.at(++i);
+        } else if (argument == QStringLiteral("--no-log")) {
+            logPath = QStringLiteral("-");
         } else {
             qCritical().noquote()
-                    << QStringLiteral("usage: %1 [--dry-run] [--database <file>]")
+                    << QStringLiteral("usage: %1 [--dry-run] [--database <file>] "
+                                       "[--log <file>|--no-log]")
                                .arg(arguments.value(0));
             return 2;
         }
     }
+
+    // Before anything that logs. The journal on this device keeps seconds of
+    // history (see notify/filelogger.h), so this is where the daemon's own
+    // trail actually lives.
+    if (logPath.isEmpty())
+        logPath = FileLogger::defaultPath();
+    if (logPath != QStringLiteral("-") && !FileLogger::install(logPath))
+        qWarning().noquote() << QStringLiteral("could not open %1 for logging").arg(logPath);
 
     if (databasePath.isEmpty()) {
         const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);

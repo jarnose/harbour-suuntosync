@@ -957,8 +957,12 @@ produces enough log noise that the window is **seconds** wide: "Logs begin
 at 19:38:02" with the clock at 19:38:11. Adding `defaultuser` to
 `systemd-journal` (`gpasswd -a`, since there is no `usermod` here) makes the
 journal readable, and there is nothing in it to read. `/proc/locks` turned
-out to be the more useful instrument, and a daemon that is meant to be
-diagnosable should log to a file of its own.
+out to be the more useful instrument.
+
+So the daemon keeps its own log:
+`~/.cache/io.github.jarnose/suuntosync/suuntosync-notifyd.log`, appended to,
+rotated once at 256 kB, and still written to stderr as well so running it by
+hand is unchanged. `--log <file>` moves it and `--no-log` turns it off.
 
 ### Still not run
 

@@ -216,6 +216,7 @@ if(BUILD_DAEMON)
 
 add_executable(suuntosync-notifyd
     src/suuntosync-notifyd.cpp
+    src/notify/filelogger.cpp
     src/notify/notificationmonitor.cpp
     src/notify/notificationrouter.cpp
     src/notify/notifierdaemon.cpp

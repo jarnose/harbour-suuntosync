@@ -16,6 +16,10 @@ Confirmed on real hardware, not just in tests:
   a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever
   watch is connected (`/Logbook/byId/<id>/Descriptors`) rather than
   compiled in. See `docs/sbem-chunk-map.md`.
+- **Two watches at once.** Both are remembered and switched from the
+  pull-down menu or Settings, which matters because they decode
+  differently: each one's field table is kept per address, so switching
+  back does not mean fetching it again.
 - **Workouts from the Suunto cloud**, with route, training metrics and
   sample data.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
@@ -32,6 +36,27 @@ Confirmed on real hardware, not just in tests:
   watch validates the data on its own time — seconds on a Race, minutes on
   a 9 Baro — so the date is polled rather than read once. **Needs no
   Suunto account**: the assist-data endpoints take no credential.
+- **Phone notifications on the watch.** A text message arriving on the phone
+  appears on the watch, with the app closed and nothing to press — and
+  disappears from the watch when it is dismissed on the phone. Missed calls,
+  voicemail, calendar alerts and messages all have their category mapped and
+  tested, but a text message is the one that has been watched arriving. The
+  payload is composed, not replayed: the encoder is derived
+  from three captures and from the official Android app's own code, so the
+  ANCS category, the notification id and the structure's lengths are all
+  computed, and three captured requests are reproduced byte for byte in
+  `tests/test_notificationcodec.cpp`.
+
+  Observing other applications' notifications needs a D-Bus monitor
+  connection, which the Sailjail proxy will not relay, so this half lives
+  in **`suuntosync-notifyd`, a separate optional package** outside the
+  sandbox — and the app itself stays sandboxed and Store-eligible. Only one
+  process may hold a Whiteboard session at a time, so the two arbitrate
+  with a file lock; a D-Bus name would have been tidier and a sandboxed app
+  is not allowed to own one. The daemon runs as a systemd user service that
+  the package installs and starts. Confirmed on a Race; **untried on a 9
+  Baro**, whose handle differs. See `docs/notifications.md`.
+
 - **Sleep, recovery and daily activity.** Read from the cloud, and read
   *directly off the watch* — which matters, because a night that the watch
   has recorded but never uploaded is invisible to every other client.
@@ -43,32 +68,22 @@ Confirmed on real hardware, not just in tests:
 
 ## What doesn't, yet
 
-- **Notifications to the watch** — sending one works and is confirmed on
-  hardware: the app composes a notification and a Suunto Race shows it,
-  title and message. The encoder is derived from three captures and from
-  the official app's own code rather than replayed, so the category, the
-  id and the lengths are computed.
-
-  Forwarding the phone's *own* notifications needs a D-Bus monitor
-  connection, which the Sailjail proxy will not relay — so it lives in
-  **`suuntosync-notifyd`, a separate optional package** outside the
-  sandbox, built from this same tree, and this app stays sandboxed and
-  Store-eligible. Only one process may hold a Whiteboard session, so the
-  two arbitrate with a file lock; a D-Bus name would have been tidier and
-  a sandboxed app is not allowed to own one. **Confirmed end to end on
-  hardware**: a text message on the phone reaches the watch with the app
-  closed, and disappears from the watch when it is dismissed on the phone.
-  It runs as a systemd user service, installed and started by the package
-  itself — see `docs/notifications.md`. Untried on a 9 Baro.
+- **Notifications on a 9 Baro.** Its Whiteboard handle differs from a
+  Race's, and the request structure's own type byte is known only from a
+  Race, so this is the one part of the notification path that may need
+  work rather than just a test.
+- **The watch's media controls.** Both watches ask the *phone* for
+  `/Media/Player/State`, `/Media/Player/Control` and `/Media/Track/Info`
+  at the start of every connection. Nothing here answers them. It is the
+  one direction of the protocol that has never been implemented, in either
+  app.
+- **The MediaTek EPO assist-data format**, which neither watch here asks
+  for, and **laps on cloud-synced workouts**, which needs one capture of
+  the response's real structure.
 
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.
-
-Two watches can be remembered at once and switched from the pull-down menu
-or Settings, which matters when the two decode differently: each one's
-field table is kept per address, so switching back does not mean fetching
-it again.
 
 ### Which watches
 
@@ -92,7 +107,9 @@ dex. `docs/` carries the results:
 | `sbem-chunk-map.md` | the watch's own descriptor table, read out of the device — and why it is per watch model |
 | `workout-upload.md` | the cloud's multipart upload, and the health API |
 | `watch-push-resources.md` | sleep and activity timeline files, GPS ephemeris, weather |
-| `notifications.md` | why a sandboxed Sailfish app cannot observe notifications |
+| `notifications.md` | the ANCS-over-Whiteboard payload, the encoder, and the daemon that feeds it |
+| `sml-schema-descriptors.md` | the field schema the watch hands out about itself |
+| `activity-types.md` | both activity-id vocabularies, the watch's and the cloud's |
 
 Two habits run through the whole thing and are worth stating, because they
 caught real bugs:
@@ -118,8 +135,9 @@ down as a measurement rather than promoted to a property of the format.
 
 ## Building
 
-Sailfish SDK, CMake. `zlib` is the only dependency beyond Qt5 and
-sailfishapp.
+Sailfish SDK, CMake. Beyond Qt5 and sailfishapp the app needs `zlib`, and
+the daemon needs `dbus-1` as well — QtDBus cannot monitor another
+application's traffic, so that half talks to libdbus directly.
 
 The notification daemon is a second package out of the same tree, and its
 SPEC file is in `daemon/` rather than `rpm/` because sfdk refuses to
@@ -129,8 +147,9 @@ build when it finds two of them there:
 sfdk -c specfile=daemon/suuntosync-notifyd.spec build
 ```
 
-GitHub Actions builds unsigned RPMs for 5.1.0.11 on every push, aarch64
-and armv7hl, and attaches them to a release on a `v*` tag. They are CI
+GitHub Actions builds unsigned RPMs of the **app** for 5.1.0.11 on every
+push, aarch64 and armv7hl, and attaches them to a release on a `v*` tag.
+The daemon is built locally with the command above and is not in CI. They are CI
 builds, not Store packages: `pkcon install-local` will say the package is
 untrusted, and it is right.
 

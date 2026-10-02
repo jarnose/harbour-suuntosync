@@ -103,6 +103,17 @@ public:
                                   const QString &name);
     Q_INVOKABLE void forgetWatch();
 
+    // Every watch that has been paired here, most recent first, as
+    // {address, objectPath, name, active} for a menu. Changes whenever
+    // pairedWatchChanged() fires, which is what QML should listen to.
+    Q_INVOKABLE QVariantList knownWatches() const;
+
+    // Makes a remembered watch the active one and connects to it, without
+    // going back through the pairing page. A no-op if that address is
+    // already active, so re-picking the current entry from a menu does not
+    // drop a working connection.
+    Q_INVOKABLE void switchToWatch(const QString &address);
+
     // Phase 6 validation probe: issues a real "GET /Logbook/Entries"
     // Whiteboard request over the connected watch's GATT link and reports
     // the raw result via whiteboardTestResult() - nothing is parsed or

@@ -3,6 +3,7 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QDateTime>
 #include <QVariant>
 #include <QFileInfo>
 #include <QDir>
@@ -50,11 +51,35 @@ bool PairedWatchStore::open(QString *error)
                 "  payload BLOB NOT NULL"
                 ")"));
     }
+    if (ok) {
+        // Also added after the fact, and for the same reason: switching
+        // between two watches used to mean forgetting one first.
+        ok = q.exec(QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS known_watches ("
+                "  address TEXT PRIMARY KEY,"
+                "  object_path TEXT NOT NULL,"
+                "  name TEXT NOT NULL,"
+                "  model TEXT,"
+                "  last_used INTEGER NOT NULL"
+                ")"));
+    }
     if (!ok) {
         if (error)
             *error = q.lastError().text();
         return false;
     }
+
+    // A watch paired before known_watches existed would otherwise be
+    // missing from the switcher it is supposed to be the first entry of.
+    // INSERT OR IGNORE, so this is a one-time backfill and not a
+    // last_used reset on every launch.
+    QSqlQuery backfill(db);
+    backfill.prepare(QStringLiteral(
+            "INSERT OR IGNORE INTO known_watches (address, object_path, name, model, last_used) "
+            "SELECT address, object_path, name, model, ? FROM paired_watch"));
+    backfill.addBindValue(QDateTime::currentMSecsSinceEpoch());
+    if (!backfill.exec() && error)
+        *error = backfill.lastError().text();
     return true;
 }
 
@@ -99,19 +124,71 @@ bool PairedWatchStore::save(const PairedWatch &watch, QString *error)
             *error = q.lastError().text();
         return false;
     }
+
+    // And remember it among the known ones. A failure here is worth
+    // reporting but not worth undoing the save: the active watch is set,
+    // which is what the caller asked for.
+    QSqlQuery remember(db);
+    remember.prepare(QStringLiteral(
+            "INSERT INTO known_watches (address, object_path, name, model, last_used) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(address) DO UPDATE SET object_path = excluded.object_path, "
+            "name = excluded.name, model = excluded.model, last_used = excluded.last_used"));
+    remember.addBindValue(watch.address);
+    remember.addBindValue(watch.objectPath);
+    remember.addBindValue(watch.name);
+    remember.addBindValue(watch.model);
+    remember.addBindValue(QDateTime::currentMSecsSinceEpoch());
+    if (!remember.exec() && error)
+        *error = remember.lastError().text();
     return true;
+}
+
+QVector<PairedWatch> PairedWatchStore::knownWatches(QString *error) const
+{
+    QVector<PairedWatch> watches;
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery q(db);
+    if (!q.exec(QStringLiteral("SELECT address, object_path, name, model FROM known_watches "
+                                "ORDER BY last_used DESC"))) {
+        if (error)
+            *error = q.lastError().text();
+        return watches;
+    }
+    while (q.next()) {
+        PairedWatch watch;
+        watch.address = q.value(0).toString();
+        watch.objectPath = q.value(1).toString();
+        watch.name = q.value(2).toString();
+        watch.model = q.value(3).toString();
+        watches.append(watch);
+    }
+    return watches;
 }
 
 bool PairedWatchStore::clear(QString *error)
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery q(db);
+    const PairedWatch active = load(nullptr);
+
     q.prepare(QStringLiteral("DELETE FROM paired_watch WHERE id = ?"));
     q.addBindValue(kSingletonRowId);
     if (!q.exec()) {
         if (error)
             *error = q.lastError().text();
         return false;
+    }
+
+    // "Forget" has to mean it, or the watch would reappear in the switcher.
+    // Its descriptor table is kept: it is expensive to fetch, harmless to
+    // keep, and keyed by address, so re-pairing the same watch finds it.
+    if (!active.address.isEmpty()) {
+        QSqlQuery forget(db);
+        forget.prepare(QStringLiteral("DELETE FROM known_watches WHERE address = ?"));
+        forget.addBindValue(active.address);
+        if (!forget.exec() && error)
+            *error = forget.lastError().text();
     }
     return true;
 }

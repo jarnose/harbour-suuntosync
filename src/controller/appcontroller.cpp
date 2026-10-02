@@ -727,6 +727,17 @@ void AppController::stopScan()
 void AppController::selectWatch(const QString &objectPath, const QString &address,
                                  const QString &name)
 {
+    // Let go of whatever is in hand first. Without this, switching from a
+    // connected Race to a 9 Baro left the Whiteboard client attached to the
+    // Race's characteristics - every request would still have gone to the
+    // old watch while the UI said otherwise, which is the worst kind of
+    // wrong because it looks like it works.
+    if (!m_pairedWatch.address.isEmpty() && m_pairedWatch.address != address) {
+        m_whiteboardClient->detach();
+        if (m_watchConnected && !m_pairedWatch.objectPath.isEmpty())
+            m_bluezAdapter->disconnectFromDevice(m_pairedWatch.objectPath);
+    }
+
     PairedWatch watch;
     watch.objectPath = objectPath;
     watch.address = address;
@@ -753,6 +764,44 @@ void AppController::selectWatch(const QString &objectPath, const QString &addres
     emit watchConnectedChanged();
 
     m_bluezAdapter->connectToDevice(objectPath);
+}
+
+QVariantList AppController::knownWatches() const
+{
+    QVariantList list;
+    // nullptr rather than a discarded QString: this is const, so it cannot
+    // emit errorOccurred, and a menu that comes back empty says as much as
+    // an error nobody would see.
+    const QVector<PairedWatch> watches = m_pairedWatchStore->knownWatches(nullptr);
+    for (const PairedWatch &watch : watches) {
+        QVariantMap entry;
+        entry[QStringLiteral("address")] = watch.address;
+        entry[QStringLiteral("objectPath")] = watch.objectPath;
+        entry[QStringLiteral("name")] = watch.name;
+        entry[QStringLiteral("active")] = watch.address == m_pairedWatch.address;
+        list.append(entry);
+    }
+    return list;
+}
+
+void AppController::switchToWatch(const QString &address)
+{
+    if (address.isEmpty() || address == m_pairedWatch.address)
+        return;
+
+    QString error;
+    const QVector<PairedWatch> watches = m_pairedWatchStore->knownWatches(&error);
+    if (watches.isEmpty() && !error.isEmpty()) {
+        emit errorOccurred(tr("Could not read the remembered watches: %1").arg(error));
+        return;
+    }
+    for (const PairedWatch &watch : watches) {
+        if (watch.address != address)
+            continue;
+        selectWatch(watch.objectPath, watch.address, watch.name);
+        return;
+    }
+    emit errorOccurred(tr("That watch is not remembered any more - pair it again."));
 }
 
 void AppController::forgetWatch()

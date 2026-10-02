@@ -43,13 +43,25 @@ Confirmed on real hardware, not just in tests:
 
 ## What doesn't, yet
 
-- **Notifications to the watch.** The mechanism is understood (see
-  `docs/notifications.md`) but it requires `Sandboxing=Disabled`, which
-  costs Jolla Store eligibility — a decision, not a missing feature.
+- **Notifications to the watch** — half done, and the done half is the
+  hard one. The app composes a notification and a Suunto Race shows it,
+  title and message, confirmed on hardware. The encoder is derived from
+  three captures and from the official app's own code rather than
+  replayed, so the category, the id and the lengths are computed (see
+  `docs/notifications.md`). What is missing is *observing* the phone's
+  own notifications in order to forward them, which needs
+  `Sandboxing=Disabled` and so costs Jolla Store eligibility — a
+  decision, not a missing feature. Until that is decided there is a
+  Send button on the pairing page and nothing automatic.
 
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.
+
+Two watches can be remembered at once and switched from the pull-down menu
+or Settings, which matters when the two decode differently: each one's
+field table is kept per address, so switching back does not mean fetching
+it again.
 
 ### Which watches
 

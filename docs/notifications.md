@@ -621,3 +621,17 @@ than anything automatic. "Take it back" removes the same id.
 The category picker is there because the category is the one field whose
 effect cannot be seen from this side at all - only the watch's own screen
 shows whether 6 is filed differently from 0.
+
+### It works (2026-10-02)
+
+A notification composed by this app, from the encoder above, **arrives on a
+Suunto Race and renders properly** - title and message both. Status 200,
+first try, no capture replayed.
+
+So the layout derived from three captures is right, and the parts that were
+computed rather than copied - the length byte, the parameter's type code,
+the string pool's offsets, the notification id - are all right too. That
+was the open question the previous section ended on.
+
+Still untested: the 9 Baro, and whether a non-zero `categoryId` changes
+anything the watch shows.

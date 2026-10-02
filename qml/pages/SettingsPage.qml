@@ -8,9 +8,20 @@ Page {
 
     property string lastError: ""
 
+    // Not a binding: knownWatches() hits SQLite, so it is read when the
+    // page opens and when the active watch changes, not on every repaint.
+    property var knownWatches: []
+
+    function refreshKnownWatches() {
+        knownWatches = AppController.knownWatches()
+    }
+
+    Component.onCompleted: refreshKnownWatches()
+
     Connections {
         target: AppController
         onErrorOccurred: page.lastError = message
+        onPairedWatchChanged: page.refreshKnownWatches()
     }
 
     SilicaFlickable {
@@ -78,6 +89,38 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.primaryColor
                 font.pixelSize: Theme.fontSizeSmall
+            }
+
+            // Every watch that has been paired here, as a menu. Switching
+            // used to mean forgetting one watch and finding the other in a
+            // scan, which is three screens for something done daily when
+            // two watches are in use.
+            ListItem {
+                id: watchSwitcher
+                visible: page.knownWatches.length > 1
+                contentHeight: Theme.itemSizeSmall
+                onClicked: openMenu()
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Switch watch")
+                    color: watchSwitcher.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+
+                menu: ContextMenu {
+                    Repeater {
+                        model: page.knownWatches
+                        MenuItem {
+                            // The active one is listed too, marked, so the
+                            // menu says which watch is in use rather than
+                            // only offering the ones that are not.
+                            text: modelData.active
+                                  ? qsTr("%1 (in use)").arg(modelData.name) : modelData.name
+                            onClicked: AppController.switchToWatch(modelData.address)
+                        }
+                    }
+                }
             }
 
             Button {

@@ -118,6 +118,14 @@ down as a measurement rather than promoted to a property of the format.
 Sailfish SDK, CMake. `zlib` is the only dependency beyond Qt5 and
 sailfishapp.
 
+The notification daemon is a second package out of the same tree, and its
+SPEC file is in `daemon/` rather than `rpm/` because sfdk refuses to
+build when it finds two of them there:
+
+```
+sfdk -c specfile=daemon/suuntosync-notifyd.spec build
+```
+
 GitHub Actions builds unsigned RPMs for 5.1.0.11 on every push, aarch64
 and armv7hl, and attaches them to a release on a `v*` tag. They are CI
 builds, not Store packages: `pkcon install-local` will say the package is

@@ -641,7 +641,16 @@ anything the watch shows.
 
 The decision was made: **a separate package, and the application stays
 Store-eligible.** `suuntosync-notifyd`, built from the same tree with
-`-DBUILD_APP=OFF -DBUILD_DAEMON=ON`, installed as a systemd *user* service,
+
+```
+sfdk -c specfile=daemon/suuntosync-notifyd.spec build
+```
+
+which sets `-DBUILD_APP=OFF -DBUILD_DAEMON=ON`. Its SPEC file lives in
+`daemon/` rather than `rpm/` for a dull but load-bearing reason: sfdk
+refuses to build when it finds two SPEC files in `rpm/`, and Qt Creator
+passes it no `specfile` option, so a second one there breaks the ordinary
+application build outright. It installs as a systemd *user* service,
 `Requires: harbour-suuntosync` because the app owns the pairing and the
 database it reads.
 

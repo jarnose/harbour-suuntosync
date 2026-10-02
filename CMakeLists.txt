@@ -206,6 +206,8 @@ add_custom_target(distfiles
         qml/pages/HealthPage.qml
         qml/pages/SettingsPage.qml
         rpm/harbour-suuntosync.spec
+        daemon/suuntosync-notifyd.spec
+        daemon/suuntosync-notifyd.service
         ${TS_FILES})
 
 endif() # BUILD_APP

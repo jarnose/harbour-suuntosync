@@ -8,8 +8,17 @@
 # eligibility for everything it does, this binary lives outside the sandbox
 # in its own package, and the application stays inside.
 #
-# Built from the same source tree with the application switched off:
-#   sfdk build --specfile rpm/suuntosync-notifyd.spec
+# Built from the same source tree with the application switched off, from
+# the repository root:
+#
+#   sfdk -c specfile=daemon/suuntosync-notifyd.spec build
+#
+# **Deliberately not in rpm/.** sfdk looks for a SPEC file in the package's
+# rpm directory and refuses to build when it finds more than one - and Qt
+# Creator passes it no specfile option, so a second SPEC file in there
+# breaks the ordinary application build with "Multiple RPM SPEC files
+# found". Keeping this one beside the service file it installs costs one
+# option on the command line and keeps the IDE working.
 #
 # No harbour- prefix and no .desktop file: this is not a Store application
 # and it has no user interface. It is a systemd user service.

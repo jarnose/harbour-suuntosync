@@ -45,6 +45,7 @@ private slots:
     void onPosted(const PhoneNotification &notification);
     void onClosed(quint32 id);
     void onDeviceUpdated(const BluezAdapter::Device &device);
+    void onConnectFinished(const QString &objectPath, bool ok, const QString &error);
     void pump();
 
 private:
@@ -59,6 +60,10 @@ private:
     };
 
     void reloadWatch();
+    // Gives up the Whiteboard session and the lock, and deliberately leaves
+    // the Bluetooth connection up: BlueZ refcounts it, the application can
+    // open its own, and keeping it means the next notification pays for a
+    // handshake rather than for a whole reconnect.
     void letGo();
 
     PairedWatchStore m_store;
@@ -73,6 +78,19 @@ private:
     PairedWatch m_watch;
     bool m_connected = false;
     bool m_busy = false;
+    // attachToDevice() takes seconds - GATT resolution, StartNotify, the
+    // session handshake - and BlueZ reports device properties repeatedly
+    // while it happens. Without this, every property change started the
+    // attach over, each one detaching the last one's half-finished state,
+    // and the log filled with ready/gone pairs and handshake timeouts from
+    // attempts nobody was waiting for any more.
+    bool m_attaching = false;
+    // The daemon has to open the Bluetooth connection itself. Waiting for
+    // one, the way the first version did, means it only ever works just
+    // after the application has been using the watch - which is exactly
+    // when it is least needed. The watch drops the link within seconds of
+    // the last client letting go.
+    bool m_connecting = false;
 
     // Bounded: long enough that a burst does not evict itself, short enough
     // that a watch coming back into range does not replay a whole morning.

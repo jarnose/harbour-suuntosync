@@ -71,6 +71,7 @@ MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
 void MdsWhiteboardClient::attachToDevice(const QString &deviceObjectPath)
 {
     detach();
+    ++m_sessionGeneration;
     m_deviceObjectPath = deviceObjectPath;
 
     QDBusConnection::systemBus().connect(
@@ -105,6 +106,7 @@ void MdsWhiteboardClient::detach()
     m_writeCharPath.clear();
     m_notifyCharPath.clear();
     m_handshakeAcked = false;
+    ++m_sessionGeneration;
 
     // Nothing queued or in flight will ever resolve now - fail everything
     // rather than leaking callbacks that silently never fire.
@@ -219,7 +221,10 @@ void MdsWhiteboardClient::sendHandshake()
         return;
     }
 
-    QTimer::singleShot(kRequestTimeoutMs, this, [this]() {
+    const quint32 generation = m_sessionGeneration;
+    QTimer::singleShot(kRequestTimeoutMs, this, [this, generation]() {
+        if (generation != m_sessionGeneration)
+            return;  // detached since; this timer is about a session that is gone
         if (!m_handshakeAcked) {
             emit errorOccurred(tr("Watch didn't acknowledge the session handshake "
                                    "(TYPE=0x13) - GET requests would time out too"));

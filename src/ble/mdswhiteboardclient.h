@@ -334,6 +334,13 @@ private:
     Mds::Decoder m_decoder;
     uint16_t m_nextRequestId = 1;
     bool m_handshakeAcked = false;
+    // Bumped on every attach and detach. The handshake's own timeout is a
+    // one-shot timer, and detaching before it fires used to make it report
+    // a failure for a session that had succeeded and simply been handed
+    // back - which read like an error in the log and was not one. The timer
+    // captures the generation it belongs to and does nothing if it has
+    // moved on.
+    quint32 m_sessionGeneration = 0;
 
     struct QueuedRequest
     {

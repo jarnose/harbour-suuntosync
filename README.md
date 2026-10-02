@@ -55,8 +55,11 @@ Confirmed on real hardware, not just in tests:
   sandbox, built from this same tree, and this app stays sandboxed and
   Store-eligible. Only one process may hold a Whiteboard session, so the
   two arbitrate with a file lock; a D-Bus name would have been tidier and
-  a sandboxed app is not allowed to own one. Written, not yet run — see
-  `docs/notifications.md`.
+  a sandboxed app is not allowed to own one. **Confirmed end to end on
+  hardware**: a text message on the phone reaches the watch with the app
+  closed, and disappears from the watch when it is dismissed on the phone.
+  What is left is starting it from its systemd unit rather than by hand —
+  see `docs/notifications.md`.
 
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is

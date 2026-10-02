@@ -47,6 +47,8 @@ bool NotifierDaemon::start(QString *error)
     reloadWatch();
 
     connect(m_adapter, &BluezAdapter::deviceUpdated, this, &NotifierDaemon::onDeviceUpdated);
+    connect(m_adapter, &BluezAdapter::connectFinished, this,
+             &NotifierDaemon::onConnectFinished);
     connect(m_adapter, &BluezAdapter::errorOccurred, this, [](const QString &message) {
         qWarning() << "bluez:" << message;
     });
@@ -54,6 +56,7 @@ bool NotifierDaemon::start(QString *error)
         qWarning() << "whiteboard:" << message;
     });
     connect(m_client, &MdsWhiteboardClient::readyChanged, this, [this](bool ready) {
+        m_attaching = false;
         qInfo() << "whiteboard session" << (ready ? "ready" : "gone");
         pump();
     });
@@ -87,6 +90,35 @@ void NotifierDaemon::onDeviceUpdated(const BluezAdapter::Device &device)
     if (device.connected != m_connected) {
         m_connected = device.connected;
         qInfo() << "watch" << (m_connected ? "connected" : "disconnected");
+        if (m_connected)
+            m_connecting = false;
+        else
+            m_attaching = false;
+    }
+    pump();
+}
+
+void NotifierDaemon::onConnectFinished(const QString &objectPath, bool ok, const QString &error)
+{
+    if (objectPath != m_watch.objectPath)
+        return;
+    m_connecting = false;
+    if (!ok) {
+        qWarning() << "could not connect to the watch:" << error;
+        // Leave the queue alone and let the retry timer come back to it: a
+        // watch out of range now may be in range in five seconds.
+        m_retry->start();
+        return;
+    }
+
+    // Take this as connected rather than waiting for BlueZ to say so.
+    // connectFinished arrives *before* the Connected property update, and
+    // pumping on the strength of the property alone spun: every pump saw
+    // !m_connected and started another connect, dozens per millisecond.
+    // The application has always done it this way; the daemon now does too.
+    if (!m_connected) {
+        m_connected = true;
+        qInfo() << "watch connected";
     }
     pump();
 }
@@ -117,8 +149,9 @@ void NotifierDaemon::onPosted(const PhoneNotification &notification)
 
     // Logged at info even in a real run: this is the one line that says what
     // the daemon decided, and the categories are still being learned.
-    qInfo().noquote() << QStringLiteral("notification %1 category=%2 -> ancs %3: %4 / %5")
+    qInfo().noquote() << QStringLiteral("notification %1 from %2 category=%3 -> ancs %4: %5 / %6")
                                  .arg(notification.id)
+                                 .arg(QString::fromStdString(candidate.appId))
                                  .arg(notification.category.isEmpty()
                                               ? QStringLiteral("(none)")
                                               : notification.category)
@@ -150,6 +183,7 @@ void NotifierDaemon::onClosed(quint32 id)
 
 void NotifierDaemon::letGo()
 {
+    m_attaching = false;
     // Unconditionally: detach() is documented to drop whatever state there
     // is, and "not ready yet" can also mean "half way through attaching".
     m_client->detach();
@@ -169,8 +203,20 @@ void NotifierDaemon::pump()
         return;
     }
 
-    if (!m_connected || m_watch.objectPath.isEmpty()) {
-        // Out of range, or no watch chosen yet. The queue keeps what it can.
+    if (m_watch.objectPath.isEmpty()) {
+        // Nothing has been paired in the application yet.
+        return;
+    }
+
+    if (!m_connected) {
+        // Open the connection ourselves. The watch drops the link within
+        // seconds of the last client letting go, so by the time a
+        // notification arrives there is usually nothing to attach to.
+        if (!m_connecting) {
+            m_connecting = true;
+            qInfo() << "connecting to" << m_watch.name;
+            m_adapter->connectToDevice(m_watch.objectPath);
+        }
         return;
     }
 
@@ -184,24 +230,37 @@ void NotifierDaemon::pump()
 
     if (!m_client->isReady()) {
         // attachToDevice() answers through readyChanged(), which calls back
-        // in here.
-        m_client->attachToDevice(m_watch.objectPath);
+        // in here. Once is enough: starting it again would throw away the
+        // attempt already in progress.
+        if (!m_attaching) {
+            m_attaching = true;
+            m_client->attachToDevice(m_watch.objectPath);
+        }
         return;
     }
 
     const Pending pending = m_queue.takeFirst();
     m_busy = true;
     if (pending.isRemoval) {
-        m_client->removeNotification(pending.removeId, [this](bool ok, const QString &failure) {
+        const quint32 id = pending.removeId;
+        m_client->removeNotification(id, [this, id](bool ok, const QString &failure) {
             m_busy = false;
-            if (!ok)
+            if (ok)
+                qInfo() << "took notification" << id << "off the watch";
+            else
                 qDebug() << "removal failed:" << failure;
             pump();
         });
     } else {
-        m_client->sendNotification(pending.add, [this](bool ok, const QString &failure) {
+        const quint32 id = pending.add.notificationId;
+        m_client->sendNotification(pending.add, [this, id](bool ok, const QString &failure) {
             m_busy = false;
-            if (!ok)
+            // Logged on success too. This is the line that says the whole
+            // thing worked, and it used to be the only event in the daemon
+            // that produced no output at all.
+            if (ok)
+                qInfo() << "the watch took notification" << id;
+            else
                 qWarning() << "sending failed:" << failure;
             pump();
         });

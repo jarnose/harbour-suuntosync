@@ -789,9 +789,67 @@ One practical note for testing: Sailfish's Qt sends `qInfo`/`qDebug` to the
 journal, so a manual run needs `QT_LOGGING_TO_CONSOLE=1` or the log looks
 empty.
 
+### The sending half works too (same day)
+
+End to end, with the application closed and nothing touched by hand:
+
+```
+15:17:58 watching the session bus via BecomeMonitor
+15:17:58 paired watch: "Suunto Race 2352D0000247" "0C:8C:DC:C2:13:59"
+15:17:58 watch connected
+15:18:46 notification 513 from jolla-messages category=x-nemo.messaging.sms -> ancs 6: Liisa Virtanen / Nahdaanko kuudelta?
+15:18:47 whiteboard session ready
+15:18:48 the watch took notification 2073402632
+15:18:48 whiteboard session gone
+15:19:08 whiteboard session ready
+15:19:08 took notification 2073402632 off the watch
+15:19:08 whiteboard session gone
+```
+
+The watch showed it. The last three lines were not planned for this test and
+are the better result: when the phone's own notification expired, lipstick
+sent `NotificationClosed`, and the daemon took the notification back off the
+watch - so the removal path is confirmed as well.
+
+Two bits of the design hold up in the numbers. Attaching costs about a
+second (46.7 -> 47.3 to ready, 48.1 for the send), and re-attaching after
+having let go costs about a tenth of that, because the Bluetooth connection
+is deliberately left up. Letting go after each burst is what makes the
+file-lock arbitration cheap.
+
+### Three more bugs that only running could find
+
+**The daemon never connected to the watch.** It waited for BlueZ to report
+a connection and only ever acted on one, which meant it worked exactly once
+- in the first test, where the application had just been using the watch so
+the link was still up. A watch drops the link within seconds of the last
+client letting go, so by the time a notification arrives there is normally
+nothing to attach to. It opens the connection itself now.
+
+**`connectFinished` arrives before the `Connected` property.** Pumping the
+queue on the strength of the property alone spun: every pump saw "not
+connected" and started another connect. The log filled with 15,273 lines of
+`connecting to "Suunto Race"`, dozens per millisecond. Taking
+`connectFinished(ok)` as connected - which is what the application has
+always done - is the fix.
+
+**A stale handshake timeout reported failure for a session that had
+succeeded.** The handshake's 10-second timer captured only `this`, and
+`detach()` resets the acked flag, so a session handed back cleanly produced
+`Watch didn't acknowledge the session handshake` ten seconds later. The
+timer now carries the session generation it belongs to and says nothing if
+that has moved on. This one was in `MdsWhiteboardClient`, so the
+application had it too.
+
+### One thing the real world said
+
+Two genuine notifications arrived during a test - GitHub emails - and they
+carry **no `category` hint at all**, so they land as Other. The default is
+doing its job, but filing email as Email will need the sending package
+rather than the category. The log now names the package for exactly that
+reason.
+
 ### Still not run
 
-The sending half: whether a watch takes a notification the daemon
-composed, and whether an attach-per-notification behaves on a link that was
-just handed back. And the service unit - everything above was the binary run
-by hand, not started by systemd.
+The systemd unit: everything above was the binary started by hand. And the
+9 Baro.

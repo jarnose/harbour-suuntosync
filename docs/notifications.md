@@ -870,7 +870,46 @@ told so by the watch.
 A single instance is what the systemd unit gives, so this is not a case to
 design for; it is a free measurement.
 
+### The systemd unit, confirmed without being able to read the log
+
+`pkcon install-local` of the RPM enables and starts the service from its
+`%post`, and it comes up `enabled` and `active`. Proving it *works* needed a
+detour, because the journal is not readable: `defaultuser` is not in
+`systemd-journal`, so the service's own output is root-only
+(`devel-su journalctl _COMM=suuntosync-noti`).
+
+The flock turned out to be the evidence. With the service as the only daemon
+running, a notification posted on the phone produced this in `/proc/locks`:
+
+```
+t+0s  FLOCK ADVISORY WRITE 36929 fe:02:6686107 0 EOF
+t+1s  FLOCK ADVISORY WRITE 36929 fe:02:6686107 0 EOF
+```
+
+pid 36929 being `/usr/bin/suuntosync-notifyd`, the service. It took the lock
+for about two seconds and let go - attach, send, release - which is the whole
+cycle, observed from outside the process.
+
+Two notes for whoever runs this next:
+
+- **`systemctl-user` is root-only**; from a normal shell it is
+  `systemctl --user`. The `%post` scriptlet uses the former because it runs
+  as root during installation.
+- **`Restart=on-failure` does not restart after a `kill`.** systemd excludes
+  SIGTERM, SIGINT, SIGHUP and SIGPIPE from "failure", so killing the daemon
+  by hand leaves it stopped until it is started again - and a crash still
+  restarts it. That is the behaviour worth having, and it is easy to mistake
+  for the unit being broken.
+
+### An accident worth keeping
+
+Two instances ran at once for a while, the service and a hand-started one.
+They both sent, and the watch did not end up with two notifications -
+because `notificationId` is derived from the phone's id, the category and
+the package, so both instances computed the same number and the second send
+was a re-add of the same notification. Predictable in hindsight, and not
+something that was designed.
+
 ### Still not run
 
-The systemd unit: everything above was the binary started by hand. And the
-9 Baro.
+The 9 Baro.

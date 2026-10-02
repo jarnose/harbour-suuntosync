@@ -58,8 +58,8 @@ Confirmed on real hardware, not just in tests:
   a sandboxed app is not allowed to own one. **Confirmed end to end on
   hardware**: a text message on the phone reaches the watch with the app
   closed, and disappears from the watch when it is dismissed on the phone.
-  What is left is starting it from its systemd unit rather than by hand —
-  see `docs/notifications.md`.
+  It runs as a systemd user service, installed and started by the package
+  itself — see `docs/notifications.md`. Untried on a 9 Baro.
 
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is

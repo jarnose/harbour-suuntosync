@@ -71,7 +71,12 @@ watch is queued, and dropped if it waits too long.
 
 %post
 systemctl-user daemon-reload || :
-systemctl-user enable --now %{name}.service || :
+systemctl-user enable %{name}.service || :
+# restart, not "enable --now": --now does nothing to a service that is
+# already running, so an upgrade left the old binary in place and the new
+# one sitting unused on disk. restart starts it when stopped and replaces it
+# when running, which is what both an install and an upgrade want.
+systemctl-user restart %{name}.service || :
 
 %preun
 if [ "$1" = 0 ]; then

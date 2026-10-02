@@ -964,6 +964,18 @@ So the daemon keeps its own log:
 rotated once at 256 kB, and still written to stderr as well so running it by
 hand is unchanged. `--log <file>` moves it and `--no-log` turns it off.
 
+### A packaging bug worth the two minutes it cost
+
+`%post` ran `systemctl-user enable --now`, and `--now` does nothing to a
+service that is already running - so installing an upgrade left the old
+binary running and the new one unused on disk, with `ActiveEnterTimestamp`
+from before the install as the only clue. It is `enable` followed by
+`restart` now: restart starts a stopped service and replaces a running one,
+which is what an install and an upgrade both want.
+
+Worth knowing for testing by hand:
+`systemctl --user restart suuntosync-notifyd.service` needs no root.
+
 ### Still not run
 
 The 9 Baro.

@@ -119,12 +119,22 @@ void NotifierDaemon::onDeviceUpdated(const BluezAdapter::Device &device)
     pump();
 }
 
-void NotifierDaemon::onConnectFinished(const QString &objectPath, bool ok, const QString &error)
+void NotifierDaemon::onConnectFinished(const QString &objectPath, bool ok, const QString &error,
+                                       const QString &errorName)
 {
     if (objectPath != m_watch.objectPath)
         return;
     m_connecting = false;
-    if (!ok) {
+    if (!ok && errorName == QLatin1String(BluezError::kInProgress)) {
+        // Somebody else's Connect() is outstanding - the application's, or
+        // our own previous one that BlueZ has not finished unwinding. Wait
+        // for it rather than calling this a failure; three of these in a row
+        // is what a recovering connection looks like.
+        qDebug() << "a connection is already being opened; waiting";
+        m_retry->start();
+        return;
+    }
+    if (!ok && errorName != QLatin1String(BluezError::kAlreadyConnected)) {
         qWarning() << "could not connect to the watch:" << error;
         // Leave the queue alone and let the retry timer come back to it: a
         // watch out of range now may be in range in five seconds.

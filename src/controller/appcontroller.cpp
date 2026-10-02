@@ -704,13 +704,27 @@ void AppController::onDeviceUpdated(const BluezAdapter::Device &device)
     }
 }
 
-void AppController::onConnectFinished(const QString &objectPath, bool ok, const QString &error)
+void AppController::onConnectFinished(const QString &objectPath, bool ok, const QString &error,
+                                      const QString &errorName)
 {
     if (objectPath != m_pairedWatch.objectPath)
         return;
     if (!ok) {
-        emit errorOccurred(tr("Could not connect to watch: %1").arg(error));
-        return;
+        // BlueZ allows one Connect() per device at a time, so if the
+        // notification daemon is already trying, ours comes back
+        // "In Progress" - which means the connection is on its way, not that
+        // it failed. Reporting it made a perfectly good watch look broken
+        // for a minute, which is how this was found.
+        if (errorName == QLatin1String(BluezError::kInProgress)) {
+            qWarning() << "a connection to the watch is already being opened; waiting";
+            return;
+        }
+        if (errorName != QLatin1String(BluezError::kAlreadyConnected)) {
+            emit errorOccurred(tr("Could not connect to watch: %1").arg(error));
+            return;
+        }
+        // Already connected is not a failure either: carry on as if the
+        // call had succeeded, which is what the watch's state says.
     }
     m_watchConnected = true;
     emit watchConnectedChanged();

@@ -24,6 +24,16 @@
 // even post-pairing, that'll show up as connectFinished(ok=false) with a
 // BlueZ error string - a real build/test cycle will tell us, not more
 // guessing here.
+// The two BlueZ connect errors that are not failures. BlueZ allows one
+// Connect() per device at a time, so a second caller - the application while
+// the notification daemon is already trying, or the other way round - gets
+// InProgress, which means "it is coming", not "it did not work". Reporting
+// that as a failure is what made a working watch look broken.
+namespace BluezError {
+const char *const kInProgress = "org.bluez.Error.InProgress";
+const char *const kAlreadyConnected = "org.bluez.Error.AlreadyConnected";
+}
+
 class BluezAdapter : public QObject
 {
     Q_OBJECT
@@ -60,7 +70,13 @@ public:
 
 signals:
     void deviceUpdated(const BluezAdapter::Device &device);
-    void connectFinished(const QString &objectPath, bool ok, const QString &error);
+    // `errorName` is the D-Bus error name, e.g. org.bluez.Error.InProgress -
+    // the one part of a failure that is worth branching on. The message is
+    // for a human; the name is not localised and not reworded between BlueZ
+    // versions. A slot may take only the first three arguments, which is why
+    // this was appended rather than folded into the message.
+    void connectFinished(const QString &objectPath, bool ok, const QString &error,
+                          const QString &errorName = QString());
     void errorOccurred(const QString &message);
 
 private slots:

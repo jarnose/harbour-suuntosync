@@ -45,7 +45,8 @@ private slots:
     void onPosted(const PhoneNotification &notification);
     void onClosed(quint32 id);
     void onDeviceUpdated(const BluezAdapter::Device &device);
-    void onConnectFinished(const QString &objectPath, bool ok, const QString &error);
+    void onConnectFinished(const QString &objectPath, bool ok, const QString &error,
+                            const QString &errorName);
     void pump();
 
 private:

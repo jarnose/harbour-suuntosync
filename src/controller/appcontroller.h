@@ -411,7 +411,8 @@ signals:
 
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
-    void onConnectFinished(const QString &objectPath, bool ok, const QString &error);
+    void onConnectFinished(const QString &objectPath, bool ok, const QString &error,
+                            const QString &errorName);
     // The sequential per-entry loop behind syncWatchWorkouts() - fetches
     // logbookIds[index], then recurses to index+1 (or finishes at the end),
     // tallying succeeded and collecting one human-readable line per failure

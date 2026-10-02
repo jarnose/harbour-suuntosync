@@ -136,7 +136,8 @@ void BluezAdapter::connectToDevice(const QString &objectPath)
     connect(watcher, &QDBusPendingCallWatcher::finished,
             this, [this, objectPath](QDBusPendingCallWatcher *w) {
                 const QDBusPendingReply<> reply = *w;
-                emit connectFinished(objectPath, !reply.isError(), reply.error().message());
+                emit connectFinished(objectPath, !reply.isError(), reply.error().message(),
+                                      reply.error().name());
                 w->deleteLater();
             });
 }

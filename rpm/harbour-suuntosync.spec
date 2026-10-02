@@ -48,7 +48,14 @@ lives in a separate, optional daemon package.
 
 %build
 
-%cmake
+# Both options, explicitly. CMake's option() honours a cached value, and
+# sfdk configures in the source directory - so building the daemon with
+# BUILD_APP off leaves the cache saying so, and a later application build
+# would quietly produce nothing and then fail at install time with
+# "No such file or directory" for its own .desktop file.
+# (No per-cent signs in this comment: rpm parses macros inside comments too,
+# and a section name in one makes it see a second section.)
+%cmake -DBUILD_APP=ON -DBUILD_DAEMON=OFF
 
 %make_build
 

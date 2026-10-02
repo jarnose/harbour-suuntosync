@@ -130,6 +130,21 @@ Page {
             }
 
             Button {
+                // The switcher's list only ever grew without this. Behind a
+                // remorse timer because it is the one watch-side action that
+                // throws something away - though not the field table, which
+                // is kept per address and costs a minute to fetch again.
+                x: Theme.horizontalPageMargin
+                visible: AppController.watchPaired
+                text: qsTr("Forget this watch")
+                onClicked: forgetRemorse.execute(qsTr("Forgetting %1")
+                                                  .arg(AppController.pairedWatchName),
+                                                 function() { AppController.forgetWatch() })
+            }
+
+            RemorsePopup { id: forgetRemorse }
+
+            Button {
                 // The one watch-side feature that needs no account: the
                 // assist-data endpoints take no credential at all.
                 x: Theme.horizontalPageMargin

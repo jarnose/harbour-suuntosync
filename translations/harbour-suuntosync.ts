@@ -257,7 +257,7 @@ exists - %2 bytes
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1477"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2213"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2202"/>
         <source>Failed to save account: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -287,7 +287,7 @@ exists - %2 bytes
         <location filename="../src/controller/appcontroller.cpp" line="1675"/>
         <location filename="../src/controller/appcontroller.cpp" line="2031"/>
         <location filename="../src/controller/appcontroller.cpp" line="2041"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2638"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2627"/>
         <source>%1: %2</source>
         <translation type="unfinished"></translation>
     </message>
@@ -328,7 +328,7 @@ exists - %2 bytes
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1711"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2293"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2282"/>
         <source>Could not read the stored session: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -406,67 +406,67 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2154"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2143"/>
         <source>Failed to load workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2173"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2162"/>
         <source>Failed to load login session: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2184"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2173"/>
         <source>Failed to sync workouts: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2201"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2190"/>
         <source>Failed to save workout: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2272"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2261"/>
         <source>Sample data is only available for cloud workouts.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2299"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2288"/>
         <source>Could not download sample data: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2317"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2306"/>
         <source>No charts found in %1 kB of sample data. Raw response saved to %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2320"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2309"/>
         <source>No charts found in the sample data, and it could not be saved.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2459"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2448"/>
         <source>Failed to list watch entries: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2590"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2579"/>
         <source>Re-read %1 stored workouts with this watch&apos;s own field table.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2616"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2605"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2650"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2639"/>
         <source>%1: decode failed (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2695"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2684"/>
         <source>%1: failed to save (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1252,67 +1252,77 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="139"/>
+        <source>Forget this watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../qml/pages/SettingsPage.qml" line="140"/>
+        <source>Forgetting %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="155"/>
         <source>Update GPS data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="139"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="154"/>
         <source>Updating GPS data…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="151"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="166"/>
         <source>Downloads the satellite predictions the watch uses to get a fix quickly, and writes them to it. Needs no Suunto account.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="156"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="171"/>
         <source>Sync when the watch connects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="157"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="172"/>
         <source>Off by default: a sync is minutes of radio time, and the watch coming into range isn&apos;t always a reason to start one.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="165"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="180"/>
         <source>Cover</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="169"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="184"/>
         <source>Show</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="178"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="193"/>
         <source>Latest workout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="179"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="194"/>
         <source>Lifetime totals</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="180"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="195"/>
         <source>Last night&apos;s sleep</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="181"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="196"/>
         <source>Nothing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="190"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="205"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/SettingsPage.qml" line="195"/>
+        <location filename="../qml/pages/SettingsPage.qml" line="210"/>
         <source>Syncs workouts and health data with a Suunto watch over Bluetooth, and with the Suunto cloud. Not affiliated with or endorsed by Suunto.</source>
         <translation type="unfinished"></translation>
     </message>

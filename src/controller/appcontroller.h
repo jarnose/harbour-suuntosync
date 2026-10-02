@@ -360,9 +360,6 @@ public:
     // they are the watch's and this project has no better names for them.
     Q_INVOKABLE QVariantList healthEntries(const QString &kind, int limit) const;
 
-    // One-line summary per kind for the page header: the newest entry's
-    // timestamp and how many are stored. Empty map for a kind with none.
-    Q_INVOKABLE QVariantMap healthOverview(const QString &kind) const;
 
     // Uploads a watch-synced workout to the Suunto cloud (item 2 of the
     // 2026-09-22 list). The payload was built at sync time and stored (see

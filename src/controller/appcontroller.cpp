@@ -2135,17 +2135,6 @@ QVariantList AppController::healthEntries(const QString &kind, int limit) const
     return out;
 }
 
-QVariantMap AppController::healthOverview(const QString &kind) const
-{
-    QVariantMap out;
-    const qint64 newest = m_healthStore->newestTimestamp(kind);
-    if (newest == 0)
-        return out;
-    out.insert(QStringLiteral("newest"), newest);
-    out.insert(QStringLiteral("count"), m_healthStore->load(kind, 0, nullptr).size());
-    return out;
-}
-
 void AppController::loadCachedWorkouts()
 {
     QString error;

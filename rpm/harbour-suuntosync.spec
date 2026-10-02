@@ -4,7 +4,7 @@ Summary:    Suunto Sync
 Version:    0.1
 Release:    1
 License:    MIT
-URL:        http://example.org/
+URL:        https://github.com/jarnose/harbour-suuntosync
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
@@ -31,11 +31,17 @@ BuildRequires:  desktop-file-utils
 BuildRequires:  cmake
 
 %description
-Syncs workout history and stats from a Suunto smartwatch (Suunto Race,
-Suunto 9 Baro) over Bluetooth LE and via the Suunto cloud account, and
-forwards phone notifications to the watch. Cloud account tokens are stored
-in the Sailfish Secrets vault (block-encrypted, device-lock protected),
-never in plain text on disk.
+Syncs workouts, routes, sleep, recovery and daily activity with a Suunto
+watch (Suunto Race, Suunto 9 Baro) over Bluetooth LE and with the Suunto
+cloud, in either direction, and sends the watch the GPS assist data that
+makes it find satellites in seconds. Cloud account tokens are stored in the
+Sailfish Secrets vault (block-encrypted, device-lock protected), never in
+plain text on disk.
+
+Forwarding the phone's own notifications to the watch is deliberately NOT
+part of this package: observing other applications' notifications requires
+leaving the Sailjail sandbox, which this package does not do. That feature
+lives in a separate, optional daemon package.
 
 %prep
 %setup -q -n %{name}-%{version}

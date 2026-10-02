@@ -844,13 +844,39 @@ timer now carries the session generation it belongs to and says nothing if
 that has moved on. This one was in `MdsWhiteboardClient`, so the
 application had it too.
 
-### One thing the real world said
+### Email, and what naming the package was for
 
 Two genuine notifications arrived during a test - GitHub emails - and they
-carry **no `category` hint at all**, so they land as Other. The default is
-doing its job, but filing email as Email will need the sending package
-rather than the category. The log now names the package for exactly that
-reason.
+carry **no `category` hint at all**, so they landed as Other. The log was
+changed to name the sending package for exactly that reason, and a
+deliberate test message answered it:
+
+```
+notification 531 from messageserver5 category=(none) -> ancs 0: Jarno Selanpaa / testiviestin otsikko
+notification 532 from messageserver5 category=(none) -> ancs 0: Jarno Selanpaa / testiviestin otsikko
+```
+
+`messageserver5` is Sailfish's own mail server, and it sets no category at
+all. So `categoryFor()` has a second table, consulted only when the category
+says nothing: one entry, `messageserver5` -> Email, because one is what has
+been measured. It grows that way or not at all. A category still wins when
+an app sets one, because an app that sets one means it.
+
+**And it posts twice.** Ids 531 and 532, same sender, same subject, within
+the same second - and because the watch id is derived from the phone's id,
+those are two different notifications as far as the watch is concerned. One
+message arriving, two appearing on a wrist. The daemon now drops a
+notification whose package, title and message match the last one within
+three seconds: long enough to catch a double post, short enough that two
+genuinely identical messages a few seconds apart both get through.
+
+Confirmed on the phone, with the same text the mail server sent:
+
+```
+21:01:39 notification 533 from messageserver5 category=(none) -> ancs 6: Jarno Selanpaa / testiviestin otsikko
+21:01:39 ignoring notification 534: the same one again
+21:01:41 ignoring notification 535: the same one again
+```
 
 ### 403 confirmed live, by accident
 

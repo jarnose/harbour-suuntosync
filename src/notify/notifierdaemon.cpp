@@ -1,5 +1,8 @@
 #include "notifierdaemon.h"
 
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -12,6 +15,13 @@ const int kMaxQueued = 8;
 // for as long as it is attached to the watch, so this is a slow poll on
 // purpose: there is nothing to be gained by asking often.
 const int kRetryMs = 5000;
+// How long a notification is worth delivering. Two minutes is long enough to
+// cover a watch that was simply asleep and short enough that nobody is
+// surprised by what turns up on their wrist.
+const qint64 kMaxAgeMs = 120000;
+// How long to give an attach before deciding it is not going to happen.
+// A good one takes about a second.
+const int kAttachTimeoutMs = 20000;
 } // namespace
 
 NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject *parent)
@@ -22,10 +32,19 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     , m_client(new MdsWhiteboardClient(this))
     , m_monitor(new NotificationMonitor(this))
     , m_retry(new QTimer(this))
+    , m_attachTimeout(new QTimer(this))
     , m_link(QFileInfo(databasePath).absolutePath(), WatchLink::Background)
 {
     m_retry->setInterval(kRetryMs);
     connect(m_retry, &QTimer::timeout, this, &NotifierDaemon::pump);
+
+    m_attachTimeout->setSingleShot(true);
+    m_attachTimeout->setInterval(kAttachTimeoutMs);
+    connect(m_attachTimeout, &QTimer::timeout, this, [this]() {
+        qWarning() << "the watch never finished opening a session; letting go";
+        letGo();
+        m_retry->start();
+    });
 }
 
 bool NotifierDaemon::start(QString *error)
@@ -57,6 +76,8 @@ bool NotifierDaemon::start(QString *error)
     });
     connect(m_client, &MdsWhiteboardClient::readyChanged, this, [this](bool ready) {
         m_attaching = false;
+        if (ready)
+            m_attachTimeout->stop();
         qInfo() << "whiteboard session" << (ready ? "ready" : "gone");
         pump();
     });
@@ -144,6 +165,7 @@ void NotifierDaemon::onPosted(const PhoneNotification &notification)
     }
 
     Pending pending;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
     pending.add = NotificationRouter::toWatchNotification(
             candidate, static_cast<uint32_t>(QDateTime::currentMSecsSinceEpoch() / 1000));
 
@@ -173,6 +195,7 @@ void NotifierDaemon::onClosed(quint32 id)
     if (m_dryRun || !m_sent.contains(id))
         return;
     Pending pending;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
     pending.isRemoval = true;
     pending.removeId = m_sent.take(id);
     if (m_queue.size() >= kMaxQueued)
@@ -184,6 +207,7 @@ void NotifierDaemon::onClosed(quint32 id)
 void NotifierDaemon::letGo()
 {
     m_attaching = false;
+    m_attachTimeout->stop();
     // Unconditionally: detach() is documented to drop whatever state there
     // is, and "not ready yet" can also mean "half way through attaching".
     m_client->detach();
@@ -191,10 +215,34 @@ void NotifierDaemon::letGo()
     m_retry->stop();
 }
 
+bool NotifierDaemon::watchIsConnected()
+{
+    if (m_watch.objectPath.isEmpty())
+        return false;
+    QDBusInterface properties(QStringLiteral("org.bluez"), m_watch.objectPath,
+                               QStringLiteral("org.freedesktop.DBus.Properties"),
+                               QDBusConnection::systemBus());
+    const QDBusReply<QVariant> reply = properties.call(
+            QStringLiteral("Get"), QStringLiteral("org.bluez.Device1"),
+            QStringLiteral("Connected"));
+    return reply.isValid() && reply.value().toBool();
+}
+
 void NotifierDaemon::pump()
 {
     if (m_dryRun || m_busy)
         return;
+
+    // Forget anything too old to be worth showing. Done here rather than on
+    // a timer so that the queue emptying also stops the retries.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (int i = m_queue.size() - 1; i >= 0; --i) {
+        if (now - m_queue.at(i).queuedAtMs <= kMaxAgeMs)
+            continue;
+        if (!m_queue.at(i).isRemoval)
+            qInfo() << "giving up on a notification the watch never took";
+        m_queue.removeAt(i);
+    }
 
     if (m_queue.isEmpty()) {
         // Nothing to do, so hold nothing: the application should be able to
@@ -208,6 +256,9 @@ void NotifierDaemon::pump()
         return;
     }
 
+    // Ground truth, every time. See watchIsConnected().
+    m_connected = watchIsConnected();
+
     if (!m_connected) {
         // Open the connection ourselves. The watch drops the link within
         // seconds of the last client letting go, so by the time a
@@ -220,6 +271,10 @@ void NotifierDaemon::pump()
         return;
     }
 
+    // The lock comes after the connection, not before it. Claiming it first
+    // meant holding it for as long as a connect took - and for ever, if the
+    // watch was out of range - which is the one thing the lock exists to
+    // avoid doing to the application.
     QString error;
     if (!m_link.tryClaim(&error)) {
         qInfo().noquote() << QStringLiteral("waiting for the watch: %1").arg(error);
@@ -234,6 +289,7 @@ void NotifierDaemon::pump()
         // attempt already in progress.
         if (!m_attaching) {
             m_attaching = true;
+            m_attachTimeout->start();
             m_client->attachToDevice(m_watch.objectPath);
         }
         return;

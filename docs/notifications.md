@@ -910,6 +910,56 @@ the package, so both instances computed the same number and the second send
 was a re-add of the same notification. Predictable in hindsight, and not
 something that was designed.
 
+### Four hours later, two bugs the clock found
+
+The service was still up after four hours, same pid, no restarts, and it
+reacted to a notification immediately - so the monitor connection survives.
+What it then did was wrong in two ways, and both needed the watch to have
+gone away, which is the state no earlier test had been in.
+
+**It believed a four-hour-old "connected".** `BluezAdapter` does not
+subscribe to a device's `PropertiesChanged` - it learns state from
+`refresh()` and `InterfacesAdded` only - so a disconnect is invisible to it.
+The application gets away with that because a person drives it and the
+pairing page refreshes; a daemon does not. Believing it, the daemon claimed
+the watch lock and sat in an attach that could never finish, **holding the
+lock indefinitely** - the one thing the lock exists to avoid doing to the
+application. It asks BlueZ for the property now, every time it matters.
+
+**An attach had no deadline.** `MdsWhiteboardClient` waits for
+`ServicesResolved` with no timeout of its own, and its handshake timeout
+only starts once the handshake has been sent - so an attach that never got
+that far hung for ever. The daemon gives it twenty seconds and lets go.
+
+And one thing that was missing rather than wrong: a queued notification had
+no expiry, so a watch out of range meant a connect attempt every five
+seconds for as long as the daemon lived. Two minutes is the limit now, and
+the queue emptying is what stops the retries.
+
+With all three, a notification arriving while the watch is away reads like
+this:
+
+```
+19:42:14 notification 528 from jolla-messages category=x-nemo.messaging.sms -> ancs 6: Kello poissa / ...
+19:42:14 connecting to "Suunto Race 2352D0000247"
+19:44:24 could not connect to the watch: Did not receive a reply ...
+19:44:30 giving up on a notification the watch never took
+```
+
+One connect attempt, no lock held at any point in those two minutes, and the
+queue empty afterwards. BlueZ's `Connect()` took 130 seconds to fail, which
+is worth knowing and is not something to fix here.
+
+### The journal is not where to look
+
+`Storage=volatile` and `SplitMode=none` on this device, and the phone
+produces enough log noise that the window is **seconds** wide: "Logs begin
+at 19:38:02" with the clock at 19:38:11. Adding `defaultuser` to
+`systemd-journal` (`gpasswd -a`, since there is no `usermod` here) makes the
+journal readable, and there is nothing in it to read. `/proc/locks` turned
+out to be the more useful instrument, and a daemon that is meant to be
+diagnosable should log to a file of its own.
+
 ### Still not run
 
 The 9 Baro.

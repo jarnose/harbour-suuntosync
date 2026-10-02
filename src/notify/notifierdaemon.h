@@ -57,9 +57,23 @@ private:
         bool isRemoval = false;
         Ancs::Notification add;
         quint32 removeId = 0;
+        // When it was queued. A notification nobody could deliver because
+        // the watch was out of range is noise by the time it comes back,
+        // and without a deadline it would keep the retry timer - and a
+        // connect attempt every five seconds - going for as long as the
+        // daemon lives.
+        qint64 queuedAtMs = 0;
     };
 
     void reloadWatch();
+
+    // Asks BlueZ, rather than trusting what it last said. BluezAdapter does
+    // not subscribe to a device's PropertiesChanged - it learns state from
+    // refresh() and InterfacesAdded only - so a disconnect is invisible to
+    // it. The application gets away with that because a person drives it; a
+    // daemon that believed a four-hour-old "connected" claimed the watch
+    // lock and sat in an attach that could never finish.
+    bool watchIsConnected();
     // Gives up the Whiteboard session and the lock, and deliberately leaves
     // the Bluetooth connection up: BlueZ refcounts it, the application can
     // open its own, and keeping it means the next notification pays for a
@@ -73,6 +87,11 @@ private:
     MdsWhiteboardClient *m_client;
     NotificationMonitor *m_monitor;
     QTimer *m_retry;
+    // An attach that never completes used to hold the lock for ever:
+    // MdsWhiteboardClient waits for ServicesResolved with no deadline of its
+    // own, and the handshake timeout only fires once the handshake has been
+    // sent.
+    QTimer *m_attachTimeout;
     WatchLink m_link;
 
     PairedWatch m_watch;

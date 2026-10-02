@@ -36,6 +36,8 @@ jobs:
           run logentriesdecoder ../src/ble/logentriesdecoder.cpp
           run mdswirecodec      ../src/ble/mdswirecodec.cpp
           run notificationcodec ../src/ble/mdswirecodec.cpp ../src/ble/notificationcodec.cpp
+          run notificationrouter ../src/ble/mdswirecodec.cpp ../src/ble/notificationcodec.cpp \
+                                 ../src/notify/notificationrouter.cpp
           run polyline          ../src/cloud/polyline.cpp
           run suuntoauth        ../src/cloud/suuntoauth.cpp
           run zipwriter         ../src/cloud/zipwriter.cpp -lz

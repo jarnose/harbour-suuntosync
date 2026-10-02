@@ -1,0 +1,18 @@
+[Unit]
+Description=Suunto Sync notification forwarder
+Documentation=https://github.com/jarnose/harbour-suuntosync
+
+# Deliberately no Requires= on a bus unit. The session bus is not a systemd
+# socket unit on Sailfish, and requiring something that does not exist makes
+# the unit fail outright rather than retry. If the bus is not there yet the
+# daemon exits non-zero and the Restart below handles it, which is the same
+# outcome with none of the guessing.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/suuntosync-notifyd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=user-session.target

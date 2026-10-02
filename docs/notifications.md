@@ -635,3 +635,113 @@ was the open question the previous section ended on.
 
 Still untested: the 9 Baro, and whether a non-zero `categoryId` changes
 anything the watch shows.
+
+
+## The daemon, built (2026-10-02)
+
+The decision was made: **a separate package, and the application stays
+Store-eligible.** `suuntosync-notifyd`, built from the same tree with
+`-DBUILD_APP=OFF -DBUILD_DAEMON=ON`, installed as a systemd *user* service,
+`Requires: harbour-suuntosync` because the app owns the pairing and the
+database it reads.
+
+### Two premises, measured on the phone first
+
+Neither of these was assumed, because the whole package split rests on them.
+
+**An unsandboxed process does see other applications' notifications.** A
+`dbus-monitor` run over SSH caught a `Notify` call made from a separate
+connection in full - app name, summary, body, every hint - and then the
+reply carrying the id the server assigned. The bus is D-Bus 1.16.2, so
+`BecomeMonitor` is available and succeeded. This is the premise, and it is
+why the daemon is a separate package: inside Sailjail the filtering D-Bus
+proxy relays only the sandboxed application's own traffic.
+
+**`defaultuser` can drive BlueZ.** It is in the `bluetooth` group, and
+enumerating `org.bluez`'s object tree from a plain SSH shell returns the
+adapter, both bonded watches, and their services and characteristics.
+
+### What could not be done with a D-Bus name, and what replaced it
+
+The plan above was one well-known name with `AllowReplacement` and
+`ReplaceExisting`: the app takes it, the daemon yields. **That does not
+work**, and the reason is on the device rather than in the design.
+Sailjail's `Base.permission` grants a sandboxed application
+
+```
+dbus-user.own       org.sailfishos.coveraction.*
+```
+
+and nothing else. Owning `io.github.jarnose.suuntosync.WatchLink` would
+need a permission file installed into `/etc/sailjail/permissions` - which
+is exactly what Whisperfish ships (`dbus-user.own
+be.rubdos.harbour-whisperfish.*`), and which is not a thing a package aimed
+at the Store should be doing. The same wall blocks the reverse direction:
+the app cannot *call* an arbitrary service either.
+
+So the arbitration is an **advisory file lock** - `flock` on
+`watch-link.lock` beside the database, in the directory both processes
+already agree on. No permission is involved, and the kernel releases it when
+the holder dies, which a D-Bus name does not improve on.
+
+The two sides are deliberately asymmetric:
+
+- The **application** takes the lock when it attaches to the watch and holds
+  it until it detaches - and attaches whether or not it got it. It is the
+  side with a person waiting on it.
+- The **daemon** attaches only while it holds the lock, sends what is
+  queued, and lets go immediately. So "the app is open" means notifications
+  wait, and nothing else does.
+
+The cost, stated plainly: each notification the daemon sends pays for an
+attach - StartNotify plus the session handshake, a second or two. On a wrist
+that is invisible. The alternative was holding the session permanently and
+having to hand it back, which is the part that needed the name.
+
+### What it does with a notification
+
+`src/notify/notificationrouter.*` is Qt-free and tested
+(`tests/test_notificationrouter.cpp`, 32 assertions, in CI). Sailfish's
+real category strings - read off
+`/usr/share/lipstick/notificationcategories` on the device, not taken from
+the freedesktop specification - map to ANCS categories by longest prefix:
+
+| Sailfish | ANCS |
+|---|---|
+| `x-nemo.call.missed*` | 2 MissedCall |
+| `x-nemo.messaging.voicemail*` | 3 Voicemail |
+| `x-nemo.messaging.*` (sms, mms, im, group) | 6 Email |
+| `x-nemo.calendar*` | 5 Schedule |
+| `x-nemo.social*` | 4 Social |
+| `im.received` | 6 Email |
+| `harbour-whisperfish-call` | 1 IncomingCall |
+| `harbour-whisperfish-message` | 6 Email |
+| anything else | 0 Other |
+
+A text message is **Email**, because that is what the official Android app
+does and the watch has no message category. And an incoming call is not
+normally a notification on Sailfish at all - voicecall-ui shows its own
+screen - so category 1 arrives only from a VoIP app that posts one. That is
+also the only way to exercise it on a phone with no SIM, which answers the
+question from a week ago about simulating a call.
+
+Dropped before the watch: our own notifications, anything with no title,
+and `x-nemo.battery`, `x-nemo.system-update`, `x-nemo.messaging.error`,
+`x-nemo.messaging.authorizationrequest`, `x-jolla.lipstick.*`,
+`x-jolla.cellular.error`.
+
+`x-nemo-owner` is preferred over `app_name` as the `appId` the watch shows,
+and the two preview hints over the plain summary and body, because that is
+where the text a person actually reads tends to be.
+
+### Testing it
+
+`suuntosync-notifyd --dry-run` monitors and logs and never touches a watch,
+which separates the two halves. The real run wants the app closed, since the
+app holds the lock while it is attached.
+
+Nothing in this section has been run yet. In particular: whether
+`BecomeMonitor` works the same from a systemd user service as it did from an
+SSH shell, what real Sailfish applications actually put in their hints, and
+whether a second attach-per-notification behaves on a watch that has just
+been handed back.

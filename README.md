@@ -43,16 +43,20 @@ Confirmed on real hardware, not just in tests:
 
 ## What doesn't, yet
 
-- **Notifications to the watch** — half done, and the done half is the
-  hard one. The app composes a notification and a Suunto Race shows it,
-  title and message, confirmed on hardware. The encoder is derived from
-  three captures and from the official app's own code rather than
-  replayed, so the category, the id and the lengths are computed (see
-  `docs/notifications.md`). What is missing is *observing* the phone's
-  own notifications in order to forward them, which needs
-  `Sandboxing=Disabled` and so costs Jolla Store eligibility — a
-  decision, not a missing feature. Until that is decided there is a
-  Send button on the pairing page and nothing automatic.
+- **Notifications to the watch** — sending one works and is confirmed on
+  hardware: the app composes a notification and a Suunto Race shows it,
+  title and message. The encoder is derived from three captures and from
+  the official app's own code rather than replayed, so the category, the
+  id and the lengths are computed.
+
+  Forwarding the phone's *own* notifications needs a D-Bus monitor
+  connection, which the Sailjail proxy will not relay — so it lives in
+  **`suuntosync-notifyd`, a separate optional package** outside the
+  sandbox, built from this same tree, and this app stays sandboxed and
+  Store-eligible. Only one process may hold a Whiteboard session, so the
+  two arbitrate with a file lock; a D-Bus name would have been tidier and
+  a sandboxed app is not allowed to own one. Written, not yet run — see
+  `docs/notifications.md`.
 
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is

@@ -20,6 +20,7 @@
 #include "../cloud/smljson.h"
 #include "../cloud/zipwriter.h"
 
+#include <QDebug>
 #include <QStandardPaths>
 #include <QtMath>
 #include <QVariantMap>
@@ -59,10 +60,14 @@ void appendProbeLog(const QString &text)
         << text << "\n\n";
 }
 
+QString dataDirectory()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+}
+
 QString dbPath()
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    return QDir(dir).filePath(QStringLiteral("suuntosync.sqlite"));
+    return QDir(dataDirectory()).filePath(QStringLiteral("suuntosync.sqlite"));
 }
 
 // "ble_" prefix keeps this in its own key namespace, separate from cloud
@@ -551,6 +556,7 @@ AppController::AppController(QObject *parent)
     , m_deviceModel(new DeviceListModel(this))
     , m_pairedWatchStore(new PairedWatchStore(dbPath()))
     , m_whiteboardClient(new MdsWhiteboardClient(this))
+    , m_watchLink(dataDirectory(), WatchLink::Foreground)
     , m_workoutStore(new WorkoutStore(dbPath()))
     , m_workoutModel(new WorkoutListModel(this))
     , m_healthStore(new HealthStore(dbPath()))
@@ -692,8 +698,10 @@ void AppController::onDeviceUpdated(const BluezAdapter::Device &device)
     // rebuild/relaunch - onConnectFinished never fires again in that case
     // since we don't auto-reconnect, so this was the only place that could
     // ever attach the Whiteboard client for an already-connected watch).
-    if (device.connected && !m_whiteboardReady)
+    if (device.connected && !m_whiteboardReady) {
+        claimWatchLink();
         m_whiteboardClient->attachToDevice(device.objectPath);
+    }
 }
 
 void AppController::onConnectFinished(const QString &objectPath, bool ok, const QString &error)
@@ -706,6 +714,7 @@ void AppController::onConnectFinished(const QString &objectPath, bool ok, const 
     }
     m_watchConnected = true;
     emit watchConnectedChanged();
+    claimWatchLink();
     m_whiteboardClient->attachToDevice(objectPath);
 }
 
@@ -734,6 +743,7 @@ void AppController::selectWatch(const QString &objectPath, const QString &addres
     // wrong because it looks like it works.
     if (!m_pairedWatch.address.isEmpty() && m_pairedWatch.address != address) {
         m_whiteboardClient->detach();
+        releaseWatchLink();
         if (m_watchConnected && !m_pairedWatch.objectPath.isEmpty())
             m_bluezAdapter->disconnectFromDevice(m_pairedWatch.objectPath);
     }
@@ -814,6 +824,7 @@ void AppController::forgetWatch()
     if (m_watchConnected)
         m_bluezAdapter->disconnectFromDevice(m_pairedWatch.objectPath);
     m_whiteboardClient->detach();
+    releaseWatchLink();
     m_pairedWatch = PairedWatch();
     m_watchConnected = false;
     emit pairedWatchChanged();
@@ -1068,6 +1079,23 @@ void AppController::testNotificationRemove()
         m_lastNotificationId = 0;
         emit logbookTestResult(ok ? tr("The watch removed it") : error);
     });
+}
+
+void AppController::claimWatchLink()
+{
+    QString error;
+    if (!m_watchLink.tryClaim(&error)) {
+        // Logged, not reported, and deliberately not fatal: the caller
+        // attaches anyway. The daemon holds this lock only for the few
+        // seconds a send takes, and a user waiting on the app should not be
+        // made to wait for a notification. See notify/watchlink.h.
+        qWarning() << "attaching without the watch link:" << error;
+    }
+}
+
+void AppController::releaseWatchLink()
+{
+    m_watchLink.release();
 }
 
 void AppController::probePath(const QString &path)

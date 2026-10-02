@@ -4,6 +4,7 @@
 #include "../cloud/accountmeta.h"
 #include "../ble/bluezadapter.h"
 #include "../ble/pairedwatch.h"
+#include "../notify/watchlink.h"
 
 #include <QObject>
 #include <QString>
@@ -423,6 +424,15 @@ private:
     void fetchWatchEntryAt(const QVector<QString> &logbookIds, int index, int succeeded,
                             const QStringList &failures);
 
+    // Whiteboard is one request, one response: only one process may hold a
+    // session with the watch. The app takes the link whenever it attaches
+    // and gives it back when it detaches, which makes the notification
+    // daemon - if one is installed at all - step aside while the app is
+    // using the watch. Nothing here fails if no daemon exists; the name is
+    // simply uncontested.
+    void claimWatchLink();
+    void releaseWatchLink();
+
     TokenVault *m_tokenVault;
     CloudAccountStore *m_cloudAccountStore;
     CloudAccount m_cloudAccount;
@@ -437,6 +447,10 @@ private:
 
     MdsWhiteboardClient *m_whiteboardClient;
     bool m_whiteboardReady = false;
+    // Held while the Whiteboard session is, so the notification daemon - if
+    // one is installed - knows to stay off the watch. Declared here, next to
+    // the session it guards, and initialised in that order.
+    WatchLink m_watchLink;
     // Guards against testWhiteboard() firing a second overlapping request -
     // a real capture showed two byte-identical GET requests (same request
     // ID) going out under 1ms apart from a single tap, almost certainly a

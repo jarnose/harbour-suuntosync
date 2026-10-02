@@ -1,17 +1,42 @@
 cmake_minimum_required(VERSION 3.19)
 project(harbour-suuntosync CXX C)
 
+# Two packages come out of this one tree, and they are built separately.
+#
+# The application is sandboxed and Store-eligible. The notification daemon
+# cannot be: observing other applications' notifications needs a D-Bus
+# monitor connection, which the Sailjail proxy will not relay. Rather than
+# give that up for the whole app, the daemon is its own package, built with
+# -DBUILD_APP=OFF -DBUILD_DAEMON=ON from rpm/suuntosync-notifyd.spec.
+#
+# Separate options rather than one switch, so that a developer build can
+# have both at once.
+option(BUILD_APP "Build the Silica application" ON)
+option(BUILD_DAEMON "Build the notification daemon" OFF)
+
 # NOTE: no "Bluetooth" component - Sailfish OS 5.1's SDK target has no
 # pkgconfig(Qt5Bluetooth) at all (confirmed by a real build attempt: zypper
 # found no provider, by name or capability). QtConnectivity/QtBluetooth isn't
 # part of the Sailfish OS Qt5 distribution; BLE work here goes through BlueZ
 # 5's own D-Bus API (org.bluez.*) via Qt5::DBus instead (added below, Phase 5) -
 # see ~/.claude/plans/agile-hopping-harp.md.
-find_package(Qt5 COMPONENTS Core Qml Gui Quick Sql Concurrent Network DBus LinguistTools REQUIRED)
+set(QT_COMPONENTS Core Sql Network DBus)
+if(BUILD_APP)
+    list(APPEND QT_COMPONENTS Qml Gui Quick Concurrent LinguistTools)
+endif()
+find_package(Qt5 COMPONENTS ${QT_COMPONENTS} REQUIRED)
 
 include(FindPkgConfig)
-pkg_search_module(SAILFISH sailfishapp REQUIRED)
-pkg_search_module(SAILFISHSECRETS sailfishsecrets REQUIRED)
+if(BUILD_APP)
+    pkg_search_module(SAILFISH sailfishapp REQUIRED)
+    pkg_search_module(SAILFISHSECRETS sailfishsecrets REQUIRED)
+endif()
+if(BUILD_DAEMON)
+    # libdbus-1 directly, not Qt5::DBus: QtDBus only delivers messages
+    # addressed to us, and a notification is addressed to the notification
+    # server. See src/notify/notificationmonitor.h.
+    pkg_search_module(DBUS1 dbus-1 REQUIRED)
+endif()
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -59,15 +84,12 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # field in a payload by looking it up rather than by hard-coded offset -
 # the way the official app does it. The two hand-written decoders above stay
 # as they are, being hardware-validated; this covers everything they don't.
-add_executable(harbour-suuntosync
-    src/harbour-suuntosync.cpp
-    src/controller/appcontroller.cpp
-    src/secrets/tokenvault.cpp
-    src/cloud/cloudaccountstore.cpp
+# Everything the daemon also needs. Named once so the two targets cannot
+# drift apart: a decoder fixed for the app is fixed for the daemon.
+set(WATCH_SOURCES
     src/ble/bluezmanagedobjects.cpp
     src/ble/bluezadapter.cpp
     src/ble/pairedwatchstore.cpp
-    src/ble/devicelistmodel.cpp
     src/ble/mdswirecodec.cpp
     src/ble/mdswhiteboardclient.cpp
     src/ble/sbemcontainer.cpp
@@ -83,6 +105,18 @@ add_executable(harbour-suuntosync
     src/ble/activitydecoder.cpp
     src/ble/notificationcodec.cpp
     src/ble/heatshrink/heatshrink_decoder.c
+)
+
+if(BUILD_APP)
+
+add_executable(harbour-suuntosync
+    src/harbour-suuntosync.cpp
+    src/controller/appcontroller.cpp
+    src/notify/watchlink.cpp
+    ${WATCH_SOURCES}
+    src/secrets/tokenvault.cpp
+    src/cloud/cloudaccountstore.cpp
+    src/ble/devicelistmodel.cpp
     src/cloud/suuntoauth.cpp
     src/cloud/polyline.cpp
     src/cloud/iso8601.cpp
@@ -173,6 +207,40 @@ add_custom_target(distfiles
         qml/pages/SettingsPage.qml
         rpm/harbour-suuntosync.spec
         ${TS_FILES})
+
+endif() # BUILD_APP
+
+if(BUILD_DAEMON)
+
+add_executable(suuntosync-notifyd
+    src/suuntosync-notifyd.cpp
+    src/notify/notificationmonitor.cpp
+    src/notify/notificationrouter.cpp
+    src/notify/notifierdaemon.cpp
+    src/notify/watchlink.cpp
+    ${WATCH_SOURCES}
+)
+
+target_include_directories(suuntosync-notifyd PRIVATE ${DBUS1_INCLUDE_DIRS})
+
+find_package(ZLIB REQUIRED)
+target_link_libraries(suuntosync-notifyd
+    ZLIB::ZLIB
+    Qt5::Core
+    Qt5::Sql
+    Qt5::Network
+    Qt5::DBus
+    ${DBUS1_LDFLAGS}
+)
+
+install(TARGETS suuntosync-notifyd
+    RUNTIME DESTINATION bin
+)
+install(FILES daemon/suuntosync-notifyd.service
+    DESTINATION lib/systemd/user
+)
+
+endif() # BUILD_DAEMON
 
 # Tell Qt Creator where the application executable(s) would be located on the device.
 file(WRITE "${CMAKE_BINARY_DIR}/QtCreatorDeployment.txt"

@@ -24,11 +24,16 @@ struct Candidate
     uint32_t phoneId = 0;   // the id the notification server assigned
 };
 
-// False for the notifications nobody wants on a wrist: our own, the ones
-// with no text, and the system's own chatter. The category strings tested
-// here are real ones, read off
+// Why this notification is not going to the watch, or nullptr if it is.
+// A reason rather than a bool because the daemon logs one line per
+// notification and "ignoring x-nemo.messaging.im" is misleading when what
+// was actually wrong was an empty title.
+//
+// The categories tested are real ones, read off
 // /usr/share/lipstick/notificationcategories on the device rather than
 // guessed from the freedesktop specification.
+const char *dropReason(const Candidate &candidate);
+
 bool shouldForward(const Candidate &candidate);
 
 // The ANCS category, by longest matching prefix, defaulting to Other.

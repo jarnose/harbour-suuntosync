@@ -53,24 +53,29 @@ bool blank(const std::string &text)
 
 } // namespace
 
-bool shouldForward(const Candidate &candidate)
+const char *dropReason(const Candidate &candidate)
 {
     // Our own, including the one the probe button sends - forwarding those
     // would be a loop with extra steps.
     if (candidate.appId.find("suuntosync") != std::string::npos)
-        return false;
+        return "our own notification";
 
     // A notification with no title renders as an empty box. The official
     // Android app drops these too, and logs the extras it could not find a
     // title among.
     if (blank(candidate.title))
-        return false;
+        return "no title";
 
     for (const char *prefix : kIgnoredPrefixes) {
         if (startsWith(candidate.category, prefix))
-            return false;
+            return "category stays on the phone";
     }
-    return true;
+    return nullptr;
+}
+
+bool shouldForward(const Candidate &candidate)
+{
+    return dropReason(candidate) == nullptr;
 }
 
 uint8_t categoryFor(const std::string &sailfishCategory)

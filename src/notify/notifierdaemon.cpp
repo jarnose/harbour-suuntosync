@@ -101,12 +101,13 @@ void NotifierDaemon::onPosted(const PhoneNotification &notification)
     candidate.category = notification.category.toStdString();
     candidate.phoneId = notification.id;
 
-    if (!NotificationRouter::shouldForward(candidate)) {
-        qDebug().noquote() << QStringLiteral("ignoring %1 from %2")
+    if (const char *reason = NotificationRouter::dropReason(candidate)) {
+        qDebug().noquote() << QStringLiteral("ignoring %1 from %2: %3")
                                       .arg(notification.category.isEmpty()
                                                    ? QStringLiteral("(no category)")
                                                    : notification.category,
-                                            QString::fromStdString(candidate.appId));
+                                            QString::fromStdString(candidate.appId),
+                                            QString::fromLatin1(reason));
         return;
     }
 

@@ -92,6 +92,18 @@ int main()
     check(NotificationRouter::shouldForward(candidate("x-nemo.system-update")) == false,
           "nor a system update");
 
+    // The reason, not just the verdict: the daemon logs it, and "ignoring
+    // x-nemo.messaging.im" is a lie when the real problem was an empty
+    // title.
+    check(NotificationRouter::dropReason(candidate("x-nemo.messaging.sms")) == nullptr,
+          "a forwarded notification has no drop reason");
+    check(std::string(NotificationRouter::dropReason(candidate("x-nemo.messaging.im", "")))
+                  == "no title",
+          "an empty title says so");
+    check(std::string(NotificationRouter::dropReason(candidate("x-nemo.battery")))
+                  == "category stays on the phone",
+          "an ignored category says that instead");
+
     // The conversion.
     const Ancs::Notification out = NotificationRouter::toWatchNotification(
             candidate("x-nemo.messaging.sms"), 1790939702);

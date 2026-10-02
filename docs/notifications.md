@@ -749,8 +749,49 @@ where the text a person actually reads tends to be.
 which separates the two halves. The real run wants the app closed, since the
 app holds the lock while it is attached.
 
-Nothing in this section has been run yet. In particular: whether
-`BecomeMonitor` works the same from a systemd user service as it did from an
-SSH shell, what real Sailfish applications actually put in their hints, and
-whether a second attach-per-notification behaves on a watch that has just
-been handed back.
+**The monitoring half is confirmed on the phone (2026-10-02.)** Five
+notifications posted from a separate connection, five correct decisions:
+
+```
+notification 500 category=x-nemo.messaging.sms      -> ancs 6: Matti Meikalainen / Moi, nahdaanko illalla?
+notification 501 category=x-nemo.call.missed        -> ancs 2: Vastaamaton puhelu / Matti Meikalainen
+ignoring x-nemo.battery from lipstick: category stays on the phone
+notification 503 category=x-nemo.calendar.reminder  -> ancs 5: Testi / 20:49
+ignoring x-nemo.messaging.im from someapp: no title
+```
+
+`BecomeMonitor` worked from the binary, not only from a shell, and the
+preview hints came through as the title and body.
+
+### The bug that found itself immediately
+
+The first run monitored nothing and said
+
+```
+QSocketNotifier: Invalid socket 6 and type 'Read', disabling...
+```
+
+The filter was returning `DBUS_HANDLER_RESULT_NOT_YET_HANDLED`, with a
+comment explaining that a monitor must not claim messages addressed to
+somebody else. That reasoning is exactly backwards. `NOT_YET_HANDLED` lets
+libdbus fall through to its own default, and its default for a method call
+nobody handled is to **send back
+`org.freedesktop.DBus.Error.UnknownMethod`** - it does not check who the
+message was addressed to. A monitor that sends anything is disconnected by
+the bus, so the first notification closed the socket under us, every time.
+
+`DBUS_HANDLER_RESULT_HANDLED`, unconditionally, is correct: on a monitor
+connection nothing else is going to act on these messages, and the only
+alternative is libdbus answering on our behalf. libwatchfish returns
+`HANDLED` from its filter too, which was the confirmation after the fact.
+
+One practical note for testing: Sailfish's Qt sends `qInfo`/`qDebug` to the
+journal, so a manual run needs `QT_LOGGING_TO_CONSOLE=1` or the log looks
+empty.
+
+### Still not run
+
+The sending half: whether a watch takes a notification the daemon
+composed, and whether an attach-per-notification behaves on a link that was
+just handed back. And the service unit - everything above was the binary run
+by hand, not started by systemd.

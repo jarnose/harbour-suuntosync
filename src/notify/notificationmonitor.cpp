@@ -189,8 +189,19 @@ unsigned int NotificationMonitor::handleMessage(DBusConnection *, DBusMessage *m
         handleClosed(message);
     }
 
-    // A monitor must never claim a message: it is somebody else's.
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    // HANDLED, always, and this is not a detail. Returning
+    // NOT_YET_HANDLED lets libdbus fall through to its own default, which
+    // for a method call with no handler is to send back
+    // org.freedesktop.DBus.Error.UnknownMethod - and a monitor that sends
+    // anything at all is disconnected by the bus. The socket then closes
+    // under us, which surfaces as "QSocketNotifier: Invalid socket N and
+    // type 'Read', disabling..." and silence from then on. Measured on the
+    // phone: the first notification killed the connection every time.
+    //
+    // Claiming messages addressed to somebody else reads wrong and is
+    // right: on a monitor connection nothing else is going to act on them,
+    // and the only alternative is libdbus answering on our behalf.
+    return DBUS_HANDLER_RESULT_HANDLED;
 }
 
 void NotificationMonitor::handleNotify(DBusMessage *message)

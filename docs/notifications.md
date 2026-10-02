@@ -684,12 +684,26 @@ Sailjail's `Base.permission` grants a sandboxed application
 dbus-user.own       org.sailfishos.coveraction.*
 ```
 
-and nothing else. Owning `io.github.jarnose.suuntosync.WatchLink` would
-need a permission file installed into `/etc/sailjail/permissions` - which
-is exactly what Whisperfish ships (`dbus-user.own
-be.rubdos.harbour-whisperfish.*`), and which is not a thing a package aimed
-at the Store should be doing. The same wall blocks the reverse direction:
-the app cannot *call* an arbitrary service either.
+and nothing else *from a permission file*. **Correction, 2026-10-02:** the
+running application's firejail command line also carries
+
+```
+--dbus-user.own=io.github.jarnose.suuntosync
+```
+
+which sailjail derives from `OrganizationName` and `ApplicationName`. So a
+sandboxed app does get exactly one name of its own - that one, with no
+sub-names under it, so `io.github.jarnose.suuntosync.WatchLink` is still
+out. Arbitration on the bare name would in fact have worked, with the
+daemon watching `NameOwnerChanged`. The flock stays because it is in and
+proven, and because it covers "the app is mid-send" as well as "the app is
+running"; but the claim that a sandboxed app cannot own a name was too
+strong and is withdrawn.
+
+Anything beyond that one name would need a permission file installed into
+`/etc/sailjail/permissions` - which is exactly what Whisperfish ships
+(`dbus-user.own be.rubdos.harbour-whisperfish.*`), and which is not a thing
+a package aimed at the Store should be doing.
 
 So the arbitration is an **advisory file lock** - `flock` on
 `watch-link.lock` beside the database, in the directory both processes

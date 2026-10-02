@@ -1122,20 +1122,24 @@ const char *const kAncsEnabledPath = "/Settings/Ble/AncsEnabled";
 void AppController::readWatchNotificationsEnabled()
 {
     if (!m_whiteboardReady) {
-        emit watchNotificationsRead(-1);
+        emit watchNotificationsRead(-1, tr("not connected to the watch"));
         return;
     }
     m_whiteboardClient->readValue(QString::fromLatin1(kAncsEnabledPath),
             [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
-        if (!ok || body.size() < 2) {
-            qWarning() << "could not read the watch's notification setting:" << error;
-            emit watchNotificationsRead(-1);
+        if (!ok) {
+            emit watchNotificationsRead(-1, error);
+            return;
+        }
+        if (body.size() < 2) {
+            emit watchNotificationsRead(
+                    -1, tr("the watch answered with %1 bytes").arg(body.size()));
             return;
         }
         // The reply ends in the value as a 16-bit little-endian integer:
         // ...c8 00 01 00 00 on a 9 Baro, ...c8 00 01 00 01 on a Race.
         const int value = body[body.size() - 2] | (body[body.size() - 1] << 8);
-        emit watchNotificationsRead(value != 0 ? 1 : 0);
+        emit watchNotificationsRead(value != 0 ? 1 : 0, QString());
     });
 }
 

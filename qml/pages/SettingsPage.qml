@@ -24,12 +24,17 @@ Page {
 
     // -1 until the watch has been asked, which only works while connected.
     property int watchNotifications: -1
+    property string watchNotificationsDetail: ""
+
 
     Connections {
         target: AppController
         onErrorOccurred: page.lastError = message
         onPairedWatchChanged: page.refreshKnownWatches()
-        onWatchNotificationsRead: page.watchNotifications = value
+        onWatchNotificationsRead: {
+            page.watchNotifications = value
+            page.watchNotificationsDetail = detail
+        }
         onWhiteboardReadyChanged: {
             if (AppController.whiteboardReady)
                 AppController.readWatchNotificationsEnabled()
@@ -162,13 +167,22 @@ Page {
                 // The watch's own switch, not a preference of this app's: a
                 // watch with this off refuses a notification with 400, which
                 // is exactly what a 9 Baro did while its own menu said
-                // notifications were on. Hidden until the watch has
-                // answered, because a switch showing a guess is worse than
-                // no switch.
-                visible: page.watchNotifications >= 0
+                // notifications were on.
+                //
+                // Shown whenever a watch is paired, and disabled with the
+                // reason when the watch has not answered - the first version
+                // hid it until the value was known, which made "could not
+                // ask" look exactly like "this was never built".
+                visible: AppController.watchPaired
+                enabled: page.watchNotifications >= 0
                 text: qsTr("Accept notifications on the watch")
-                description: qsTr("The setting on the watch itself. Needed before "
-                                   + "the notification daemon can send anything.")
+                description: page.watchNotifications >= 0
+                        ? qsTr("The setting on the watch itself. Needed before "
+                                + "the notification daemon can send anything.")
+                        : qsTr("The watch has not said: %1")
+                                .arg(page.watchNotificationsDetail.length > 0
+                                      ? page.watchNotificationsDetail
+                                      : qsTr("not asked yet"))
                 automaticCheck: false
                 checked: page.watchNotifications === 1
                 onClicked: AppController.setWatchNotificationsEnabled(

@@ -421,7 +421,10 @@ signals:
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
-    void watchNotificationsRead(int value);
+    // `detail` says why on -1, because a switch that is simply absent is
+    // indistinguishable from a feature that was never built - which is how
+    // this signal came to carry a reason.
+    void watchNotificationsRead(int value, const QString &detail);
     void workoutUploaded(const QString &key, bool ok, const QString &message);
     void workoutUploadProgress(int done, int total);
 

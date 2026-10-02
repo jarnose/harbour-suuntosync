@@ -698,10 +698,8 @@ void AppController::onDeviceUpdated(const BluezAdapter::Device &device)
     // rebuild/relaunch - onConnectFinished never fires again in that case
     // since we don't auto-reconnect, so this was the only place that could
     // ever attach the Whiteboard client for an already-connected watch).
-    if (device.connected && !m_whiteboardReady) {
-        claimWatchLink();
-        m_whiteboardClient->attachToDevice(device.objectPath);
-    }
+    if (device.connected && !m_whiteboardReady)
+        attachWhenLinkIsFree(device.objectPath);
 }
 
 void AppController::onConnectFinished(const QString &objectPath, bool ok, const QString &error,
@@ -728,8 +726,7 @@ void AppController::onConnectFinished(const QString &objectPath, bool ok, const 
     }
     m_watchConnected = true;
     emit watchConnectedChanged();
-    claimWatchLink();
-    m_whiteboardClient->attachToDevice(objectPath);
+    attachWhenLinkIsFree(objectPath);
 }
 
 void AppController::refreshDevices()
@@ -1095,16 +1092,30 @@ void AppController::testNotificationRemove()
     });
 }
 
-void AppController::claimWatchLink()
+void AppController::attachWhenLinkIsFree(const QString &objectPath, int attemptsLeft)
 {
     QString error;
-    if (!m_watchLink.tryClaim(&error)) {
-        // Logged, not reported, and deliberately not fatal: the caller
-        // attaches anyway. The daemon holds this lock only for the few
-        // seconds a send takes, and a user waiting on the app should not be
-        // made to wait for a notification. See notify/watchlink.h.
-        qWarning() << "attaching without the watch link:" << error;
+    if (m_watchLink.tryClaim(&error)) {
+        m_whiteboardClient->attachToDevice(objectPath);
+        return;
     }
+
+    if (attemptsLeft > 0) {
+        // 250 ms apart, so five seconds in total - far longer than the
+        // daemon needs for one notification, and short enough that nobody
+        // watching the screen notices.
+        QTimer::singleShot(250, this, [this, objectPath, attemptsLeft]() {
+            if (objectPath == m_pairedWatch.objectPath && !m_whiteboardReady)
+                attachWhenLinkIsFree(objectPath, attemptsLeft - 1);
+        });
+        return;
+    }
+
+    // Five seconds of somebody else holding it means something is wrong
+    // with them, not with us. Attach anyway and say so: a stuck daemon
+    // should not make the watch unusable from the app.
+    qWarning() << "attaching without the watch link after waiting:" << error;
+    m_whiteboardClient->attachToDevice(objectPath);
 }
 
 void AppController::releaseWatchLink()

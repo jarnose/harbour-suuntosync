@@ -450,7 +450,14 @@ private:
     // daemon - if one is installed at all - step aside while the app is
     // using the watch. Nothing here fails if no daemon exists; the name is
     // simply uncontested.
-    void claimWatchLink();
+    // Takes the watch link and attaches, waiting a little for the lock
+    // rather than barging in. The daemon holds it for a second or two per
+    // notification, so waiting costs almost nothing - and attaching anyway,
+    // which is what this used to do, puts two writers on one Whiteboard
+    // session and corrupts the framing. That showed up as "the watch didn't
+    // acknowledge the session handshake", which is a true statement about a
+    // self-inflicted problem.
+    void attachWhenLinkIsFree(const QString &objectPath, int attemptsLeft = 20);
     void releaseWatchLink();
 
     TokenVault *m_tokenVault;

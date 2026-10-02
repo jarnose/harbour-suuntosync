@@ -590,6 +590,9 @@ of padding the watch never initialises.
 
 ### Not yet confirmed
 
+**Superseded - see "It works" and the daemon sections below.** Kept as
+written because it records what was and was not known at the time.
+
 Nothing here has been sent to a watch. Three captured requests reproduced
 byte for byte is a strong check on the layout and no check at all on
 whether the watch accepts one we composed. The 9 Baro is a second

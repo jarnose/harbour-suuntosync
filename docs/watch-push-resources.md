@@ -574,6 +574,11 @@ text. Saved as `ephemeris_9baro_2026-09-25.bin` in the private fixtures.
 
 ### What is still missing, and it is only one thing
 
+**Answered later in this file - see "The blob's source, and both watches
+unblocked (2026-09-26)".** The endpoints are literals in the APK and need no
+credential. Left as written because the reasoning for not attempting it that
+evening still stands.
+
 Where the phone gets those 61440 bytes. It is not in `libmds.so` - the blob
 arrives from the Java side through `suunto://MDS/GNSS/%s/EphemerisData` -
 and the URL is built at runtime, so it is not in the APK's string table
@@ -622,7 +627,7 @@ without any watch-side work. Untested, and worth one look at the workout
 list before claiming it.
 
 
-## Does a Race have the push path too? (open, but cheap to settle)
+## Does a Race have the push path too? (answered below: yes)
 
 Jarno's question: with the Race's WiFi switched off, would the app fall
 back to pushing the ephemeris over BLE the way it does for a 9 Baro? If it

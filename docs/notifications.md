@@ -1067,6 +1067,8 @@ them is expensive:
    sending a notification to a 9 Baro - the same rig that produced the
    Race's bytes.
 
+   **This is where it stands** - see below.
+
 Worth stating because it is the opposite of a disappointment: the
 arbitration, the connect-on-demand, the queue and the lock all behaved
 exactly as designed against a watch that then said no.
@@ -1113,6 +1115,51 @@ because that is what it is.
 What is assumed rather than captured: that `AncsEnabled` takes the same
 type as `WeekType`. The read reply's shape agrees, and the cost of being
 wrong is a 400 and a switch that snaps back.
+
+### Not the setting, and not Do Not Disturb either
+
+Two things were eliminated by trying them.
+
+The watch had **Do Not Disturb** on. Turning it off changed nothing: still
+400.
+
+And `/Settings/Ble/AncsEnabled` **reads 1 on the Baro now**, measured
+directly rather than from a week-old capture:
+
+```
+/Settings/Ble/AncsEnabled = 11 bytes: f0 3b 05 01 80 00 c8 00 01 00 01
+```
+
+So the setting difference was real when the captures were taken and is not
+the current cause. Enabled, not disturbed, and still refusing.
+
+### Which leaves the structure, and there is a precedent for that
+
+`libmds.so` has `SDS::WB::ConnectionType` with a `LEGACY` member, and every
+`legacy/` source path in it belongs to `legacy/Communist/...` - the
+Ambit-era NSP protocol. **A 9 Baro is not a legacy device**: it speaks the
+same Whiteboard this project has used to decode its workouts, its ephemeris
+and its daily activity. So `legacyNotif` is not what it wants, and the
+resource path is not the difference.
+
+That leaves what is inside the structure, and the precedent is strong
+rather than speculative: **the Baro's SBEM descriptor ids were completely
+different from the Race's**, which is why the field table is read off
+whichever watch is connected instead of compiled in. The notification
+structure's type id (`0x1209`) and its form byte (`0x6a`) come from the
+same kind of per-firmware metadata.
+
+Two ways to get them, and the first has worked four times already:
+
+1. **Capture one.** The official Android app sending a notification to the
+   9 Baro, on the rig that produced the Race's three captures. Known cost,
+   ground truth, and it would also validate the second route.
+2. **Ask the watch.** Implement `protocol_v9`'s structure traversal - the
+   schema walk the official app runs before its PUTs and that this project
+   has shortcut past everywhere. That is the move that solved the
+   descriptor tables, and the lesson written down there was that the device
+   knew its own schema all along. It is also a Ghidra-informed
+   implementation of the one part of the protocol never built here.
 
 ### A stale watch, found the same minute
 

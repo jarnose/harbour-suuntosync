@@ -52,18 +52,20 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     });
 }
 
-bool NotifierDaemon::start(QString *error)
+bool NotifierDaemon::start(QString *error, bool withMonitor)
 {
-    connect(m_monitor, &NotificationMonitor::posted, this, &NotifierDaemon::onPosted);
-    connect(m_monitor, &NotificationMonitor::closed, this, &NotifierDaemon::onClosed);
-    if (!m_monitor->start(error))
-        return false;
-    qInfo() << "watching the session bus via"
-            << (m_monitor->isMonitor() ? "BecomeMonitor" : "legacy eavesdropping");
+    if (withMonitor) {
+        connect(m_monitor, &NotificationMonitor::posted, this, &NotifierDaemon::onPosted);
+        connect(m_monitor, &NotificationMonitor::closed, this, &NotifierDaemon::onClosed);
+        if (!m_monitor->start(error))
+            return false;
+        qInfo() << "watching the session bus via"
+                << (m_monitor->isMonitor() ? "BecomeMonitor" : "legacy eavesdropping");
 
-    if (m_dryRun) {
-        qInfo() << "dry run: nothing will be sent to a watch";
-        return true;
+        if (m_dryRun) {
+            qInfo() << "dry run: nothing will be sent to a watch";
+            return true;
+        }
     }
 
     if (!m_store.open(error))
@@ -246,12 +248,33 @@ void NotifierDaemon::onClosed(quint32 id)
         return;
     Pending pending;
     pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
-    pending.isRemoval = true;
+    pending.kind = Pending::Remove;
     pending.removeId = m_sent.take(id);
     if (m_queue.size() >= kMaxQueued)
         m_queue.removeFirst();
     m_queue.append(pending);
     pump();
+}
+
+void NotifierDaemon::requestRead(const QString &path)
+{
+    Pending pending;
+    pending.kind = Pending::Read;
+    pending.path = path;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
+    m_oneShot = true;
+    m_queue.append(pending);
+}
+
+void NotifierDaemon::requestWriteEnum(const QString &path, quint8 value)
+{
+    Pending pending;
+    pending.kind = Pending::WriteEnum;
+    pending.path = path;
+    pending.value = value;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
+    m_oneShot = true;
+    m_queue.append(pending);
 }
 
 void NotifierDaemon::letGo()
@@ -286,10 +309,10 @@ void NotifierDaemon::pump()
     // Forget anything too old to be worth showing. Done here rather than on
     // a timer so that the queue emptying also stops the retries.
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    for (int i = m_queue.size() - 1; i >= 0; --i) {
+    for (int i = m_queue.size() - 1; !m_oneShot && i >= 0; --i) {
         if (now - m_queue.at(i).queuedAtMs <= kMaxAgeMs)
             continue;
-        if (!m_queue.at(i).isRemoval)
+        if (m_queue.at(i).kind == Pending::Add)
             qInfo() << "giving up on a notification the watch never took";
         m_queue.removeAt(i);
     }
@@ -353,7 +376,43 @@ void NotifierDaemon::pump()
 
     const Pending pending = m_queue.takeFirst();
     m_busy = true;
-    if (pending.isRemoval) {
+    if (pending.kind == Pending::Read) {
+        const QString path = pending.path;
+        m_client->readValue(path, [this, path](bool ok, const std::vector<uint8_t> &body,
+                                                const QString &failure) {
+            m_busy = false;
+            if (!ok) {
+                qCritical().noquote() << QStringLiteral("%1: %2").arg(path, failure);
+            } else {
+                QString hex;
+                for (uint8_t byte : body)
+                    hex += QStringLiteral("%1 ").arg(byte, 2, 16, QLatin1Char('0'));
+                qInfo().noquote() << QStringLiteral("%1 = %2 bytes: %3")
+                                             .arg(path).arg(body.size()).arg(hex.trimmed());
+            }
+            if (m_oneShot) {
+                emit finished(ok);
+                return;
+            }
+            pump();
+        });
+    } else if (pending.kind == Pending::WriteEnum) {
+        const QString path = pending.path;
+        const quint8 value = pending.value;
+        m_client->putSmallEnum(path, value, [this, path, value](bool ok,
+                                                                 const QString &failure) {
+            m_busy = false;
+            if (ok)
+                qInfo().noquote() << QStringLiteral("%1 = %2, written").arg(path).arg(value);
+            else
+                qCritical().noquote() << QStringLiteral("%1: %2").arg(path, failure);
+            if (m_oneShot) {
+                emit finished(ok);
+                return;
+            }
+            pump();
+        });
+    } else if (pending.kind == Pending::Remove) {
         const quint32 id = pending.removeId;
         m_client->removeNotification(id, [this, id](bool ok, const QString &failure) {
             m_busy = false;

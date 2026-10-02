@@ -39,7 +39,23 @@ public:
     // the monitoring half gets tested with no watch in the room.
     NotifierDaemon(const QString &databasePath, bool dryRun, QObject *parent = nullptr);
 
-    bool start(QString *error);
+    // `withMonitor` false builds the watch half only, for the one-shot
+    // probes below: there is no point watching the bus for a single read.
+    bool start(QString *error, bool withMonitor = true);
+
+    // Reads a watch resource, or writes a one-byte enum to it, once, and
+    // then emits finished(). Uses the same queue as a notification, so it
+    // gets the lock, the connect, the attach and the timeouts for free.
+    //
+    // This exists because every question about the watch's own settings
+    // otherwise needs somebody to tap something in the application. The
+    // 9 Baro refusing notifications with 400 was three round trips of
+    // "what does the switch say" before this was worth building.
+    void requestRead(const QString &path);
+    void requestWriteEnum(const QString &path, quint8 value);
+
+signals:
+    void finished(bool ok);
 
 private slots:
     void onPosted(const PhoneNotification &notification);
@@ -55,9 +71,12 @@ private:
     // arrived cannot overtake its own arrival.
     struct Pending
     {
-        bool isRemoval = false;
+        enum Kind { Add, Remove, Read, WriteEnum };
+        Kind kind = Add;
         Ancs::Notification add;
         quint32 removeId = 0;
+        QString path;
+        quint8 value = 0;
         // When it was queued. A notification nobody could deliver because
         // the watch was out of range is noise by the time it comes back,
         // and without a deadline it would keep the retry timer - and a
@@ -111,6 +130,9 @@ private:
     // when it is least needed. The watch drops the link within seconds of
     // the last client letting go.
     bool m_connecting = false;
+    // One-shot mode: quit after the queue drains rather than waiting for
+    // the next notification.
+    bool m_oneShot = false;
 
     // Bounded: long enough that a burst does not evict itself, short enough
     // that a watch coming back into range does not replay a whole morning.

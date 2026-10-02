@@ -22,6 +22,11 @@ const qint64 kMaxAgeMs = 120000;
 // How long to give an attach before deciding it is not going to happen.
 // A good one takes about a second.
 const int kAttachTimeoutMs = 20000;
+// Two identical notifications this close together are one notification
+// posted twice, not two messages. Long enough to catch a double post, short
+// enough that two genuinely identical messages a few seconds apart both get
+// through.
+const qint64 kDuplicateWindowMs = 3000;
 } // namespace
 
 NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject *parent)
@@ -173,6 +178,21 @@ void NotifierDaemon::onPosted(const PhoneNotification &notification)
                                             QString::fromLatin1(reason));
         return;
     }
+
+    // The same thing twice in a row, within a moment: one notification the
+    // phone posted twice. See m_lastContent.
+    const QString content = QStringLiteral("%1|%2|%3").arg(
+            QString::fromStdString(candidate.appId),
+            QString::fromStdString(candidate.title),
+            QString::fromStdString(candidate.message));
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (content == m_lastContent && nowMs - m_lastContentAtMs < kDuplicateWindowMs) {
+        qDebug().noquote() << QStringLiteral("ignoring notification %1: the same one again")
+                                      .arg(notification.id);
+        return;
+    }
+    m_lastContent = content;
+    m_lastContentAtMs = nowMs;
 
     Pending pending;
     pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();

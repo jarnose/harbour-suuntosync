@@ -104,7 +104,20 @@ int main()
                   == "category stays on the phone",
           "an ignored category says that instead");
 
+    // The package fallback, for the apps that set no category at all.
+    check(NotificationRouter::categoryFor("", "messageserver5") == Ancs::CategoryEmail,
+          "Sailfish's mail server has no category and is still Email");
+    check(NotificationRouter::categoryFor("", "org.example.whatever") == Ancs::CategoryOther,
+          "an unknown package with no category stays Other");
+    check(NotificationRouter::categoryFor("x-nemo.call.missed", "messageserver5")
+                  == Ancs::CategoryMissedCall,
+          "a category that says something beats the package table");
+
     // The conversion.
+    NotificationRouter::Candidate mail = candidate("", "Jarno Selanpaa", "messageserver5");
+    check(NotificationRouter::toWatchNotification(mail, 1).categoryId == Ancs::CategoryEmail,
+          "and the whole conversion uses it");
+
     const Ancs::Notification out = NotificationRouter::toWatchNotification(
             candidate("x-nemo.messaging.sms"), 1790939702);
     check(out.categoryId == Ancs::CategoryEmail, "a text message converts to category 6");

@@ -119,4 +119,13 @@ private:
     // Phone notification id -> the id we sent it to the watch as, so a
     // close on the phone can take the right one off the watch.
     QHash<quint32, quint32> m_sent;
+
+    // The last notification's package, title and message, and when it was
+    // seen. Sailfish's mail server posts the same notification twice - ids
+    // 531 and 532, same sender, same subject, within the same second - and
+    // because the watch id is derived from the phone's id, the two are
+    // different notifications as far as the watch is concerned. A person
+    // would see one message arrive and two appear on their wrist.
+    QString m_lastContent;
+    qint64 m_lastContentAtMs = 0;
 };

@@ -26,6 +26,13 @@ const Mapping kMappings[] = {
     { "harbour-whisperfish-message", Ancs::CategoryEmail },
 };
 
+// Packages whose notifications carry no usable category. One entry, because
+// one is what has been measured: Sailfish's mail server, which posts with
+// no category and would otherwise land under Other.
+const Mapping kPackageMappings[] = {
+    { "messageserver5", Ancs::CategoryEmail },
+};
+
 // Categories that stay on the phone: the system's own notices, and errors
 // about the phone rather than about anything a person wants on a wrist.
 const char *const kIgnoredPrefixes[] = {
@@ -92,13 +99,28 @@ uint8_t categoryFor(const std::string &sailfishCategory)
     return best;
 }
 
+uint8_t categoryFor(const std::string &sailfishCategory, const std::string &appId)
+{
+    // The category first: it is the more specific of the two, and an app
+    // that sets one means it.
+    const uint8_t byCategory = categoryFor(sailfishCategory);
+    if (byCategory != Ancs::CategoryOther)
+        return byCategory;
+
+    for (const Mapping &mapping : kPackageMappings) {
+        if (appId.find(mapping.prefix) != std::string::npos)
+            return mapping.category;
+    }
+    return Ancs::CategoryOther;
+}
+
 Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowSeconds)
 {
     Ancs::Notification out;
     out.appId = candidate.appId;
     out.title = candidate.title;
     out.message = candidate.message;
-    out.categoryId = categoryFor(candidate.category);
+    out.categoryId = categoryFor(candidate.category, candidate.appId);
     out.date = nowSeconds;
 
     // Derived from the phone's own id, so a later close can take the right

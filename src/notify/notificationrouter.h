@@ -46,6 +46,13 @@ bool shouldForward(const Candidate &candidate);
 // which is also the only way to exercise it on a phone with no SIM.
 uint8_t categoryFor(const std::string &sailfishCategory);
 
+// The same, falling back to the sending package when the category says
+// nothing. Email needs this: Sailfish's mail server posts its notifications
+// with **no category at all** - measured, `from messageserver5
+// category=(none)` - so a mapped package name is the only thing left to go
+// on. The table grows by measurement, not by guessing at names.
+uint8_t categoryFor(const std::string &sailfishCategory, const std::string &appId);
+
 // The whole conversion. `nowSeconds` is passed in rather than read from the
 // clock so that a test is a test.
 Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowSeconds);

@@ -20,3 +20,13 @@ tests/fixtures/
 
 # Python bytecode from the tools/ scripts
 __pycache__/
+
+# An in-source sfdk build leaves these behind. The daemon build in
+# particular configures CMake in the source directory, so its binary, its
+# AUTOMOC output and the packaged RPM all land here.
+RPMS/
+QtCreatorDeployment.txt
+documentation.list
+install_manifest.txt
+suuntosync-notifyd
+*_autogen/

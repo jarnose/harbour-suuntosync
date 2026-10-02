@@ -849,6 +849,27 @@ doing its job, but filing email as Email will need the sending package
 rather than the category. The log now names the package for exactly that
 reason.
 
+### 403 confirmed live, by accident
+
+Two daemons ran at once for a few minutes - one started by hand while a test
+instance was already up - and the log is worth keeping:
+
+```
+waiting for the watch: the other process is using the watch
+...
+removal failed: "The watch has no notification with that id"
+```
+
+The first line is the file lock doing exactly its job: the second instance
+queued and waited rather than writing into the first one's session. The
+second is the first time the **403** path has been seen on hardware, which
+confirms the status code taken from the capture - both instances see the same
+bus, so both tried the removal, and the one that had never sent anything got
+told so by the watch.
+
+A single instance is what the systemd unit gives, so this is not a case to
+design for; it is a free measurement.
+
 ### Still not run
 
 The systemd unit: everything above was the binary started by hand. And the

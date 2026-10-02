@@ -95,14 +95,34 @@ bool NotifierDaemon::start(QString *error)
 
 void NotifierDaemon::reloadWatch()
 {
+    const PairedWatch previous = m_watch;
+
     QString error;
     m_watch = m_store.load(&error);
-    if (!error.isEmpty())
+    if (!error.isEmpty()) {
         qWarning() << "could not read the paired watch:" << error;
-    else if (m_watch.address.isEmpty())
+        return;
+    }
+    if (m_watch.address == previous.address)
+        return;
+
+    if (m_watch.address.isEmpty()) {
         qInfo() << "no watch is paired in the application yet";
-    else
+    } else {
         qInfo() << "paired watch:" << m_watch.name << m_watch.address;
+    }
+
+    if (previous.address.isEmpty())
+        return;
+
+    // The user switched watches in the application. Everything in hand
+    // belongs to the old one - the session, the lock, the belief that
+    // something is connected - so put it all down. Without this the daemon
+    // went on addressing the watch that was swapped out, which is the kind
+    // of wrong that looks like it works.
+    qInfo() << "the application switched watches; letting the old one go";
+    letGo();
+    m_connected = false;
 }
 
 void NotifierDaemon::onDeviceUpdated(const BluezAdapter::Device &device)
@@ -280,6 +300,12 @@ void NotifierDaemon::pump()
         letGo();
         return;
     }
+
+    // The active watch is the application's to choose, and it can change
+    // while the daemon is running. Cheap enough to re-read whenever there is
+    // something to deliver - one indexed SELECT on a local file - and the
+    // alternative is sending to whichever watch was active at boot.
+    reloadWatch();
 
     if (m_watch.objectPath.isEmpty()) {
         // Nothing has been paired in the application yet.

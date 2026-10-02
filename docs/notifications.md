@@ -1005,6 +1005,53 @@ which is what an install and an upgrade both want.
 Worth knowing for testing by hand:
 `systemctl --user restart suuntosync-notifyd.service` needs no root.
 
+### The 9 Baro refuses it: status 400 (2026-10-02)
+
+Everything up to the watch worked. The application held the lock while it
+was open, the daemon queued and waited, the lock freed when the app closed,
+the daemon connected, the session opened - and the watch answered the PUT
+with **400**:
+
+```
+21:07:17 notification 536 ... -> ancs 6: Baro-testi / Nakyyko tama kellossa
+21:07:17 waiting for the watch: the other process is using the watch
+   (x4, five seconds apart, while the application held the lock)
+21:08:07 whiteboard session ready
+21:08:07 sending failed: "The watch refused the notification (status 400)"
+```
+
+400 means the frame was understood - the CRC passed and the handle resolved
+- and the body was not. Two things can account for that, and only one of
+them is expensive:
+
+1. **Notifications may simply not be enabled on this watch.** The Race has
+   been used with the official app and had them turned on at some point;
+   the 9 Baro may never have. The resource exists either way, which is why
+   the handle resolved. `/Settings/Ble/AncsEnabled` is readable with the
+   application's probe.
+2. **The structure's type byte or its form byte may differ.** `0x09` and
+   `0x6a` are known from a Race and nothing else. The type's *high* byte is
+   computed from the ack, so it is not a suspect. If this is the cause the
+   answer is not guessable: it needs a capture of the official Android app
+   sending a notification to a 9 Baro - the same rig that produced the
+   Race's bytes.
+
+Worth stating because it is the opposite of a disappointment: the
+arbitration, the connect-on-demand, the queue and the lock all behaved
+exactly as designed against a watch that then said no.
+
+### A stale watch, found the same minute
+
+The daemon read the active watch from the database **only at startup**, so
+switching watches in the application left it addressing the old one. It
+re-reads whenever it has something to deliver now - one indexed SELECT on a
+local file - and when the address has changed it puts down the session, the
+lock and its belief that anything is connected.
+
+This was visible the moment the 9 Baro was connected: the log still said
+`paired watch: "Suunto Race ..."` while the database already said
+`Suunto 9 ...`, and only a restart moved it.
+
 ### Still not run
 
-The 9 Baro.
+A 9 Baro that accepts one.

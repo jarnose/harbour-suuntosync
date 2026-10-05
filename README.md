@@ -18,8 +18,9 @@ Confirmed on real hardware, not just in tests:
   compiled in. See `docs/sbem-chunk-map.md`.
 - **Two watches at once.** Both are remembered and switched from the
   pull-down menu or Settings, which matters because they decode
-  differently: each one's field table is kept per address, so switching
-  back does not mean fetching it again.
+  differently: each one's field table is kept per address, so switching back
+  does not mean fetching it again. The daemon follows the switch, and
+  Settings can forget a watch outright.
 - **Workouts from the Suunto cloud**, with route, training metrics and
   sample data.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
@@ -39,12 +40,14 @@ Confirmed on real hardware, not just in tests:
 - **Phone notifications on the watch.** A text message arriving on the phone
   appears on the watch, with the app closed and nothing to press — and
   disappears from the watch when it is dismissed on the phone. Missed calls,
-  voicemail, calendar alerts and messages all have their category mapped and
-  tested, but a text message is the one that has been watched arriving. The
-  payload is composed, not replayed: the encoder is derived
-  from three captures and from the official Android app's own code, so the
-  ANCS category, the notification id and the structure's lengths are all
-  computed, and three captured requests are reproduced byte for byte in
+  voicemail, email, calendar alerts and messages all have their ANCS category
+  mapped and tested; a text message is the one that has been watched
+  arriving, on both watch models.
+
+  The payload is composed, not replayed: the encoder is derived from four
+  captures and from the official Android app's own code, so the category,
+  the notification id and the structure's lengths are all computed — and all
+  four captured requests are reproduced byte for byte in
   `tests/test_notificationcodec.cpp`.
 
   Observing other applications' notifications needs a D-Bus monitor
@@ -61,6 +64,18 @@ Confirmed on real hardware, not just in tests:
   kind of difference as the SBEM descriptor ids — and both sets were
   captured. A watch model nobody has captured is refused rather than sent a
   guess. See `docs/notifications.md`.
+
+- **The watch's own settings, read and written.** Settings has a switch for
+  `/Settings/Ble/AncsEnabled`, which is the watch-side gate a notification
+  PUT is refused by, and the daemon binary doubles as a command-line probe:
+
+  ```
+  suuntosync-notifyd --read /Settings/Ble/AncsEnabled
+  suuntosync-notifyd --write-enum /Settings/Ble/AncsEnabled 1
+  ```
+
+  It exists because questions about the watch otherwise need somebody to tap
+  something, and three rounds of that was two too many.
 
 - **Sleep, recovery and daily activity.** Read from the cloud, and read
   *directly off the watch* — which matters, because a night that the watch
@@ -81,7 +96,6 @@ Confirmed on real hardware, not just in tests:
 - **The MediaTek EPO assist-data format**, which neither watch here asks
   for, and **laps on cloud-synced workouts**, which needs one capture of
   the response's real structure.
-
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.
@@ -112,8 +126,8 @@ dex. `docs/` carries the results:
 | `sml-schema-descriptors.md` | the field schema the watch hands out about itself |
 | `activity-types.md` | both activity-id vocabularies, the watch's and the cloud's |
 
-Two habits run through the whole thing and are worth stating, because they
-caught real bugs:
+Three habits run through the whole thing and are worth stating, because
+they caught real bugs:
 
 **Decoders are Qt-free and tested against golden vectors.** Anything that
 parses bytes lives in plain C++ with STL only, so it compiles and runs with
@@ -127,8 +141,15 @@ protocol turned out to be wrong and only a real capture settled it: the
 sleep resource path that does not exist on the wire, a parameter prefix
 that looked like a length and was a type code, an upload that failed four
 times for four unrelated reasons, and a daily-activity resource written off
-as "a different structure" when the reply had simply been empty. The commit
-messages record which guesses were wrong, deliberately.
+as "a different structure" when the reply had simply been empty.
+
+The clearest case is the most recent. A 9 Baro refused a notification with
+status 400, and three plausible explanations — Do Not Disturb, the watch's
+ANCS setting, and an older "legacy" notification path that genuinely exists
+in the firmware library — were all eliminated by measuring rather than
+reasoning. Twenty minutes of capture then showed the real answer: the layout
+is identical and five constants differ. The commit messages record which
+guesses were wrong, deliberately.
 
 **What is confirmed on hardware is said so, and what is not is not.** Two
 watches exist here and a third does not, so "identical on both" is written
@@ -157,6 +178,12 @@ copy, which leaves the checkout alone and keeps the daemon's SPEC out of
 `rpm/` where sfdk and Qt Creator need it not to be. They are CI
 builds, not Store packages: `pkcon install-local` will say the package is
 untrusted, and it is right.
+
+The daemon keeps its own log at
+`~/.cache/io.github.jarnose/suuntosync/suuntosync-notifyd.log`. That is not
+a preference: journald on this device runs with `Storage=volatile` and
+enough log traffic that its window is seconds wide, so there is nowhere else
+for a background process to leave a trail.
 
 The golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See

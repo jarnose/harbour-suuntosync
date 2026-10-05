@@ -428,17 +428,72 @@ half right:
   cloud already gave us stays not-pending; a genuinely new one keeps the
   `pending = 1` it was inserted with.
 
+## Laps, from the cloud's own sample data (2026-10-05)
+
+`GET /v1/workouts/{key}/sml` carries the laps, and not where the curves
+are. The response is
+
+```
+{ "Data":    { "Samples": [ ... 12974 per-sample points ... ] },
+  "Summary": { "Samples": [ ... 10 ... ] } }
+```
+
+and the laps are in **Summary**. Each summary sample has
+`Attributes["suunto/sml"]`, and the interesting ones hold a `Windows` array
+whose entries carry a `Type`:
+
+| `Type` | what it is |
+|---|---|
+| `Autolap` | an automatic lap |
+| `Lap` | one the wearer pressed for |
+| `Activity` | the whole activity |
+| `Move` | the whole recording |
+
+Captured from a walk on 2026-10-02 with both kinds on it - three of each:
+
+```
+Autolap  1076.0 s  1000 m      Lap  1446.5 s  1349 m
+Autolap   996.3 s  1000 m      Lap   365.8 s   270 m
+Autolap   590.7 s   830 m      Lap   850.8 s  1211 m
+```
+
+**The two kinds are parallel partitions of the same workout, not a
+sequence.** Each set sums to the whole on its own - 2830 m and 2663 s both
+ways, matching `Move` exactly. So they are numbered within their own kind;
+interleaving them would double every distance.
+
+`Distance` and `Duration` are each window's own rather than cumulative,
+which is the opposite of how the watch's own lap markers work - those are
+absolute and the decoder differences them. `TimeISO8601` on the sample is
+where the window ended.
+
+A window also carries the lap's `Altitude`, `Cadence`, `HR`, `Power`,
+`Speed`, `Temperature` and `VerticalSpeed` as `{Avg, Max, Min}`, plus
+`Ascent`, `Descent`, `Energy` and a long row of dive and running-dynamics
+fields that are null on a walk. None of that is read yet; the four fields
+the lap list shows are.
+
+One unit worth noting because it confirms an older question: `HR` here is
+**hertz** - `Avg: 1.29` for a walk, which is 77 bpm - and `Energy` is joules,
+333688 for the first lap, the same unit the watch uses.
+
+The names map onto the vocabulary the BLE decoder already uses for the
+watch's own markers: `Autolap` is a distance lap and `Lap` is a manual one.
+Both sources therefore produce the same words in the lap list.
+
 ## Still open
 
-1. **`workoutBinary`'s exact field order** - `HeaderSerializer.c`,
+1. **The rest of a lap window.** Nine `{Avg, Max, Min}` groups and a dozen
+   scalars per lap, of which four fields are read. Nothing needs them yet.
+2. **`workoutBinary`'s exact field order** - `HeaderSerializer.c`,
    `ServiceHeaderSerializer.b` and the four sub-serializers. Readable, not
    read. **Not needed**: a watch-recorded upload sends SML instead, and
    that path works. This stays documented in case a phone-recorded workout
    ever matters.
-2. **Whether omitting nil readings matters.** The upload succeeds without
+3. **Whether omitting nil readings matters.** The upload succeeds without
    them, so the difference is confirmed harmless - but it has never been
    tested the other way.
-3. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
+4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
 
 ## Setting up HTTPS interception again (2026-09-25)

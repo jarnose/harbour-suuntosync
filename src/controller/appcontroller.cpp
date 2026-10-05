@@ -288,6 +288,76 @@ void collectSmlLeaves(const QJsonValue &value, std::map<QString, std::vector<dou
     }
 }
 
+// Laps out of a cloud sample-data response.
+//
+// They live in Summary.Samples, not in Data: each sample carries
+// Attributes["suunto/sml"].Windows, and each window has a Type. Captured
+// from a walk with both kinds of lap on it:
+//
+//   Autolap   an automatic lap - three of them, 1000 + 1000 + 830 m
+//   Lap       a lap the wearer pressed for - three, 1349 + 270 + 1211 m
+//   Activity  the whole activity
+//   Move      the whole recording
+//
+// The two lap kinds are **parallel partitions of the same workout**, not a
+// sequence: each set sums to the total on its own (2830 m and 2663 s both
+// ways). So they are numbered within their own kind rather than
+// interleaved, and the type is carried through so a reader can tell which
+// is which.
+//
+// The names map onto the vocabulary the BLE decoder already uses for the
+// watch's own markers - Autolap is a distance lap and Lap is a manual one -
+// so both sources produce the same words.
+//
+// Distance and Duration are each window's own, not cumulative. TimeISO8601
+// on the sample is where the window ended.
+QByteArray buildCloudLapsJson(const QByteArray &body)
+{
+    const QJsonObject root = QJsonDocument::fromJson(body).object();
+    const QJsonArray samples =
+            root.value(QStringLiteral("Summary")).toObject()
+                .value(QStringLiteral("Samples")).toArray();
+
+    QJsonArray laps;
+    int automatic = 0;
+    int manual = 0;
+    for (const QJsonValue &sampleValue : samples) {
+        const QJsonArray windows =
+                sampleValue.toObject().value(QStringLiteral("Attributes")).toObject()
+                    .value(QStringLiteral("suunto/sml")).toObject()
+                    .value(QStringLiteral("Windows")).toArray();
+        for (const QJsonValue &windowValue : windows) {
+            const QJsonObject window = windowValue.toObject();
+            const QString type = window.value(QStringLiteral("Type")).toString();
+
+            QString name;
+            int number = 0;
+            if (type == QStringLiteral("Autolap")) {
+                name = QStringLiteral("Distance");
+                number = ++automatic;
+            } else if (type == QStringLiteral("Lap")) {
+                name = QStringLiteral("Manual");
+                number = ++manual;
+            } else {
+                // Activity and Move are the whole workout, which the
+                // summary fields already carry.
+                continue;
+            }
+
+            QJsonObject lap;
+            lap.insert(QStringLiteral("number"), number);
+            lap.insert(QStringLiteral("type"), name);
+            lap.insert(QStringLiteral("durationSeconds"),
+                        window.value(QStringLiteral("Duration")).toDouble());
+            lap.insert(QStringLiteral("distanceMeters"),
+                        window.value(QStringLiteral("Distance")).toDouble());
+            laps.append(lap);
+        }
+    }
+
+    return laps.isEmpty() ? QByteArray() : QJsonDocument(laps).toJson(QJsonDocument::Compact);
+}
+
 QByteArray buildCloudSeriesJson(const QByteArray &body)
 {
     const QJsonDocument doc = QJsonDocument::fromJson(body);
@@ -2428,6 +2498,9 @@ void AppController::loadCloudSamples(const QString &key, bool saveRaw)
                 const QByteArray saved = buildCloudSeriesJson(body);
                 if (!saved.isEmpty())
                     m_workoutStore->saveSeries(key, saved, nullptr);
+                const QByteArray savedLaps = buildCloudLapsJson(body);
+                if (!savedLaps.isEmpty())
+                    m_workoutStore->saveLaps(key, savedLaps, nullptr);
                 m_cloudSamplesInProgress = false;
                 emit cloudSamplesInProgressChanged();
                 emit workoutDetailsChanged(key);
@@ -2453,6 +2526,14 @@ void AppController::loadCloudSamples(const QString &key, bool saveRaw)
             }
 
             m_workoutStore->saveSeries(key, series, nullptr);
+
+            // The laps are in the same response, so there is no second
+            // request and no second button: whoever downloads the curves
+            // gets the laps.
+            const QByteArray laps = buildCloudLapsJson(body);
+            if (!laps.isEmpty())
+                m_workoutStore->saveLaps(key, laps, nullptr);
+
             finish(QString());
         });
     });

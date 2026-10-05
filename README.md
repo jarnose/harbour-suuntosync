@@ -21,8 +21,9 @@ Confirmed on real hardware, not just in tests:
   differently: each one's field table is kept per address, so switching back
   does not mean fetching it again. The daemon follows the switch, and
   Settings can forget a watch outright.
-- **Workouts from the Suunto cloud**, with route, training metrics and
-  sample data.
+- **Workouts from the Suunto cloud**, with route, training metrics, sample
+  data and laps — automatic and manual ones, which the cloud keeps as two
+  parallel partitions of the same workout rather than one sequence.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
   payload is converted to the JSON the cloud expects, zipped and posted. A
   workout recorded on the watch shows up in the official app afterwards.
@@ -94,8 +95,7 @@ Confirmed on real hardware, not just in tests:
   one direction of the protocol that has never been implemented, in either
   app.
 - **The MediaTek EPO assist-data format**, which neither watch here asks
-  for, and **laps on cloud-synced workouts**, which needs one capture of
-  the response's real structure.
+  for.
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.

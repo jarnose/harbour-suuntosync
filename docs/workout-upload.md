@@ -510,6 +510,13 @@ shows 15, 5 and +9 - the same three figures the official app shows, from
 Suunto's own per-workout stress scores through the standard 42- and 7-day
 averages. Nothing is being approximated.
 
+**Checked a second time, 2026-10-05**, after the incremental sync below and
+a few more workouts: the official app showed 17, 12 and +4, and so did this
+one. That is the more informative of the two checks. A single agreement can
+come from a level that happens to coincide; agreement after ATL has more
+than doubled and TSB has swung from +9 to +4 says the decay constants
+themselves are right.
+
 Worth knowing about the first such sync: it fetches twelve pages and more
 than a thousand workouts. Every later sync used to re-fetch the lot,
 because `since` was hard-coded to 0 - what it meant had not been

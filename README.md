@@ -11,7 +11,11 @@ Confirmed on real hardware, not just in tests:
 - **Fitness, fatigue and form.** CTL, ATL and TSB — what Suunto's app calls
   Progress — on the main page, from the cloud's own per-workout stress
   scores through the standard 42- and 7-day exponential averages. Checked
-  against the official app on the same account: 15, 5 and +9 both ways.
+  against the official app on the same account: 15, 5 and +9 both ways, and
+  again as 17, 12 and +4 a few workouts later. The second check is the
+  stronger one — the figures tracked a real change rather than matching
+  once, which is what says the 42- and 7-day time constants are right and
+  not just the level.
   Nothing here invents a training load from duration or heart rate; a figure
   that looked like Suunto's and was not would be worse than none.
 

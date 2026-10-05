@@ -65,6 +65,8 @@ public:
                                                       const QString &error)>;
     using WorkoutDetailCallback = std::function<void(bool ok, const QJsonObject &workout,
                                                         const QString &error)>;
+    using JsonArrayCallback = std::function<void(bool ok, const QJsonArray &payload,
+                                                   const QString &error)>;
 
     explicit SuuntoCloudClient(QObject *parent = nullptr);
 
@@ -135,6 +137,21 @@ public:
     // showing what it has.
     void fetchWorkoutExtensions(const QString &sessionKey, const QString &workoutKey,
                                  WorkoutDetailCallback callback);
+
+    // GET /v2/personal/best/records?statsVersion=V2&tz=<IANA zone> - the
+    // account's all-time bests, per activity, plus a separate set for the
+    // current year. Note the v2: a v1 of this path was not observed and is
+    // not assumed to exist.
+    //
+    // The timezone is the server's business, not decoration: a year
+    // boundary decides what counts as "this year", and the official app
+    // sends the phone's own zone.
+    //
+    // Payload is an array, handed back raw. The record *values* are not all
+    // in units this project can state - the distances and the durations
+    // are, the speeds and the pace are not; see docs/workout-upload.md.
+    void fetchPersonalRecords(const QString &sessionKey, const QString &timezone,
+                               JsonArrayCallback callback);
 
     // GET /v1/workouts/{key}/sml - the workout's full sample data. Despite
     // the path it is JSON rather than the binary SBEM the watch serves, and

@@ -42,6 +42,15 @@ public:
     bool updateTrainingMetrics(const QString &key, double epoc, double peakTrainingEffect,
                                 double recoveryTime, QString *error);
 
+    // Whole cloud responses that belong to the account rather than to one
+    // workout, keyed by a kind name ("records"). Stored so the page they
+    // feed draws something without a network: a list of all-time bests
+    // changes a few times a year, so the cached copy is almost always the
+    // right answer. fetchedAtMs is unix ms and may be null on load.
+    bool saveCloudCache(const QString &kind, const QByteArray &json, qint64 fetchedAtMs,
+                         QString *error);
+    QByteArray loadCloudCache(const QString &kind, qint64 *fetchedAtMs = nullptr) const;
+
     bool saveDetails(const QString &key, const QByteArray &json, QString *error);
     QByteArray loadDetails(const QString &key) const;
 

@@ -158,7 +158,54 @@ bool WorkoutStore::open(QString *error)
         return false;
     }
 
+    // Whole cloud responses that belong to the account rather than to any
+    // one workout - the personal records so far. Kept so the page they
+    // feed works without a network, which for a list of all-time bests is
+    // the normal case: they change a few times a year.
+    QSqlQuery cache(db);
+    if (!cache.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS cloud_cache ("
+            "  kind TEXT PRIMARY KEY,"
+            "  json TEXT NOT NULL,"
+            "  fetched_at INTEGER NOT NULL"
+            ")"))) {
+        if (error)
+            *error = cache.lastError().text();
+        return false;
+    }
+
     return true;
+}
+
+bool WorkoutStore::saveCloudCache(const QString &kind, const QByteArray &json, qint64 fetchedAtMs,
+                                   QString *error)
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral(
+            "INSERT INTO cloud_cache (kind, json, fetched_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(kind) DO UPDATE SET json = excluded.json, "
+            "fetched_at = excluded.fetched_at"));
+    q.addBindValue(kind);
+    q.addBindValue(QString::fromUtf8(json));
+    q.addBindValue(fetchedAtMs);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+QByteArray WorkoutStore::loadCloudCache(const QString &kind, qint64 *fetchedAtMs) const
+{
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral("SELECT json, fetched_at FROM cloud_cache WHERE kind = ?"));
+    q.addBindValue(kind);
+    if (!q.exec() || !q.next())
+        return QByteArray();
+    if (fetchedAtMs)
+        *fetchedAtMs = q.value(1).toLongLong();
+    return q.value(0).toString().toUtf8();
 }
 
 bool WorkoutStore::saveLaps(const QString &key, const QByteArray &json, QString *error)

@@ -22,6 +22,7 @@
 #include "../cloud/zipwriter.h"
 
 #include <QDebug>
+#include <QTimeZone>
 #include <QStandardPaths>
 #include <QtMath>
 #include <QVariantMap>
@@ -66,6 +67,10 @@ QString dataDirectory()
 {
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 }
+
+// The cloud_cache kind for the personal records. One name, in one place,
+// because a typo would silently cache into a second row that nothing reads.
+const QLatin1String kRecordsCacheKind("records");
 
 QString dbPath()
 {
@@ -557,6 +562,16 @@ void flattenJson(const QJsonObject &object, const QString &prefix, QJsonObject *
             entry.insert(QStringLiteral("value"), number);
             if (!unit.isEmpty())
                 entry.insert(QStringLiteral("unit"), unit);
+            out->insert(name, entry);
+        } else if (value.isString() && !value.toString().isEmpty()) {
+            // Text, kept under its own key so a reader can tell the two
+            // apart without guessing from the value's type. These were
+            // dropped until the gear block turned out to be where the
+            // recording watch names itself - model, serial and firmware
+            // version - which is worth knowing for an account that two
+            // watches both write to.
+            QJsonObject entry;
+            entry.insert(QStringLiteral("text"), value.toString());
             out->insert(name, entry);
         }
     }
@@ -2725,15 +2740,19 @@ QVariantList AppController::workoutDetails(const QString &key) const
     QVariantList out;
     for (auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
         const QJsonObject entry = it.value().toObject();
+        const QString text = entry.value(QStringLiteral("text")).toString();
         const double value = entry.value(QStringLiteral("value")).toDouble();
         // Skip fields the watch didn't record. Zero is the schema's own
         // "absent" marker for most of these (nillable=0), and a screen of
-        // a hundred zeroes would bury the dozen that mean something.
-        if (qFuzzyIsNull(value))
+        // a hundred zeroes would bury the dozen that mean something. A text
+        // field is exempt: it is absent by not being there at all, and
+        // flattenJson() already drops the empty ones.
+        if (text.isEmpty() && qFuzzyIsNull(value))
             continue;
         QVariantMap row;
         row.insert(QStringLiteral("name"), it.key());
         row.insert(QStringLiteral("value"), value);
+        row.insert(QStringLiteral("text"), text);
         row.insert(QStringLiteral("unit"), entry.value(QStringLiteral("unit")).toString());
         out.append(row);
     }
@@ -2761,6 +2780,126 @@ QVariantMap AppController::monthSummary() const
     out.insert(QStringLiteral("seconds"), totals.seconds);
     out.insert(QStringLiteral("month"), QLocale().monthName(first.month()));
     return out;
+}
+
+namespace {
+
+// All-time and this-year for one record type, on one row - which is how the
+// page shows them, and the only pairing the response offers: `records` and
+// `thisYear` are two objects keyed by the same type names.
+QVariantMap recordRow(const QString &type, const QJsonObject &allTime, const QJsonObject &year)
+{
+    QVariantMap row;
+    row.insert(QStringLiteral("type"), type);
+    // Values pass through untouched. The page knows which types are seconds
+    // and which are metres, and which this project will not claim a unit
+    // for - see docs/workout-upload.md.
+    row.insert(QStringLiteral("value"), allTime.value(QStringLiteral("value")).toDouble());
+    row.insert(QStringLiteral("date"), qint64(allTime.value(QStringLiteral("date")).toDouble()));
+    row.insert(QStringLiteral("workoutKey"),
+                allTime.value(QStringLiteral("workoutKey")).toString());
+    row.insert(QStringLiteral("hasAllTime"), !allTime.isEmpty());
+
+    row.insert(QStringLiteral("yearValue"), year.value(QStringLiteral("value")).toDouble());
+    row.insert(QStringLiteral("yearDate"), qint64(year.value(QStringLiteral("date")).toDouble()));
+    row.insert(QStringLiteral("yearWorkoutKey"),
+                year.value(QStringLiteral("workoutKey")).toString());
+    row.insert(QStringLiteral("hasYear"), !year.isEmpty());
+    return row;
+}
+
+} // namespace
+
+QVariantList AppController::personalRecords() const
+{
+    const QJsonArray groups =
+            QJsonDocument::fromJson(m_workoutStore->loadCloudCache(kRecordsCacheKind)).array();
+
+    QVariantList out;
+    for (const QJsonValue &groupValue : groups) {
+        const QJsonObject group = groupValue.toObject();
+        const QJsonObject records = group.value(QStringLiteral("records")).toObject();
+        const QJsonObject year = group.value(QStringLiteral("thisYear")).toObject();
+
+        // `types` is the server's own order for this activity, and the only
+        // ordering information in the response - `records` is a JSON object,
+        // whose keys Qt hands back alphabetically, which would put the
+        // marathon before the 5 km.
+        QVariantList rows;
+        for (const QJsonValue &typeValue : group.value(QStringLiteral("types")).toArray()) {
+            const QString type = typeValue.toString();
+            if (!records.contains(type) && !year.contains(type))
+                continue;
+            rows.append(recordRow(type, records.value(type).toObject(),
+                                   year.value(type).toObject()));
+        }
+        // An activity the account has a `types` list for but no record in -
+        // the response carries several - would otherwise be a heading with
+        // nothing under it.
+        if (rows.isEmpty())
+            continue;
+
+        QVariantMap entry;
+        entry.insert(QStringLiteral("activityId"),
+                      group.value(QStringLiteral("activityId")).toInt());
+        entry.insert(QStringLiteral("rows"), rows);
+        out.append(entry);
+    }
+    return out;
+}
+
+qint64 AppController::recordsFetchedAt() const
+{
+    qint64 fetchedAt = 0;
+    m_workoutStore->loadCloudCache(kRecordsCacheKind, &fetchedAt);
+    return fetchedAt;
+}
+
+void AppController::syncPersonalRecords()
+{
+    if (!m_cloudAccount.isSignedIn() || m_recordsSyncInProgress)
+        return;
+
+    m_recordsSyncInProgress = true;
+    emit recordsSyncInProgressChanged();
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this](bool ok, const QByteArray &data, const QString &loadError) {
+        if (!ok) {
+            m_recordsSyncInProgress = false;
+            emit recordsSyncInProgressChanged();
+            emit errorOccurred(tr("Failed to load login session: %1").arg(loadError));
+            return;
+        }
+
+        // The phone's own zone, which is what decides where this year
+        // starts. QTimeZone gives the IANA name the endpoint wants
+        // ("Europe/Helsinki"); QDateTime's offset would not.
+        const QString zone = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+        m_cloudClient->fetchPersonalRecords(QString::fromUtf8(data), zone,
+                [this](bool recordsOk, const QJsonArray &payload, const QString &error) {
+            m_recordsSyncInProgress = false;
+            emit recordsSyncInProgressChanged();
+
+            if (!recordsOk) {
+                // Loud, unlike the extensions: this is a page the user
+                // opened to see these, so an empty one needs a reason.
+                emit errorOccurred(tr("Failed to fetch records: %1").arg(error));
+                return;
+            }
+
+            QString saveError;
+            if (!m_workoutStore->saveCloudCache(kRecordsCacheKind,
+                                                 QJsonDocument(payload).toJson(
+                                                         QJsonDocument::Compact),
+                                                 QDateTime::currentMSecsSinceEpoch(),
+                                                 &saveError)) {
+                emit errorOccurred(tr("Failed to save records: %1").arg(saveError));
+                return;
+            }
+            emit personalRecordsChanged();
+        });
+    });
 }
 
 QVariantMap AppController::trainingProgress() const

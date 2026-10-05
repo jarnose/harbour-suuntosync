@@ -622,6 +622,60 @@ built from is not a detail. `tss` is the PACE one here, and `tss` is what
 this app reads - confirmed correct by the match against the official app's
 own 15 / 5 / +9 rather than by reasoning about it.
 
+### Another new endpoint: `GET /v2/personal/best/records`
+
+```
+GET /apiserver/v2/personal/best/records?statsVersion=V2&tz=Europe%2FHelsinki
+```
+
+Note the **v2** - a v1 of this path was not observed and is not assumed to
+exist. The timezone is not decoration: a year boundary decides what counts
+as "this year", and the app sends the phone's own IANA zone, slash
+percent-encoded.
+
+The payload is an array, one entry per activity:
+
+```json
+{ "activityId": 1,
+  "types": ["LongestDistance","FastestPace","KM5","KM10",
+            "HalfMarathon","FullMarathon"],
+  "records":  { "KM5": {"type":"KM5","value":1552.9,
+                        "workoutKey":"5b34fef3b99d960f7b252e21",
+                        "date":1445090887000}, ... },
+  "thisYear": { ... same shape, this year's bests ... } }
+```
+
+`types` is the only ordering information in the response, and it matters:
+`records` is a JSON object, and reading its keys back alphabetically puts
+the marathon before the 5 km.
+
+**Units: partly established, and deliberately not guessed for the rest.**
+
+- **Durations** - `LongestDuration`, `KM5`, `KM10`, `KM20`, `KM40`,
+  `KM180`, `HalfMarathon`, `FullMarathon` - are **seconds**. This is
+  arithmetic rather than assumption: 5 km in 1552.9 s is 5:11/km and
+  10 km in 3728.5 s is 6:13/km, a correctly-ordered pair that no other
+  unit produces.
+- **`LongestDistance`** is **metres** (10130.0 for a run), matching the
+  workout list's own `totalDistance`.
+- **`MaxAscent`** is metres by the same reading.
+- **`FastestPace`, `MaxSpeed`, `MaxAvgSpeed`, `MaxAvgPower`: not
+  established, and shown without a unit.** The workout *list* was measured
+  from this same capture - `avgSpeed` is exactly distance/time, so metres
+  per second, and `avgPace` is exactly (time/distance)/60, so decimal
+  minutes per kilometre, checked on seven workouts. But the record does not
+  follow: running's `FastestPace` is 3.22 all-time against 2.64 this year,
+  and in minutes per kilometre that makes this year faster than the
+  all-time best, which cannot be. Either the field is a speed despite its
+  name, or `records` excludes the current year. Cycling's `MaxSpeed` of
+  exactly 100.0 does not help - a suspiciously round number that reads
+  like a server-side cap. So the page prints the figure the server sent.
+
+Settling it needs one comparison this project can actually make: every
+record carries the `workoutKey` it was set in, and with the full history
+synced those workouts are in the local database with their own measured
+`avgPace` and `maxSpeed`. One query, not another capture.
+
 ### A new endpoint: `POST /v1/workout/extensions/<workoutKey>`
 
 Not a GET. The body is a JSON array of the extension types wanted:
@@ -685,13 +739,24 @@ evening pairs: 22.9 21:29-21:39, 23.9 21:10 and 21:35, 25.9 21:17. Those
 are the evenings this project's upload path was being tested, and the
 200-answering keys are bulk bursts from the official app instead.
 
-Suggestive, not established: no upload here ever recorded the workout key
-the server returned, so there is nothing local to match against. If it is
-right, a workout uploaded by this app is stored and listed and summarised
-correctly - the official app shows it - but its extensions subresource is
-not readable, which would show up as a missing analysis panel rather than a
-missing workout. Worth settling the next time something is uploaded, by
-keeping the returned key and asking for its extensions.
+If it is right, a workout uploaded by this app is stored and listed and
+summarised correctly - the official app shows it - but its extensions
+subresource is not readable, which shows up as a missing analysis panel
+rather than a missing workout.
+
+**This is settleable, and an earlier version of this section said it was
+not.** The claim was that no upload here ever kept the key the server
+returned. It does: `WorkoutStore::markSmlUploaded()` writes it to
+`workout_sml.uploaded_key` and has since the upload path was built. So the
+nine ids can simply be looked up on the phone:
+
+```
+sqlite3 ~/.local/share/io.github.jarnose/suuntosync/suuntosync.sqlite \
+  "SELECT key, uploaded_key FROM workout_sml WHERE uploaded_key IS NOT NULL;"
+```
+
+Every one of the nine that appears in that second column is a workout this
+app uploaded.
 
 ## Still open
 
@@ -713,9 +778,10 @@ keeping the returned key and asking for its extensions.
    official app comes back on a later incremental sync. Settling it takes
    one capture with a cursor that falls between some workout's `created`
    and its `lastModified`, or simply editing a workout and syncing.
-6. **The nine 403s on `/v1/workout/extensions/<key>`** - whether they are
-   the workouts this app uploaded, and if so what about them the server
-   objects to.
+6. **The nine 403s on `/v1/workout/extensions/<key>`** - what about those
+   workouts the server objects to. *Whether* they are this app's uploads is
+   no longer open-ended: `workout_sml.uploaded_key` has the keys, so it is
+   one query away (see above).
 
 ## Setting up HTTPS interception again (2026-09-25)
 

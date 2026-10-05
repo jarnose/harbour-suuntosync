@@ -46,6 +46,11 @@ class AppController : public QObject
     Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
     Q_PROPERTY(bool healthSyncInProgress READ isHealthSyncInProgress NOTIFY healthSyncInProgressChanged)
     // What the cover shows. Stored in QSettings; see coverMode().
+    Q_PROPERTY(bool recordsSyncInProgress READ isRecordsSyncInProgress NOTIFY recordsSyncInProgressChanged)
+    // Unix ms of the cached records' own fetch, 0 if never. The page shows
+    // it, because an all-time best that is a month stale is still right and
+    // saying when it was asked for beats implying it is live.
+    Q_PROPERTY(qint64 recordsFetchedAt READ recordsFetchedAt NOTIFY personalRecordsChanged)
     Q_PROPERTY(QString coverMode READ coverMode WRITE setCoverMode NOTIFY coverModeChanged)
     Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
     Q_PROPERTY(bool gpsUpdateInProgress READ isGpsUpdateInProgress NOTIFY gpsUpdateInProgressChanged)
@@ -64,6 +69,8 @@ public:
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
     bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
+    bool isRecordsSyncInProgress() const { return m_recordsSyncInProgress; }
+    qint64 recordsFetchedAt() const;
 
     // One of "latest", "totals", "progress", "sleep" or "nothing" - what
     // the cover page draws. A plain string rather than an enum so QML can
@@ -307,6 +314,16 @@ public:
     // thing that happens on every pull-to-refresh.
     Q_INVOKABLE void resyncCloudWorkouts();
 
+    // The account's personal bests, per activity: all-time and, separately,
+    // this year. Cached in the database, so personalRecords() answers
+    // without a network and syncPersonalRecords() is what goes and asks.
+    // Each row carries its value verbatim with a `type` name; the page
+    // decides how to show it, because the cloud's units are only partly
+    // established - distances and durations yes, speeds and pace no. See
+    // docs/workout-upload.md.
+    Q_INVOKABLE QVariantList personalRecords() const;
+    Q_INVOKABLE void syncPersonalRecords();
+
     // A BLE-synced workout's GPS track, projected for drawing: a list of
     // { "x": 0..1, "y": 0..1 } points, already aspect-corrected (longitude
     // degrees are scaled by cos(latitude), so the shape isn't stretched) and
@@ -470,6 +487,8 @@ signals:
     void healthSyncInProgressChanged();
     void gpsUpdateInProgressChanged();
     void healthDataChanged();
+    void recordsSyncInProgressChanged();
+    void personalRecordsChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
@@ -570,6 +589,7 @@ private:
     // has no idempotency key, so a double send would create two workouts.
     bool m_uploadInProgress = false;
 
+    bool m_recordsSyncInProgress = false;
     QString m_coverMode;
     bool m_syncOnConnect = false;
 

@@ -115,6 +115,14 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("HealthPage.qml"))
             }
             MenuItem {
+                // Unlike Health, this one is the cloud's alone: the records
+                // are the account's own, computed server-side over a
+                // history that reaches back further than any watch keeps.
+                visible: AppController.cloudSignedIn
+                text: qsTr("Records")
+                onClicked: pageStack.push(Qt.resolvedUrl("RecordsPage.qml"))
+            }
+            MenuItem {
                 // Two watches in the house means switching between them is
                 // a routine thing, not a setup step, so it belongs here
                 // rather than three taps deep in the pairing page.

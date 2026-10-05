@@ -28,6 +28,13 @@ Page {
     // The user's fitness age at the time of the workout, which only the
     // cloud's FitnessExtension carries - the watch does not report it.
     property int fitnessAge: 0
+    // How the recording watch names itself, from the cloud's
+    // SummaryExtension.gear. Worth showing on an account two watches both
+    // write to, and the only place a cloud workout says which one it came
+    // from - the watch's own logbook entry does not carry this.
+    property string gearName: ""
+    property string gearFirmware: ""
+    property string gearSerial: ""
     // Five {lowerLimit, seconds} entries from the cloud's
     // IntensityExtension, when it has them. The boundaries come from the
     // server rather than being derived from a configured maximum, which
@@ -91,6 +98,12 @@ Page {
                 maxVo2 = f.value
             else if (fitnessAge === 0 && f.name === "FitnessExtension.fitnessAge")
                 fitnessAge = f.value
+            else if (f.name === "SummaryExtension.gear.displayName")
+                gearName = f.text
+            else if (f.name === "SummaryExtension.gear.softwareVersion")
+                gearFirmware = f.text
+            else if (f.name === "SummaryExtension.gear.serialNumber")
+                gearSerial = f.text
             else {
                 // IntensityExtension.zones.heartRate.zoneN.{totalTime,lowerLimit}
                 var m = f.name.match(
@@ -530,6 +543,48 @@ Page {
             // naming, useful to have but not to lead with.
             Item { width: 1; height: Theme.paddingLarge }
 
+            // ---- the recording watch ----
+            Column {
+                width: parent.width
+                spacing: Theme.paddingSmall
+                visible: page.gearName.length > 0
+
+                Item { width: 1; height: Theme.paddingLarge }
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    text: qsTr("Recorded with")
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    text: page.gearName
+                    color: Theme.primaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                    truncationMode: TruncationMode.Fade
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    // Firmware and serial on one line, each omitted when
+                    // absent rather than leaving a stray separator.
+                    text: {
+                        var parts = []
+                        if (page.gearFirmware.length > 0)
+                            parts.push(qsTr("firmware %1").arg(page.gearFirmware))
+                        if (page.gearSerial.length > 0)
+                            parts.push(page.gearSerial)
+                        return parts.join(" \u00b7 ")
+                    }
+                    visible: text.length > 0
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    truncationMode: TruncationMode.Fade
+                }
+            }
+
             // ---- heart-rate zones ----
             // Only for a cloud workout: the boundaries are the account's,
             // and the watch does not hand them over with a logbook entry.
@@ -631,9 +686,13 @@ Page {
                             horizontalAlignment: Text.AlignRight
                             font.pixelSize: Theme.fontSizeExtraSmall
                             text: {
-                                // Integers stay integers; everything else
-                                // gets two decimals, which suits the range
-                                // these fields span (0.02 to 650000).
+                                // A text field shows as itself; a number
+                                // keeps integers integral and gives
+                                // everything else two decimals, which suits
+                                // the range these fields span (0.02 to
+                                // 650000).
+                                if (modelData.text.length > 0)
+                                    return modelData.text
                                 var v = modelData.value
                                 var shown = (Math.abs(v - Math.round(v)) < 0.005)
                                         ? Math.round(v).toString()

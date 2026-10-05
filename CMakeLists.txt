@@ -205,6 +205,7 @@ add_custom_target(distfiles
         qml/pages/LoginPage.qml
         qml/pages/WorkoutDetailPage.qml
         qml/pages/HealthPage.qml
+        qml/pages/RecordsPage.qml
         qml/pages/SettingsPage.qml
         rpm/harbour-suuntosync.spec
         daemon/suuntosync-notifyd.spec

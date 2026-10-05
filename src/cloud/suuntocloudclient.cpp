@@ -19,6 +19,9 @@
 namespace {
 
 const QString kBaseUrl = QStringLiteral("https://api.sports-tracker.com/apiserver/v1/");
+// One endpoint here lives under v2 rather than v1 - the personal records.
+// Its own v1 was not observed and is not assumed to exist.
+const QString kBaseUrlV2 = QStringLiteral("https://api.sports-tracker.com/apiserver/v2/");
 // Matches auth.UserAgent in tajchert/suuntool (PackageName + "/" + AppVersionCode)
 // - the same constants SuuntoAuth::deriveLoginSecret() uses, so this is kept
 // in lockstep with the APK version those constants were extracted from.
@@ -462,6 +465,44 @@ void SuuntoCloudClient::fetchWorkoutExtensions(const QString &sessionKey,
             return;
         }
         callback(true, envelope.value(QStringLiteral("payload")).toObject(), QString());
+    });
+}
+
+void SuuntoCloudClient::fetchPersonalRecords(const QString &sessionKey,
+                                              const QString &timezone,
+                                              JsonArrayCallback callback)
+{
+    // The zone is percent-encoded, slash included, exactly as the captured
+    // request has it: tz=Europe%2FHelsinki.
+    const QString url = kBaseUrlV2 + QStringLiteral("personal/best/records?statsVersion=V2&tz=")
+            + QString::fromUtf8(QUrl::toPercentEncoding(timezone));
+    const QNetworkRequest request = authorizedRequest(url, sessionKey);
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QJsonArray(), reply->errorString());
+            return;
+        }
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        if (!doc.isObject()) {
+            callback(false, QJsonArray(), tr("Unexpected response from server"));
+            return;
+        }
+        const QJsonObject envelope = doc.object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            callback(false, QJsonArray(),
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code"))
+                                                              .toInt())))
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+        callback(true, envelope.value(QStringLiteral("payload")).toArray(), QString());
     });
 }
 

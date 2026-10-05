@@ -9,26 +9,15 @@ namespace Ancs {
 
 namespace {
 
-// Four bytes at the start of the structure body that never moved across
-// three captures differing in app, title, message length and button count.
-// The same shape - pairs of 0x01 and a small number - appears at the head
-// of other Whiteboard structures in the same log, so it is most likely a
-// per-member type tag list rather than data. Replayed, not understood.
-const uint8_t kStructurePrologue[4] = { 0x01, 0x1f, 0x01, 0x21 };
-
-// The two bytes between the length and the structure body. 0x14 prefixes
-// every structure parameter in the capture, whatever the resource; 0x6a
-// varies per resource (other writes carry 0x34) and so belongs to
-// AncsRequestData specifically.
+// 0x14 prefixes every structure parameter in the capture, whatever the
+// resource and whatever the watch. The byte after it, and the type code's
+// low byte, are per watch - see Profile.
 const uint8_t kStructureTag = 0x14;
-const uint8_t kAncsRequestDataForm = 0x6a;
 
-// The low byte of the parameter's type code. Its high byte is not a
-// constant: in all six structure-carrying writes in the capture it equals
-// the ack body's second byte, which is the resource family the handle
-// belongs to. That is why it is computed rather than hard-coded - a 9 Baro
-// hands out its own handles.
-const uint8_t kAncsRequestDataType = 0x09;
+// Which watch a handle belongs to. The third byte of the ack is the
+// resource's id on that firmware.
+const uint8_t kRaceAddResource = 0x04;
+const uint8_t kBaroAddResource = 0x03;
 
 // A 32-bit unsigned parameter. Confirmed by the notification id, which
 // travels this way in both the add and the remove.
@@ -54,7 +43,7 @@ void appendString(std::vector<uint8_t> &pool, const std::string &value)
 }
 
 // The structure body, without the length byte or the two header bytes.
-std::vector<uint8_t> encodeStructureBody(const Notification &n)
+std::vector<uint8_t> encodeStructureBody(const Notification &n, const Profile &profile)
 {
     // The pool first, because the fixed part is full of offsets into it.
     std::vector<uint8_t> pool;
@@ -99,7 +88,7 @@ std::vector<uint8_t> encodeStructureBody(const Notification &n)
     body.push_back(n.categoryCount);
     body.push_back(n.eventFlags);
     appendU32(body, n.date);
-    body.insert(body.end(), kStructurePrologue, kStructurePrologue + 4);
+    body.insert(body.end(), profile.prologue, profile.prologue + 4);
 
     // Everything from here to the pool was byte-identical across all three
     // captures. Two of the constants - the 1 at +28 and the 42 at +44 -
@@ -111,11 +100,11 @@ std::vector<uint8_t> encodeStructureBody(const Notification &n)
     appendU32(body, 1);
     appendU32(body, titleOffset);
     appendU32(body, 0);
-    appendU32(body, 1);
+    appendU32(body, profile.wordAt28);
     appendU32(body, 1);
     appendU32(body, messageOffset);
     appendU32(body, 0);
-    appendU32(body, 42);
+    appendU32(body, profile.wordAt44);
     appendU32(body, 0);
     appendU32(body, 0);
     appendU32(body, 1);
@@ -159,7 +148,32 @@ size_t maximumEncodedSize()
 
 size_t encodedSize(const Notification &notification)
 {
-    return 15 + 1 + 1 + 1 + encodeStructureBody(notification).size();
+    // The profile does not change any length: it is five constants, all of
+    // them fixed-width, so a Race's size is a 9 Baro's.
+    return 15 + 1 + 1 + 1 + encodeStructureBody(notification, raceProfile()).size();
+}
+
+const Profile &raceProfile()
+{
+    static const Profile profile = { 0x09, 0x6a, { 0x01, 0x1f, 0x01, 0x21 }, 1, 42 };
+    return profile;
+}
+
+const Profile &baroProfile()
+{
+    static const Profile profile = { 0x07, 0x00, { 0x01, 0x00, 0x00, 0x00 }, 0, 0 };
+    return profile;
+}
+
+const Profile *profileForAck(const std::vector<uint8_t> &ackBody)
+{
+    if (ackBody.size() < 3)
+        return nullptr;
+    if (ackBody[2] == kRaceAddResource)
+        return &raceProfile();
+    if (ackBody[2] == kBaroAddResource)
+        return &baroProfile();
+    return nullptr;
 }
 
 void truncateToFit(Notification &notification)
@@ -177,22 +191,23 @@ void truncateToFit(Notification &notification)
     }
 }
 
-std::vector<uint8_t> encodeRequestData(const Notification &notification)
+std::vector<uint8_t> encodeRequestData(const Notification &notification,
+                                        const Profile &profile)
 {
-    const std::vector<uint8_t> body = encodeStructureBody(notification);
+    const std::vector<uint8_t> body = encodeStructureBody(notification, profile);
     if (body.size() + 1 > 255)
         throw std::invalid_argument("Ancs::encodeRequestData: notification too large to encode");
 
     std::vector<uint8_t> out;
     out.push_back(static_cast<uint8_t>(body.size() + 1));
     out.push_back(kStructureTag);
-    out.push_back(kAncsRequestDataForm);
+    out.push_back(profile.form);
     out.insert(out.end(), body.begin(), body.end());
     return out;
 }
 
 std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &addAckBody,
-                                const Notification &notification)
+                                const Notification &notification, const Profile &profile)
 {
     if (addAckBody.size() < 6)
         throw std::invalid_argument("Ancs::encodeAdd: ackBody shorter than 6 bytes");
@@ -200,12 +215,26 @@ std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &a
     std::vector<uint8_t> id;
     appendU32(id, notification.notificationId);
 
+    // The type's high byte is the ack's second byte in all six
+    // structure-carrying writes in the capture - the resource family the
+    // handle belongs to. Only the low byte is per watch.
     const uint16_t structureType =
-            static_cast<uint16_t>(addAckBody[1] << 8) | kAncsRequestDataType;
+            static_cast<uint16_t>(addAckBody[1] << 8) | profile.structureTypeLow;
 
     return Mds::encodePut(requestId, addAckBody,
                            { { kParamUInt32, id },
-                             { structureType, encodeRequestData(notification) } });
+                             { structureType, encodeRequestData(notification, profile) } });
+}
+
+std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &addAckBody,
+                                const Notification &notification)
+{
+    const Profile *profile = profileForAck(addAckBody);
+    if (!profile) {
+        throw std::invalid_argument(
+                "Ancs::encodeAdd: this watch's notification layout has not been captured");
+    }
+    return encodeAdd(requestId, addAckBody, notification, *profile);
 }
 
 std::vector<uint8_t> encodeRemove(uint16_t requestId, const std::vector<uint8_t> &removeAckBody,

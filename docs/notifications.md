@@ -1156,10 +1156,59 @@ Two ways to get them, and the first has worked four times already:
    ground truth, and it would also validate the second route.
 2. **Ask the watch.** Implement `protocol_v9`'s structure traversal - the
    schema walk the official app runs before its PUTs and that this project
-   has shortcut past everywhere. That is the move that solved the
-   descriptor tables, and the lesson written down there was that the device
-   knew its own schema all along. It is also a Ghidra-informed
-   implementation of the one part of the protocol never built here.
+   has shortcut past everywhere.
+
+The first one took twenty minutes, so the second is still unbuilt.
+
+## The 9 Baro's own bytes (2026-10-05)
+
+The S7 on a USB cable, the 9 Baro paired to it, HCI snoop already running,
+one `cmd notification post` over adb, and the log grew by 14 kB. The PUT is
+170 bytes on ATT handle `0x000e`.
+
+**The layout is identical.** The length rule, the structure tag, the four
+one-byte fields, the string-offset base, the pool order, the four-byte
+alignment before the label array, the label entries - all of it. Exactly
+five values differ:
+
+| | Race | 9 Baro |
+|---|---|---|
+| structure type | `0x1209` | `0x1207` |
+| form byte | `0x6a` | `0x00` |
+| prologue | `01 1f 01 21` | `01 00 00 00` |
+| word at rel 28 | 1 | 0 |
+| word at rel 44 | 42 | 0 |
+
+Which is the same kind of difference the SBEM descriptor ids turned out to
+be: per-firmware metadata, not protocol. Three of the four constants that
+were never understood are simply **zero** on the Baro, which says what they
+probably are - optional metadata an older firmware does not fill in. Both
+watches' values for rel 28 and rel 44 point at a NUL byte inside the header,
+so both spellings mean "an empty string".
+
+So `Ancs::Profile` is five fields, there are two of them, and
+`profileForAck()` picks one by the third byte of the handle the watch gave
+for `/Notification/Add` - `0x04` on a Race, `0x03` on a 9 Baro. **A watch
+that is neither gets no profile and `encodeAdd()` refuses**, because sending
+a Race's profile to a 9 Baro is precisely what produced the 400 this all
+started with, and "nobody has captured this watch" is more useful than
+repeating that.
+
+`tests/test_notificationcodec.cpp` now reproduces all four captured
+requests byte for byte - three from a Race and this one - and checks that
+the same notification through the other watch's profile comes out
+different, so the profile cannot quietly stop being applied.
+
+Noted and not relied upon: `2 * ack[2] + 1` gives both type bytes. Two
+points fit any line, and the arithmetic does not hold for the other
+structure-carrying resources in the capture.
+
+### Still not run
+
+Sending a composed notification to a 9 Baro. Reproducing its own bytes
+exactly is a strong check on the layout and no check on what it does with
+one of ours - and the watch is currently bonded to the Android phone it was
+captured with, so it has to be paired back to the Sailfish phone first.
 
 ### A stale watch, found the same minute
 
@@ -1173,6 +1222,4 @@ This was visible the moment the 9 Baro was connected: the log still said
 `paired watch: "Suunto Race ..."` while the database already said
 `Suunto 9 ...`, and only a restart moved it.
 
-### Still not run
 
-A 9 Baro that accepts one.

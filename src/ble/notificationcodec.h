@@ -43,6 +43,57 @@ enum CategoryId : uint8_t {
     CategoryEntertainment = 11,
 };
 
+// The handful of values in the request structure that are per watch.
+//
+// The layout is not: both watches agree on the length rule, the four
+// one-byte fields, the string-offset base, the label array and its
+// alignment. What differs is five constants, and they differ the way the
+// SBEM descriptor ids differ - because they come from the watch's own
+// metadata, which is per firmware.
+//
+// Captured, both of them, which is the only reason this exists rather than
+// a guess:
+//
+//                        Race        9 Baro
+//   structure type       0x1209      0x1207
+//   form byte            0x6a        0x00
+//   prologue             01 1f 01 21 01 00 00 00
+//   word at rel 28       1           0
+//   word at rel 44       42          0
+//
+// On the Baro three of the four unknown constants are simply zero, which
+// says what they probably are: optional metadata the older firmware does
+// not populate. Both of the Race's odd ones - the 1 at 28 and the 42 at 44
+// - point at a NUL byte inside the header, and so does the Baro's 0, so
+// both spellings mean "an empty string".
+struct Profile
+{
+    uint8_t structureTypeLow;
+    uint8_t form;
+    uint8_t prologue[4];
+    uint32_t wordAt28;
+    uint32_t wordAt44;
+};
+
+const Profile &raceProfile();
+const Profile &baroProfile();
+
+// Picks a profile from the handle the watch gave for .../Notification/Add.
+// Its third byte is the resource's own id on that firmware - 0x04 on a
+// Race, 0x03 on a 9 Baro - and that is the only thing available to tell
+// them apart at the moment the request is built.
+//
+// **Returns nullptr for any other watch**, deliberately. Guessing a
+// profile would produce a notification the watch refuses with 400, which
+// is what a Race's profile sent to a 9 Baro actually did; saying "this
+// watch has not been captured" is more useful than that. One capture of
+// the official app adds a model.
+//
+// (Noted and not relied upon: 2 * ack[2] + 1 happens to give both type
+// bytes. Two points fit any line, and the same arithmetic does not hold
+// for the other structure-carrying resources in the capture.)
+const Profile *profileForAck(const std::vector<uint8_t> &ackBody);
+
 // A button on the watch. `supportsReply` was false in all three captures;
 // it is encoded because the field exists, not because it was exercised.
 struct Label
@@ -109,7 +160,8 @@ void truncateToFit(Notification &notification);
 // The AncsRequestData parameter's payload: a one-byte length, two bytes of
 // structure header, then the structure itself. Exposed for testing; the
 // two functions below are what a caller wants.
-std::vector<uint8_t> encodeRequestData(const Notification &notification);
+std::vector<uint8_t> encodeRequestData(const Notification &notification,
+                                         const Profile &profile);
 
 // A complete PUT frame, ready to write to the notify characteristic in
 // MTU-sized chunks.
@@ -120,9 +172,16 @@ std::vector<uint8_t> encodeRequestData(const Notification &notification);
 // 9 Baro, so it genuinely differs per watch and cannot be compiled in.
 //
 // Throws std::invalid_argument if the notification is too large
-// (truncateToFit() first) or the ack body is too short.
+// (truncateToFit() first), the ack body is too short, or the watch is not
+// one whose profile has been captured.
 std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &addAckBody,
                                 const Notification &notification);
+
+// The same, for a watch whose profile the caller has in hand - which is
+// what the tests use to encode a Race's request and a 9 Baro's from the
+// same notification.
+std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &addAckBody,
+                                const Notification &notification, const Profile &profile);
 
 // The matching removal, for when the phone's notification is dismissed.
 // `removeAckBody` is the ack for .../Notification/Del - Del, not Remove -

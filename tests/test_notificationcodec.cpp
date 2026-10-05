@@ -61,6 +61,18 @@ const char *kCaptureC =
         "4469736d69737300"
         ;
 
+// D: the same shape from a **9 Baro**, captured on 2026-10-05 with the
+// official Android app and an adb-posted notification. Five constants
+// differ from a Race's and nothing else does, which is what makes
+// Ancs::Profile five fields rather than a byte replay.
+const char *kCaptureD =
+        "f0120301800002070028d7535c071299140000000102a059c36a0100000044000000"
+        "01000000560000000000000000000000010000006400000000000000000000000000"
+        "000000000000010000000100000088000000636f6d2e616e64726f69642e7368656c"
+        "6c004261726f206b616170706175730054616d612070697461697369206e616b7961"
+        "206b6161707061756b73657373610000000090000000000000004469736d69737300"
+        ;
+
 std::vector<uint8_t> fromHex(const std::string &hex)
 {
     std::vector<uint8_t> out;
@@ -172,6 +184,50 @@ int main()
     check(c.title.size() == 69 && c.message.size() == 54,
           "C's strings are 69 and 54 characters");
     checkVector("C", kCaptureC, c);
+
+    // D: a 9 Baro. Same notification shape, five different constants, and
+    // the profile is chosen from the handle the watch gave.
+    const std::vector<uint8_t> baroAck = { 0xf0, 0x12, 0x03, 0x01, 0x80, 0x00 };
+    check(Ancs::profileForAck(kAddAck) == &Ancs::raceProfile(),
+          "a Race's handle picks a Race's profile");
+    check(Ancs::profileForAck(baroAck) == &Ancs::baroProfile(),
+          "a 9 Baro's handle picks a 9 Baro's profile");
+    check(Ancs::profileForAck({ 0xf0, 0x12, 0x77, 0x01, 0x80, 0x00 }) == nullptr,
+          "and a watch nobody has captured gets no profile rather than a guess");
+
+    Ancs::Notification d;
+    d.notificationId = 0x5c53d728;
+    d.date = 1791187360;
+    d.appId = "com.android.shell";
+    d.title = "Baro kaappaus";
+    d.message = "Tama pitaisi nakya kaappauksessa";
+    d.labels = { { "Dismiss", false } };
+    {
+        const std::vector<uint8_t> expected = fromHex(kCaptureD);
+        const std::vector<uint8_t> actual =
+                bodyOf(Ancs::encodeAdd(0x01e3, baroAck, d, Ancs::baroProfile()));
+        const bool same = zeroLabelPadding(actual) == zeroLabelPadding(expected);
+        check(actual.size() == expected.size(),
+              "D encodes to " + std::to_string(expected.size()) + " bytes ("
+                      + std::to_string(actual.size()) + ")");
+        check(same, "D encodes byte-for-byte to the captured 9 Baro body");
+        if (!same) {
+            std::printf("   expected %s\n", toHex(zeroLabelPadding(expected)).c_str());
+            std::printf("   actual   %s\n", toHex(zeroLabelPadding(actual)).c_str());
+        }
+        // The same notification down a Race's profile must come out
+        // differently, or the profile is not doing anything.
+        check(bodyOf(Ancs::encodeAdd(0x01e3, baroAck, d, Ancs::raceProfile())) != expected,
+              "and a Race's profile produces something else from the same notification");
+    }
+
+    bool refused = false;
+    try {
+        Ancs::encodeAdd(1, { 0xf0, 0x12, 0x77, 0x01, 0x80, 0x00 }, d);
+    } catch (const std::exception &) {
+        refused = true;
+    }
+    check(refused, "an uncaptured watch is refused rather than sent a guess");
 
     // The id rule has to survive 32-bit overflow the way Java's does, or an
     // update would address a notification the watch has never seen.

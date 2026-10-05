@@ -68,10 +68,13 @@ Confirmed on real hardware, not just in tests:
 
 ## What doesn't, yet
 
-- **Notifications on a 9 Baro.** Its Whiteboard handle differs from a
-  Race's, and the request structure's own type byte is known only from a
-  Race, so this is the one part of the notification path that may need
-  work rather than just a test.
+- **Notifications on a 9 Baro** — one step from done. Its own request was
+  captured on 2026-10-05 and the encoder reproduces it byte for byte: the
+  layout is identical to a Race's and exactly five constants differ, which
+  is per-firmware metadata rather than protocol, the same way the SBEM
+  descriptor ids differ. What has not happened is sending a composed one to
+  it, because the watch is bonded to the Android phone it was captured with
+  and has to be paired back first.
 - **The watch's media controls.** Both watches ask the *phone* for
   `/Media/Player/State`, `/Media/Player/Control` and `/Media/Track/Info`
   at the start of every connection. Nothing here answers them. It is the

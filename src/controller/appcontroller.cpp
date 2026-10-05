@@ -566,17 +566,71 @@ void flattenJson(const QJsonObject &object, const QString &prefix, QJsonObject *
 // the watch's own fields already use. An extension carries its kind in a
 // "type" field, which becomes the name prefix so two extensions with a
 // similarly named number don't collide.
-QByteArray cloudDetailsJson(const QJsonObject &payload)
+// Both the detail GET and the extensions POST answer with the same
+// {"extensions": [...]} shape, so one function flattens either, and
+// `into` lets the two be merged before anything is stored.
+void collectCloudDetailFields(const QJsonObject &payload, QJsonObject *into)
 {
-    QJsonObject fields;
     for (const QJsonValue &value : payload.value(QStringLiteral("extensions")).toArray()) {
         const QJsonObject extension = value.toObject();
         QString type = extension.value(QStringLiteral("type")).toString();
         if (type.isEmpty())
             type = QStringLiteral("Extension");
-        flattenJson(extension, type, &fields);
+        flattenJson(extension, type, into);
     }
-    return fields.isEmpty() ? QByteArray() : QJsonDocument(fields).toJson(QJsonDocument::Compact);
+}
+
+// CTL, ATL and TSB over a list of workouts. A free function rather than a
+// member because it reads nothing but its argument, and split out of
+// AppController::trainingProgress() so the cover can show the same three
+// figures without a second loadAll of a thousand-odd rows - it already has
+// the workouts in hand for its other modes.
+//
+// The arithmetic itself is in the Qt-free WorkoutSummary; what has to be
+// here is the bucketing into days, because a day boundary needs a timezone.
+QVariantMap progressFrom(const QVector<Workout> &workouts)
+{
+    QVariantMap out;
+    out.insert(QStringLiteral("ctl"), 0.0);
+    out.insert(QStringLiteral("atl"), 0.0);
+    out.insert(QStringLiteral("tsb"), 0.0);
+    out.insert(QStringLiteral("days"), 0);
+
+    if (workouts.isEmpty())
+        return out;
+
+    // Deduplicated the same way the month is, and for the same reason: the
+    // same outing can be here twice. The larger stress score wins, which in
+    // practice means the cloud's copy beats a watch copy that has none.
+    std::vector<WorkoutSummary::Entry> entries;
+    entries.reserve(static_cast<size_t>(workouts.size()));
+    for (const Workout &workout : workouts)
+        entries.push_back({ workout.startTime, workout.totalTime, workout.trainingStressScore });
+    entries = WorkoutSummary::collapseDuplicates(std::move(entries));
+
+    // Bucket into local calendar days. This is the part that cannot live in
+    // the Qt-free side: a day boundary needs a timezone.
+    const QDate first = QDateTime::fromMSecsSinceEpoch(entries.front().startMs).date();
+    const QDate today = QDate::currentDate();
+    if (first > today)
+        return out;
+
+    const int days = first.daysTo(today) + 1;
+    std::vector<double> daily(static_cast<size_t>(days), 0.0);
+
+    for (const WorkoutSummary::Entry &entry : entries) {
+        const QDate date = QDateTime::fromMSecsSinceEpoch(entry.startMs).date();
+        const int day = first.daysTo(date);
+        if (day >= 0 && day < days)
+            daily[static_cast<size_t>(day)] += entry.tss;
+    }
+
+    const WorkoutSummary::Progress progress = WorkoutSummary::progressFromDailyLoad(daily);
+    out[QStringLiteral("ctl")] = progress.ctl;
+    out[QStringLiteral("atl")] = progress.atl;
+    out[QStringLiteral("tsb")] = progress.tsb;
+    out[QStringLiteral("days")] = days;
+    return out;
 }
 
 // Overlays the watch's own computed totals onto a workout decoded from
@@ -2300,8 +2354,21 @@ QVariantMap AppController::coverSummary() const
         out.insert(QStringLiteral("count"), workouts.size());
         out.insert(QStringLiteral("totalDistance"), totalDistance);
         out.insert(QStringLiteral("totalTime"), totalTime);
+
+        // The same three figures the main page leads with, from the
+        // workouts already loaded above. hasProgress is about having a
+        // history to average over at all, not about the numbers being
+        // non-zero: a genuine CTL of zero after a month off is a real
+        // reading and the cover should show it rather than claim nothing
+        // is synced.
+        const QVariantMap progress = progressFrom(workouts);
+        out.insert(QStringLiteral("hasProgress"), progress[QStringLiteral("days")].toInt() > 0);
+        out.insert(QStringLiteral("ctl"), progress[QStringLiteral("ctl")]);
+        out.insert(QStringLiteral("atl"), progress[QStringLiteral("atl")]);
+        out.insert(QStringLiteral("tsb"), progress[QStringLiteral("tsb")]);
     } else {
         out.insert(QStringLiteral("hasWorkout"), false);
+        out.insert(QStringLiteral("hasProgress"), false);
     }
 
     const QVector<HealthEntry> nights = m_healthStore->load(QStringLiteral("sleep"), 1, nullptr);
@@ -2483,35 +2550,59 @@ void AppController::loadCloudDetails(const QString &key)
             [this, key](bool ok, const QByteArray &data, const QString &) {
         if (!ok)
             return;
-        m_cloudClient->fetchWorkoutDetail(QString::fromUtf8(data), key,
-                [this, key](bool detailOk, const QJsonObject &payload, const QString &) {
+        const QString sessionKey = QString::fromUtf8(data);
+        m_cloudClient->fetchWorkoutDetail(sessionKey, key,
+                [this, key, sessionKey](bool detailOk, const QJsonObject &payload,
+                                         const QString &) {
             // Silent on failure: this is an enrichment, and a workout that
             // shows its summary without the extras is still useful.
-            if (!detailOk)
-                return;
-            const QByteArray json = cloudDetailsJson(payload);
-            if (json.isEmpty())
-                return;
-            m_workoutStore->saveDetails(key, json, nullptr);
+            QJsonObject fields;
+            if (detailOk)
+                collectCloudDetailFields(payload, &fields);
 
-            // Promote the three the watch also reports, so a cloud workout
-            // shows them as proper stats rather than only as rows in the
-            // field table. The cloud's units match the watch's here
-            // (ml/kg, 1-5, seconds), so no conversion.
-            const QJsonObject fields = QJsonDocument::fromJson(json).object();
-            auto number = [&fields](const char *name) {
-                return fields.value(QLatin1String(name)).toObject()
-                        .value(QStringLiteral("value")).toDouble();
-            };
-            const double epoc = number("SummaryExtension.peakEpoc");
-            const double pte = number("SummaryExtension.pte");
-            const double recovery = number("SummaryExtension.recoveryTime");
-            if (epoc > 0 || pte > 0 || recovery > 0) {
-                m_workoutStore->updateTrainingMetrics(key, epoc, pte, recovery, nullptr);
-                loadCachedWorkouts();
-            }
+            // Then the endpoint the official app itself uses, which is
+            // where the fitness and intensity analysis lives - VO2max, the
+            // fitness age, the heart-rate zone boundaries. Chained rather
+            // than fired alongside so there is one write and one signal,
+            // and so a 403 on this half still leaves the detail half
+            // stored. Both are allowed to fail; only both failing means
+            // nothing happens.
+            m_cloudClient->fetchWorkoutExtensions(sessionKey, key,
+                    [this, key, fields](bool extOk, const QJsonObject &extPayload,
+                                         const QString &extError) {
+                QJsonObject merged = fields;
+                if (extOk) {
+                    collectCloudDetailFields(extPayload, &merged);
+                } else if (!extError.isEmpty()) {
+                    // Not an errorOccurred: the page is already drawn and
+                    // this is an extra. The log is where the nine workouts
+                    // that answer 403 can be recognised.
+                    qWarning() << "extensions for" << key << "failed:" << extError;
+                }
+                if (merged.isEmpty())
+                    return;
 
-            emit workoutDetailsChanged(key);
+                const QByteArray json = QJsonDocument(merged).toJson(QJsonDocument::Compact);
+                m_workoutStore->saveDetails(key, json, nullptr);
+
+                // Promote the ones the watch also reports, so a cloud
+                // workout shows them as proper stats rather than only as
+                // rows in the field table. The cloud's units match the
+                // watch's here (ml/kg, 1-5, seconds), so no conversion.
+                auto number = [&merged](const char *name) {
+                    return merged.value(QLatin1String(name)).toObject()
+                            .value(QStringLiteral("value")).toDouble();
+                };
+                const double epoc = number("SummaryExtension.peakEpoc");
+                const double pte = number("SummaryExtension.pte");
+                const double recovery = number("SummaryExtension.recoveryTime");
+                if (epoc > 0 || pte > 0 || recovery > 0) {
+                    m_workoutStore->updateTrainingMetrics(key, epoc, pte, recovery, nullptr);
+                    loadCachedWorkouts();
+                }
+
+                emit workoutDetailsChanged(key);
+            });
         });
     });
 }
@@ -2674,48 +2765,7 @@ QVariantMap AppController::monthSummary() const
 
 QVariantMap AppController::trainingProgress() const
 {
-    QVariantMap out;
-    out.insert(QStringLiteral("ctl"), 0.0);
-    out.insert(QStringLiteral("atl"), 0.0);
-    out.insert(QStringLiteral("tsb"), 0.0);
-    out.insert(QStringLiteral("days"), 0);
-
-    const QVector<Workout> workouts = m_workoutStore->loadAll(nullptr);
-    if (workouts.isEmpty())
-        return out;
-
-    // Deduplicated the same way the month is, and for the same reason: the
-    // same outing can be here twice. The larger stress score wins, which in
-    // practice means the cloud's copy beats a watch copy that has none.
-    std::vector<WorkoutSummary::Entry> entries;
-    entries.reserve(static_cast<size_t>(workouts.size()));
-    for (const Workout &workout : workouts)
-        entries.push_back({ workout.startTime, workout.totalTime, workout.trainingStressScore });
-    entries = WorkoutSummary::collapseDuplicates(std::move(entries));
-
-    // Bucket into local calendar days. This is the part that cannot live in
-    // the Qt-free side: a day boundary needs a timezone.
-    const QDate first = QDateTime::fromMSecsSinceEpoch(entries.front().startMs).date();
-    const QDate today = QDate::currentDate();
-    if (first > today)
-        return out;
-
-    const int days = first.daysTo(today) + 1;
-    std::vector<double> daily(static_cast<size_t>(days), 0.0);
-
-    for (const WorkoutSummary::Entry &entry : entries) {
-        const QDate date = QDateTime::fromMSecsSinceEpoch(entry.startMs).date();
-        const int day = first.daysTo(date);
-        if (day >= 0 && day < days)
-            daily[static_cast<size_t>(day)] += entry.tss;
-    }
-
-    const WorkoutSummary::Progress progress = WorkoutSummary::progressFromDailyLoad(daily);
-    out[QStringLiteral("ctl")] = progress.ctl;
-    out[QStringLiteral("atl")] = progress.atl;
-    out[QStringLiteral("tsb")] = progress.tsb;
-    out[QStringLiteral("days")] = days;
-    return out;
+    return progressFrom(m_workoutStore->loadAll(nullptr));
 }
 
 QVariantList AppController::workoutLaps(const QString &key) const

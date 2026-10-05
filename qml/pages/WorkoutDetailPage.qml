@@ -25,6 +25,14 @@ Page {
     property double peakTrainingEffect: 0
     property double recoveryTime: 0
     property double maxVo2: 0
+    // The user's fitness age at the time of the workout, which only the
+    // cloud's FitnessExtension carries - the watch does not report it.
+    property int fitnessAge: 0
+    // Five {lowerLimit, seconds} entries from the cloud's
+    // IntensityExtension, when it has them. The boundaries come from the
+    // server rather than being derived from a configured maximum, which
+    // matters because they are not evenly spaced.
+    property var heartRateZones: []
     property double trainingLoad: 0
     property double trainingStressScore: 0
     // WorkoutStore key, so the route can be looked up. Empty for a workout
@@ -63,6 +71,8 @@ Page {
         // filling them in here means they appear now rather than on the
         // next open. Only when empty, so a watch workout's own figures are
         // never overwritten.
+        var zones = [{}, {}, {}, {}, {}]
+        var sawZone = false
         for (var i = 0; i < details.length; ++i) {
             var f = details[i]
             if (epoc === 0 && f.name === "SummaryExtension.peakEpoc")
@@ -71,7 +81,31 @@ Page {
                 peakTrainingEffect = f.value
             else if (recoveryTime === 0 && f.name === "SummaryExtension.recoveryTime")
                 recoveryTime = f.value
+            // estimatedVo2Max is the decimal one (43.2); vo2Max is the same
+            // figure rounded (43), so it is only a fallback. Either beats
+            // nothing, and a watch workout's own reading is never
+            // overwritten.
+            else if (maxVo2 === 0 && f.name === "FitnessExtension.estimatedVo2Max")
+                maxVo2 = f.value
+            else if (maxVo2 === 0 && f.name === "FitnessExtension.vo2Max")
+                maxVo2 = f.value
+            else if (fitnessAge === 0 && f.name === "FitnessExtension.fitnessAge")
+                fitnessAge = f.value
+            else {
+                // IntensityExtension.zones.heartRate.zoneN.{totalTime,lowerLimit}
+                var m = f.name.match(
+                    /^IntensityExtension\.zones\.heartRate\.zone([1-5])\.(totalTime|lowerLimit)$/)
+                if (m) {
+                    var z = zones[parseInt(m[1], 10) - 1]
+                    if (m[2] === "totalTime")
+                        z.seconds = f.value
+                    else
+                        z.lowerLimit = f.value
+                    sawZone = true
+                }
+            }
         }
+        heartRateZones = sawZone ? zones : []
     }
 
     Component.onCompleted: {
@@ -165,6 +199,9 @@ Page {
             entries.push({ label: qsTr("Estimated VO2max"), value: qsTr("%1 ml/kg/min").arg(maxVo2.toFixed(1)) })
         if (recoveryTime > 0)
             entries.push({ label: qsTr("Recovery time"), value: formatDuration(recoveryTime) })
+        if (fitnessAge > 0)
+            //: As in "your fitness is that of a 39-year-old" - a number of years
+            entries.push({ label: qsTr("Fitness age"), value: qsTr("%1 years").arg(fitnessAge) })
         return entries
     }
 
@@ -492,6 +529,71 @@ Page {
             // a tap because it is a hundred-odd fields in the watch's own
             // naming, useful to have but not to lead with.
             Item { width: 1; height: Theme.paddingLarge }
+
+            // ---- heart-rate zones ----
+            // Only for a cloud workout: the boundaries are the account's,
+            // and the watch does not hand them over with a logbook entry.
+            Column {
+                width: parent.width
+                visible: page.heartRateZones.length > 0
+
+                Item { width: 1; height: Theme.paddingLarge }
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    text: qsTr("Heart rate zones")
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                }
+
+                Repeater {
+                    model: page.heartRateZones
+
+                    Row {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        spacing: Theme.paddingMedium
+
+                        Label {
+                            width: parent.width * 0.45
+                            //: %1 is a zone number, 1 to 5
+                            text: qsTr("Zone %1").arg(index + 1)
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                        }
+                        Label {
+                            width: parent.width * 0.3
+                            // The next zone's lower limit is this one's
+                            // upper, and the top zone has none - so it is
+                            // shown open-ended rather than invented.
+                            text: {
+                                var lower = Math.round(modelData.lowerLimit || 0)
+                                var next = index + 1 < page.heartRateZones.length
+                                        ? page.heartRateZones[index + 1].lowerLimit
+                                        : undefined
+                                return next > 0
+                                        ? lower + "\u2013" + Math.round(next)
+                                        : lower + "\u2013"
+                            }
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                        }
+                        Label {
+                            width: parent.width * 0.25 - 2 * Theme.paddingMedium
+                            horizontalAlignment: Text.AlignRight
+                            // A zone with no time in it is shown as a dash
+                            // rather than "0min 0s", which reads like a
+                            // measurement rather than an absence.
+                            text: modelData.seconds > 0
+                                  ? page.formatDuration(modelData.seconds)
+                                  : "\u2013"
+                            color: modelData.seconds > 0
+                                   ? Theme.highlightColor : Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                        }
+                    }
+                }
+            }
 
             Button {
                 visible: page.details.length > 0

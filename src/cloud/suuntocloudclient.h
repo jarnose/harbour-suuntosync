@@ -117,6 +117,25 @@ public:
     void fetchWorkoutDetail(const QString &sessionKey, const QString &workoutKey,
                              WorkoutDetailCallback callback);
 
+    // POST /v1/workout/extensions/{key}, body a JSON array of the extension
+    // types wanted. Not a GET, and not the same endpoint as above: this is
+    // the one the official app actually uses for the analysis, and the only
+    // one whose response shape has been captured. It carries VO2max, the
+    // fitness age, EPOC, the peak training effect, the recovery time, the
+    // heart-rate zone boundaries with time spent in each, the temperatures
+    // (in kelvin) and the recording watch's serial and firmware version.
+    //
+    // Hands back the raw payload, same as fetchWorkoutDetail, and for the
+    // same reason - and so the caller can flatten both with one function,
+    // the payloads having the same {"extensions": [...]} shape.
+    //
+    // Some workouts answer 403 and keep answering it; see
+    // docs/workout-upload.md. That is reported as an ordinary failure,
+    // which for a caller enriching a page it has already drawn means
+    // showing what it has.
+    void fetchWorkoutExtensions(const QString &sessionKey, const QString &workoutKey,
+                                 WorkoutDetailCallback callback);
+
     // GET /v1/workouts/{key}/sml - the workout's full sample data. Despite
     // the path it is JSON rather than the binary SBEM the watch serves, and
     // it runs to several megabytes per workout, so this is only ever called

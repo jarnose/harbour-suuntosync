@@ -65,9 +65,11 @@ public:
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
     bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
 
-    // One of "latest", "totals", "sleep" or "nothing" - what the cover
-    // page draws. A plain string rather than an enum so QML can pass it
-    // straight through to a ComboBox without a registered type.
+    // One of "latest", "totals", "progress", "sleep" or "nothing" - what
+    // the cover page draws. A plain string rather than an enum so QML can
+    // pass it straight through to a ComboBox without a registered type,
+    // and so a mode added later cannot reinterpret a stored index: a value
+    // this build does not know simply draws the empty state.
     QString coverMode() const { return m_coverMode; }
     void setCoverMode(const QString &mode);
 

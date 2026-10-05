@@ -251,18 +251,23 @@ Page {
                 currentIndex: {
                     var m = AppController.coverMode
                     if (m === "totals") return 1
-                    if (m === "sleep") return 2
-                    if (m === "nothing") return 3
+                    if (m === "progress") return 2
+                    if (m === "sleep") return 3
+                    if (m === "nothing") return 4
                     return 0
                 }
                 menu: ContextMenu {
                     MenuItem { text: qsTr("Latest workout") }
                     MenuItem { text: qsTr("Lifetime totals") }
+                    MenuItem { text: qsTr("Fitness, fatigue and form") }
                     MenuItem { text: qsTr("Last night's sleep") }
                     MenuItem { text: qsTr("Nothing") }
                 }
                 onCurrentIndexChanged: {
-                    var modes = ["latest", "totals", "sleep", "nothing"]
+                    // Index order is presentation only - the mode is stored
+                    // as its own name, so inserting one in the middle does
+                    // not reinterpret what somebody already chose.
+                    var modes = ["latest", "totals", "progress", "sleep", "nothing"]
                     AppController.coverMode = modes[currentIndex]
                 }
             }

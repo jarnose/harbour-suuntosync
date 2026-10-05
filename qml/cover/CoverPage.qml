@@ -130,6 +130,56 @@ CoverBackground {
         }
     }
 
+    // ---- fitness, fatigue and form ----
+    // Three figures rather than one, because each is meaningless without
+    // the others: a high fitness with a high fatigue is not the same state
+    // as a high fitness with a low one, which is the whole point of form.
+    Column {
+        anchors {
+            centerIn: parent
+            verticalCenterOffset: Theme.paddingSmall
+        }
+        width: parent.width - 2 * Theme.paddingLarge
+        spacing: Theme.paddingSmall
+        visible: AppController.coverMode === "progress"
+                 && cover.summary.hasProgress === true
+
+        Repeater {
+            model: cover.summary.hasProgress === true
+                   ? [
+                       { value: String(Math.round(cover.summary.ctl)),
+                         label: qsTr("Fitness") },
+                       { value: String(Math.round(cover.summary.atl)),
+                         label: qsTr("Fatigue") },
+                       { value: cover.summary.tsb >= 0
+                                ? "+" + Math.round(cover.summary.tsb)
+                                : String(Math.round(cover.summary.tsb)),
+                         label: qsTr("Form") }
+                     ]
+                   : []
+
+            Item {
+                width: parent.width
+                height: value.height
+
+                Label {
+                    anchors.left: parent.left
+                    anchors.baseline: value.baseline
+                    text: modelData.label
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                }
+                Label {
+                    id: value
+                    anchors.right: parent.right
+                    text: modelData.value
+                    color: Theme.highlightColor
+                    font.pixelSize: Theme.fontSizeMedium
+                }
+            }
+        }
+    }
+
     // ---- last night ----
     Column {
         anchors {
@@ -175,10 +225,16 @@ CoverBackground {
         width: parent.width - 2 * Theme.paddingMedium
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.Wrap
-        visible: AppController.coverMode !== "nothing"
-                 && ((AppController.coverMode === "sleep" && cover.summary.hasSleep !== true)
-                     || (AppController.coverMode !== "sleep"
-                         && cover.summary.hasWorkout !== true))
+        // Each mode has its own idea of "nothing yet", so this asks the
+        // mode rather than carrying one condition with exceptions bolted
+        // on - the shape that was already one mode away from being wrong.
+        visible: {
+            var m = AppController.coverMode
+            if (m === "nothing") return false
+            if (m === "sleep") return cover.summary.hasSleep !== true
+            if (m === "progress") return cover.summary.hasProgress !== true
+            return cover.summary.hasWorkout !== true
+        }
         text: qsTr("Nothing synced yet")
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall

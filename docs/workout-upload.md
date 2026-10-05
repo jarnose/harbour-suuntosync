@@ -649,9 +649,29 @@ comes back is everything the list response does not carry:
 `{"extensions": []}` for a workout that has none - an empty list is a 200,
 so an absent extension document is not what the 403s below are.
 
-This is not wired up. It is the obvious way to give a *cloud* workout the
-EPOC, PTE and VO2max panel that a watch-fetched one already gets from the
-watch's own `/Summary`.
+**Wired up, 2026-10-05.** `loadCloudDetails()` now chains this after the
+detail GET and merges both into the same flattened field map, so there is
+one write and one signal. Either half may fail without losing the other;
+the extensions half failing is logged rather than shown, because the page
+is already drawn and this is an enrichment.
+
+The nine type names are sent verbatim and in the captured order. A subset
+would very likely work - the server is being told what to include, not
+matched against a signature - but there is no measurement saying so, and
+sending what was observed costs nothing.
+
+VO2max (`estimatedVo2Max`, the decimal one; `vo2Max` is the same figure
+rounded, kept as a fallback), the fitness age and the five heart-rate zones
+are new on the workout page. The zone *boundaries* matter more than they
+look: they come from the server rather than being derived from the
+configured maximum, and 0/131/146/161/176 against an `hr_max` of 192 is not
+an even division of anything. EPOC, PTE and the recovery time were already
+arriving from the detail GET, so those rows are unchanged.
+
+One thing the flattening still drops: `gear`, whose fields are strings, and
+`flattenJson()` only keeps numbers and booleans. The recording watch's
+serial and firmware version are therefore captured and documented but not
+displayed.
 
 ### Nine workouts answer 403, and they look like ours
 

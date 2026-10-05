@@ -240,7 +240,9 @@ void SuuntoCloudClient::uploadWorkout(const QString &sessionKey, const QByteArra
             const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
             callback(false, QString(),
                      tr("Server error %1: %2")
-                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code"))
+                                                              .toInt())))
                              .arg(err.value(QStringLiteral("description")).toString()));
             return;
         }
@@ -391,8 +393,72 @@ void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
             const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
             callback(false, QJsonObject(),
                      tr("Server error %1: %2")
-                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code"))
+                                                              .toInt())))
                              .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+        callback(true, envelope.value(QStringLiteral("payload")).toObject(), QString());
+    });
+}
+
+// The nine type names the official app asks for, verbatim from a capture
+// and in its order. A subset would very likely work - the server is being
+// told what to include, not matched against a signature - but there is no
+// measurement saying so, and sending exactly what was observed costs
+// nothing: the three types this app reads are in the list, and the rest
+// come back as extra rows in the field table.
+static const char *const kExtensionTypes[] = {
+    "SummaryExtension", "FitnessExtension", "SkiExtension", "IntensityExtension",
+    "DiveHeaderExtension", "SwimmingHeaderExtension", "WeatherExtension",
+    "WeatherStreamExtension", "JumpRopeExtension",
+};
+
+void SuuntoCloudClient::fetchWorkoutExtensions(const QString &sessionKey,
+                                                const QString &workoutKey,
+                                                WorkoutDetailCallback callback)
+{
+    QNetworkRequest request = authorizedRequest(
+            kBaseUrl + QStringLiteral("workout/extensions/") + workoutKey, sessionKey);
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                       QStringLiteral("application/json"));
+
+    QJsonArray types;
+    for (const char *const type : kExtensionTypes)
+        types.append(QString::fromLatin1(type));
+
+    QNetworkReply *reply =
+            m_network->post(request, QJsonDocument(types).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+
+        // 403 is a real, reproducible answer for some workouts rather than
+        // a transient failure - see docs/workout-upload.md. QNetworkReply
+        // reports it as an error, and the body still carries the envelope,
+        // so the error text below comes from the envelope where there is
+        // one.
+        const QByteArray body = reply->readAll();
+        const QJsonDocument doc = QJsonDocument::fromJson(body);
+        if (!doc.isObject()) {
+            callback(false, QJsonObject(),
+                     reply->error() != QNetworkReply::NoError
+                             ? reply->errorString()
+                             : tr("Unexpected response from server"));
+            return;
+        }
+        const QJsonObject envelope = doc.object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            callback(false, QJsonObject(),
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code")).toInt())))
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QJsonObject(), reply->errorString());
             return;
         }
         callback(true, envelope.value(QStringLiteral("payload")).toObject(), QString());
@@ -430,7 +496,9 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, qint64 sinceMs, 
             const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
             callback(false, {}, WorkoutPageInfo(),
                      tr("Server error %1: %2")
-                             .arg(err.value(QStringLiteral("code")).toInt())
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code"))
+                                                              .toInt())))
                              .arg(err.value(QStringLiteral("description")).toString()));
             return;
         }

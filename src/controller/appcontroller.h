@@ -430,6 +430,18 @@ public:
     // reads double is worse than no month at all.
     Q_INVOKABLE QVariantMap monthSummary() const;
 
+    // Chronic and acute load and the balance between them - Suunto's
+    // "Progress". Returns `ctl`, `atl`, `tsb` and `days`, the length of the
+    // history they were computed over; a CTL with a fortnight behind it is
+    // not worth showing, so the caller can decide.
+    //
+    // The stress figures are Suunto's own trainingStressScore, which its
+    // cloud returns per workout. Nothing here derives a load from duration
+    // or heart rate: a number that looked like Suunto's and was not would
+    // be worse than no number. Watch-only workouts therefore contribute
+    // nothing, because the watch's own TraingingLoadPeak comes back empty.
+    Q_INVOKABLE QVariantMap trainingProgress() const;
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();

@@ -2598,7 +2598,7 @@ QVariantMap AppController::monthSummary() const
     const QVector<Workout> workouts = m_workoutStore->loadAll(nullptr);
     entries.reserve(static_cast<size_t>(workouts.size()));
     for (const Workout &workout : workouts)
-        entries.push_back({ workout.startTime, workout.totalTime });
+        entries.push_back({ workout.startTime, workout.totalTime, workout.trainingStressScore });
 
     const WorkoutSummary::Totals totals =
             WorkoutSummary::forRange(std::move(entries), fromMs, toMs);
@@ -2607,6 +2607,52 @@ QVariantMap AppController::monthSummary() const
     out.insert(QStringLiteral("count"), totals.count);
     out.insert(QStringLiteral("seconds"), totals.seconds);
     out.insert(QStringLiteral("month"), QLocale().monthName(first.month()));
+    return out;
+}
+
+QVariantMap AppController::trainingProgress() const
+{
+    QVariantMap out;
+    out.insert(QStringLiteral("ctl"), 0.0);
+    out.insert(QStringLiteral("atl"), 0.0);
+    out.insert(QStringLiteral("tsb"), 0.0);
+    out.insert(QStringLiteral("days"), 0);
+
+    const QVector<Workout> workouts = m_workoutStore->loadAll(nullptr);
+    if (workouts.isEmpty())
+        return out;
+
+    // Deduplicated the same way the month is, and for the same reason: the
+    // same outing can be here twice. The larger stress score wins, which in
+    // practice means the cloud's copy beats a watch copy that has none.
+    std::vector<WorkoutSummary::Entry> entries;
+    entries.reserve(static_cast<size_t>(workouts.size()));
+    for (const Workout &workout : workouts)
+        entries.push_back({ workout.startTime, workout.totalTime, workout.trainingStressScore });
+    entries = WorkoutSummary::collapseDuplicates(std::move(entries));
+
+    // Bucket into local calendar days. This is the part that cannot live in
+    // the Qt-free side: a day boundary needs a timezone.
+    const QDate first = QDateTime::fromMSecsSinceEpoch(entries.front().startMs).date();
+    const QDate today = QDate::currentDate();
+    if (first > today)
+        return out;
+
+    const int days = first.daysTo(today) + 1;
+    std::vector<double> daily(static_cast<size_t>(days), 0.0);
+
+    for (const WorkoutSummary::Entry &entry : entries) {
+        const QDate date = QDateTime::fromMSecsSinceEpoch(entry.startMs).date();
+        const int day = first.daysTo(date);
+        if (day >= 0 && day < days)
+            daily[static_cast<size_t>(day)] += entry.tss;
+    }
+
+    const WorkoutSummary::Progress progress = WorkoutSummary::progressFromDailyLoad(daily);
+    out[QStringLiteral("ctl")] = progress.ctl;
+    out[QStringLiteral("atl")] = progress.atl;
+    out[QStringLiteral("tsb")] = progress.tsb;
+    out[QStringLiteral("days")] = days;
     return out;
 }
 

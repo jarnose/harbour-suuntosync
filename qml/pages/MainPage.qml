@@ -17,8 +17,14 @@ Page {
     // when a sync or a deletion changes the list.
     property var month: ({ count: 0, seconds: 0, month: "" })
 
+    // Suunto's "Progress": chronic and acute load and the balance. Shown
+    // only with a season behind it - a CTL with a fortnight of history is a
+    // number, not an estimate.
+    property var progress: ({ ctl: 0, atl: 0, tsb: 0, days: 0 })
+
     function refreshMonth() {
         month = AppController.monthSummary()
+        progress = AppController.trainingProgress()
     }
 
     function formatHours(seconds) {
@@ -231,6 +237,46 @@ Page {
                                   ? qsTr("session") : qsTr("sessions")
                             font.pixelSize: Theme.fontSizeExtraSmall
                             color: Theme.secondaryColor
+                        }
+                    }
+                }
+            }
+
+            // CTL, ATL and the balance between them. The stress figures are
+            // Suunto's own, so these are comparable with its app rather
+            // than a second opinion computed from duration.
+            Item {
+                width: parent.width
+                height: visible ? progressRow.height + Theme.paddingLarge : 0
+                visible: page.progress.days >= 42
+
+                Row {
+                    id: progressRow
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Theme.paddingLarge * 2
+
+                    Repeater {
+                        model: [
+                            { value: Math.round(page.progress.ctl), label: qsTr("Fitness") },
+                            { value: Math.round(page.progress.atl), label: qsTr("Fatigue") },
+                            { value: page.progress.tsb >= 0
+                                     ? "+" + Math.round(page.progress.tsb)
+                                     : Math.round(page.progress.tsb),
+                              label: qsTr("Form") }
+                        ]
+                        Column {
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData.value
+                                font.pixelSize: Theme.fontSizeMedium
+                                color: Theme.primaryColor
+                            }
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData.label
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                color: Theme.secondaryColor
+                            }
                         }
                     }
                 }

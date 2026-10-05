@@ -30,6 +30,11 @@ Confirmed on real hardware, not just in tests:
   monthly total that reads double is worse than none — so starts within
   ninety seconds of each other count as one workout, and the rule has its
   own Qt-free test.
+- **A cover that shows one thing, chosen.** The latest workout, lifetime
+  totals, fitness/fatigue/form, last night's sleep, or nothing — because
+  there is no one right answer: somebody training for a distance wants the
+  totals, somebody tracking recovery wants last night, and somebody who
+  only uses the app to sync wants neither.
 - **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
   each entry, and decodes it: route, heart rate, altitude, cadence, laps,
   per-sample charts and the watch's own summary totals.
@@ -46,6 +51,14 @@ Confirmed on real hardware, not just in tests:
 - **Workouts from the Suunto cloud**, with route, training metrics, sample
   data and laps — automatic and manual ones, which the cloud keeps as two
   parallel partitions of the same workout rather than one sequence.
+  A cloud workout also gets the analysis the official app shows for it:
+  VO2max, fitness age, EPOC, peak training effect, recovery time and the
+  five heart-rate zones with time spent in each. The zone boundaries come
+  from the server rather than being derived from a configured maximum —
+  0/131/146/161/176 against a maximum of 192 is not an even division of
+  anything, so computing them would have been wrong. It is a second
+  endpoint, found by capture: the official app POSTs the list of extension
+  types it wants to `/v1/workout/extensions/{key}`.
   Incremental: a routine sync asks only for what has reached the cloud
   since the last one, carrying the server's own cursor rather than this
   phone's clock. What the cloud's `since` compares against was measured

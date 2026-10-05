@@ -668,6 +668,9 @@ configured maximum, and 0/131/146/161/176 against an `hr_max` of 192 is not
 an even division of anything. EPOC, PTE and the recovery time were already
 arriving from the detail GET, so those rows are unchanged.
 
+**Confirmed on hardware, 2026-10-05**: a cloud workout shows VO2max, the
+fitness age and the five zones with time in each.
+
 One thing the flattening still drops: `gear`, whose fields are strings, and
 `flattenJson()` only keeps numbers and booleans. The recording watch's
 serial and firmware version are therefore captured and documented but not

@@ -8,6 +8,12 @@ Android app in the loop.
 
 Confirmed on real hardware, not just in tests:
 
+- **Fitness, fatigue and form.** CTL, ATL and TSB — what Suunto's app calls
+  Progress — on the main page, from the cloud's own per-workout stress
+  scores through the standard 42- and 7-day exponential averages. Checked
+  against the official app on the same account: 15, 5 and +9 both ways.
+  Nothing here invents a training load from duration or heart rate; a figure
+  that looked like Suunto's and was not would be worse than none.
 - **This month at a glance.** The main page leads with how long and how
   often, the way Suunto's own app does. Deduplicated: the same outing can be
   in the database twice, once from the watch and once from the cloud, and a

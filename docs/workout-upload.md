@@ -503,7 +503,19 @@ already stored stay stored if a later one fails.
 history back to 2010-09-20 - and the six-month hole in early 2026 that
 looked like a training break was simply the hundred-row cut. Recomputed over
 the whole history: CTL 14.58, ATL 4.68, TSB +9.47, against the Android
-app's 15, 5 and 9. All three agree to the rounding.
+app's 15, 5 and 9.
+
+**Confirmed on the phone**: with the paged sync actually finished, the app
+shows 15, 5 and +9 - the same three figures the official app shows, from
+Suunto's own per-workout stress scores through the standard 42- and 7-day
+averages. Nothing is being approximated.
+
+Worth knowing about the first such sync: it fetches twelve pages and more
+than a thousand workouts, and `since` is still hard-coded to 0, so every
+later sync re-fetches the lot. Using the stored `lastSync` would make
+routine syncs cheap, but what `since` means - started after, or modified
+after - has not been established, and guessing it would quietly drop edited
+workouts.
 
 **A wrong explanation, recorded because it was stated confidently.** The
 first account of that 1.2 was that the database's newest workout was three

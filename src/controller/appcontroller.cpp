@@ -7,6 +7,7 @@
 #include "../cloud/suuntocloudclient.h"
 #include "../store/workoutstore.h"
 #include "../store/workout.h"
+#include "../store/workoutsummary.h"
 #include "../model/workoutlistmodel.h"
 #include "../health/healthstore.h"
 #include "../ble/logbookdecoder.h"
@@ -30,6 +31,7 @@
 #include <QDir>
 #include <QFile>
 #include <QDateTime>
+#include <QLocale>
 #include <QTimer>
 #include <QSettings>
 #include <QTextStream>
@@ -2582,6 +2584,29 @@ QVariantList AppController::workoutDetails(const QString &key) const
         row.insert(QStringLiteral("unit"), entry.value(QStringLiteral("unit")).toString());
         out.append(row);
     }
+    return out;
+}
+
+QVariantMap AppController::monthSummary() const
+{
+    const QDate today = QDate::currentDate();
+    const QDate first(today.year(), today.month(), 1);
+    const qint64 fromMs = QDateTime(first, QTime(0, 0)).toMSecsSinceEpoch();
+    const qint64 toMs = QDateTime(first.addMonths(1), QTime(0, 0)).toMSecsSinceEpoch();
+
+    std::vector<WorkoutSummary::Entry> entries;
+    const QVector<Workout> workouts = m_workoutStore->loadAll(nullptr);
+    entries.reserve(static_cast<size_t>(workouts.size()));
+    for (const Workout &workout : workouts)
+        entries.push_back({ workout.startTime, workout.totalTime });
+
+    const WorkoutSummary::Totals totals =
+            WorkoutSummary::forRange(std::move(entries), fromMs, toMs);
+
+    QVariantMap out;
+    out.insert(QStringLiteral("count"), totals.count);
+    out.insert(QStringLiteral("seconds"), totals.seconds);
+    out.insert(QStringLiteral("month"), QLocale().monthName(first.month()));
     return out;
 }
 

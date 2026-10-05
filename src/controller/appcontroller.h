@@ -421,6 +421,15 @@ public:
     // has no lap markers, which is the common case for a plain outing.
     Q_INVOKABLE QVariantList workoutLaps(const QString &key) const;
 
+    // This calendar month's training, the way Suunto's own app puts it:
+    // how many sessions and how long altogether. Returns `count`,
+    // `seconds` and `month` (the local month's name).
+    //
+    // Deduplicated - see WorkoutSummary. The same outing can be in the
+    // database twice, from the watch and from the cloud, and a month that
+    // reads double is worse than no month at all.
+    Q_INVOKABLE QVariantMap monthSummary() const;
+
 signals:
     void errorOccurred(const QString &message);
     void cloudAccountChanged();

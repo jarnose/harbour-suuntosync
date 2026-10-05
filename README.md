@@ -8,6 +8,12 @@ Android app in the loop.
 
 Confirmed on real hardware, not just in tests:
 
+- **This month at a glance.** The main page leads with how long and how
+  often, the way Suunto's own app does. Deduplicated: the same outing can be
+  in the database twice, once from the watch and once from the cloud, and a
+  monthly total that reads double is worse than none — so starts within
+  ninety seconds of each other count as one workout, and the rule has its
+  own Qt-free test.
 - **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
   each entry, and decodes it: route, heart rate, altitude, cadence, laps,
   per-sample charts and the watch's own summary totals.

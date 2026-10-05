@@ -13,14 +13,36 @@ Page {
         pendingUploads = AppController.pendingWorkoutUploads()
     }
 
+    // This month's training, read once rather than bound: it changes only
+    // when a sync or a deletion changes the list.
+    property var month: ({ count: 0, seconds: 0, month: "" })
+
+    function refreshMonth() {
+        month = AppController.monthSummary()
+    }
+
+    function formatHours(seconds) {
+        var h = Math.floor(seconds / 3600)
+        var m = Math.round((seconds % 3600) / 60)
+        if (m === 60) { h += 1; m = 0 }
+        return h > 0 ? qsTr("%1 h %2 min").arg(h).arg(m) : qsTr("%1 min").arg(m)
+    }
+
     Connections {
         target: AppController
         onWorkoutSyncInProgressChanged: {
-            if (!AppController.workoutSyncInProgress)
+            if (!AppController.workoutSyncInProgress) {
                 page.refreshPending()
+                page.refreshMonth()
+            }
         }
+        // Uploading changes what is pending, not what was trained.
         onWorkoutUploaded: page.refreshPending()
         onCloudAccountChanged: page.refreshPending()
+        onWorkoutDeleted: {
+            page.refreshPending()
+            page.refreshMonth()
+        }
     }
 
     property string lastError: ""
@@ -58,6 +80,7 @@ Page {
     Component.onCompleted: {
         AppController.loadCachedWorkouts()
         refreshPending()
+        refreshMonth()
         refreshOtherWatch()
     }
 
@@ -159,6 +182,58 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: qsTr("Signed in as %1").arg(AppController.cloudEmail)
+            }
+
+            // This month, the way Suunto's own app leads with it: how much
+            // and how often. Hidden when the month is empty rather than
+            // showing a pair of zeroes.
+            Item {
+                width: parent.width
+                height: page.month.count > 0 ? monthRow.height + 2 * Theme.paddingLarge : 0
+                visible: page.month.count > 0
+
+                Row {
+                    id: monthRow
+                    anchors.centerIn: parent
+                    spacing: Theme.paddingLarge * 2
+
+                    Column {
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: page.formatHours(page.month.seconds)
+                            font.pixelSize: Theme.fontSizeLarge
+                            color: Theme.highlightColor
+                        }
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: qsTr("this month")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                        }
+                    }
+
+                    Column {
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: page.month.count
+                            font.pixelSize: Theme.fontSizeLarge
+                            color: Theme.highlightColor
+                        }
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            // Deliberately not "sessions in October": the
+                            // month name would have to be inflected in
+                            // Finnish - lokakuu becomes lokakuussa - and
+                            // QLocale only gives the nominative. "This
+                            // month" on the other figure says which month
+                            // it is anyway.
+                            text: page.month.count === 1
+                                  ? qsTr("session") : qsTr("sessions")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                        }
+                    }
+                }
             }
         }
 

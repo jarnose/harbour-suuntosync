@@ -28,7 +28,10 @@ Confirmed on real hardware, not just in tests:
   payload is converted to the JSON the cloud expects, zipped and posted. A
   workout recorded on the watch shows up in the official app afterwards.
   The workout list marks which watch-recorded workouts the cloud has
-  taken, and which are still waiting.
+  taken, and which are still waiting. One the cloud has not taken can be
+  deleted from the workout's own pull-down menu — behind a remorse timer,
+  because the watch prunes its own logbook and the phone's copy can be the
+  only one left.
 - **GPS assist data to the watch**, which is what makes it find satellites
   in seconds. Settings has an "Update GPS data" button: it asks the watch
   which of four formats it wants, downloads that one and writes it across

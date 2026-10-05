@@ -49,11 +49,14 @@ Page {
     // Whether this workout can still be pushed to the cloud. Not a binding:
     // it depends on stored state that only changes when we change it.
     property bool canUpload: false
+    // And whether it can be deleted - same reasoning, same kind of state.
+    property bool canDelete: false
 
     function reloadDetails() {
         details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
         series = workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
         canUpload = workoutKey.length > 0 && AppController.canUploadWorkout(workoutKey)
+        canDelete = workoutKey.length > 0 && AppController.canDeleteWorkout(workoutKey)
 
         // A cloud workout's training metrics arrive with the extensions,
         // after this page is already up. The store is updated too, but
@@ -98,6 +101,13 @@ Page {
                 return
             page.lastError = message
             page.canUpload = AppController.canUploadWorkout(page.workoutKey)
+            // Uploading makes it the cloud's too, so it stops being ours
+            // to throw away.
+            page.canDelete = AppController.canDeleteWorkout(page.workoutKey)
+        }
+        onWorkoutDeleted: {
+            if (key === page.workoutKey)
+                pageStack.pop()
         }
     }
 
@@ -158,6 +168,8 @@ Page {
         return entries
     }
 
+    RemorsePopup { id: deleteRemorse }
+
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height
@@ -194,6 +206,25 @@ Page {
                 text: qsTr("Save the raw sample data")
                 visible: page.source !== "ble" && page.workoutKey.length > 0
                 onClicked: AppController.loadCloudSamples(page.workoutKey, true)
+            }
+            MenuItem {
+                // Only for a workout read off the watch that the cloud has
+                // not taken: a cloud workout would come back on the next
+                // sync, and one the cloud has taken is not this app's to
+                // throw away.
+                //
+                // Declared last on purpose - Silica puts the first item
+                // nearest the page edge, where a destructive one has no
+                // business being. Behind a remorse timer, and worded to say
+                // what actually goes: the watch prunes its own logbook, and
+                // three workouts once had to be repaired out of this app's
+                // copy because the watch had already forgotten them, so
+                // this can be the last copy there is.
+                text: qsTr("Delete this workout")
+                visible: page.canDelete
+                onClicked: deleteRemorse.execute(
+                               qsTr("Deleting the phone's copy"),
+                               function() { AppController.deleteWorkout(page.workoutKey) })
             }
         }
 

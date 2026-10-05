@@ -393,6 +393,19 @@ public:
     // cloud hasn't already taken it, and we're signed in.
     Q_INVOKABLE bool canUploadWorkout(const QString &key) const;
 
+    // True for a workout read off the watch that the cloud has not taken.
+    // Those are the only ones worth offering to delete: a cloud workout
+    // would come straight back on the next sync, and one the cloud has
+    // taken is not this app's to throw away.
+    Q_INVOKABLE bool canDeleteWorkout(const QString &key) const;
+
+    // Deletes the phone's copy, and only the phone's copy. If the watch
+    // still has the workout a sync brings it back; if the watch has pruned
+    // it - which it does, and which is why three of these once had to be
+    // repaired - this was the last copy of it anywhere. The caller is
+    // expected to have asked.
+    Q_INVOKABLE void deleteWorkout(const QString &key);
+
     // Uploads every watch-synced workout that the cloud hasn't taken yet,
     // oldest first. Sequential rather than parallel: the server has no
     // idempotency key, and a batch that half-succeeded would be harder to
@@ -430,6 +443,7 @@ signals:
     // indistinguishable from a feature that was never built - which is how
     // this signal came to carry a reason.
     void watchNotificationsRead(int value, const QString &detail);
+    void workoutDeleted(const QString &key);
     void workoutUploaded(const QString &key, bool ok, const QString &message);
     void workoutUploadProgress(int done, int total);
 

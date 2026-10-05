@@ -1739,6 +1739,29 @@ void AppController::fetchHealthKindAt(int index, int fetched, const QStringList 
     });
 }
 
+bool AppController::canDeleteWorkout(const QString &key) const
+{
+    if (!key.startsWith(QStringLiteral("ble_")))
+        return false;
+    return !m_workoutStore->isSmlUploaded(key);
+}
+
+void AppController::deleteWorkout(const QString &key)
+{
+    if (!canDeleteWorkout(key)) {
+        emit errorOccurred(tr("That workout cannot be deleted here."));
+        return;
+    }
+
+    QString error;
+    if (!m_workoutStore->remove(key, &error)) {
+        emit errorOccurred(tr("Could not delete the workout: %1").arg(error));
+        return;
+    }
+    loadCachedWorkouts();
+    emit workoutDeleted(key);
+}
+
 bool AppController::canUploadWorkout(const QString &key) const
 {
     QByteArray data;

@@ -454,6 +454,29 @@ bool WorkoutStore::isSmlUploaded(const QString &key) const
     return q.exec() && q.next();
 }
 
+bool WorkoutStore::remove(const QString &key, QString *error)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    static const char *const tables[] = {
+        "workout_routes", "workout_laps", "workout_series",
+        "workout_sml", "workout_details", "workouts",
+    };
+    // The row in `workouts` goes last: if one of the others fails, the
+    // workout is still listed and the failure is visible rather than
+    // leaving an invisible workout with orphaned rows behind it.
+    for (const char *table : tables) {
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral("DELETE FROM %1 WHERE key = ?").arg(QLatin1String(table)));
+        q.addBindValue(key);
+        if (!q.exec()) {
+            if (error)
+                *error = q.lastError().text();
+            return false;
+        }
+    }
+    return true;
+}
+
 QVector<QString> WorkoutStore::keysWithEmptyDecode() const
 {
     QVector<QString> keys;

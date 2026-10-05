@@ -90,6 +90,12 @@ public:
     // Deliberately narrow: a row with any figure in it is left alone, so
     // re-decoding with the wrong watch's field table cannot overwrite a
     // workout that already decoded correctly.
+    // Removes a workout and everything keyed to it - route, laps, series,
+    // details and the SBEM sources. One statement per table rather than
+    // foreign keys, because the tables were added one at a time and none of
+    // them declares one.
+    bool remove(const QString &key, QString *error);
+
     QVector<QString> keysWithEmptyDecode() const;
 
     // Workouts that have a stored payload but no cloud key yet - i.e.

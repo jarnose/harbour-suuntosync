@@ -570,6 +570,13 @@ is exactly as consistent with "all matches" as with "this page", and the
 app only ever asked for one page. So this client carries it for diagnostics
 and pages off a full page coming back, as before.
 
+**Confirmed on the phone, 2026-10-05.** The first sync after the change
+still fetched twelve pages, because the stored cursor starts at zero; the
+next one finished almost immediately, which is the cursor surviving a write
+and a read and the server agreeing that nothing is newer. Progress stayed
+at the official app's own 17 / 12 / +4 across both, so the shorter request
+is not a shorter answer.
+
 **Implemented**: `CloudAccount.workoutCursor` (unix ms, its own column,
 *not* `lastSync` - that one is this phone's clock and the comparison happens
 on the server's), stored only when a sync finishes, and only ever moved

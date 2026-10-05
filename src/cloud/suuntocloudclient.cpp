@@ -399,10 +399,11 @@ void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
     });
 }
 
-void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit,
+void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit, int offset,
                                       WorkoutListCallback callback)
 {
-    const QString path = QStringLiteral("workouts?since=0&limit=%1&offset=0").arg(limit);
+    const QString path =
+            QStringLiteral("workouts?since=0&limit=%1&offset=%2").arg(limit).arg(offset);
     const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);

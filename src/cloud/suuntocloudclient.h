@@ -64,7 +64,17 @@ public:
     // sessionKey (the STTAuthorization header). Only the first page (most
     // recent `limit` workouts, server max 100) - older-than-that pagination
     // isn't implemented yet.
-    void listWorkouts(const QString &sessionKey, int limit, WorkoutListCallback callback);
+    // One page of the workout list. `offset` was hard-coded to 0 and the
+    // limit to 100, which meant everything past the hundredth most recent
+    // workout never arrived - the history simply stopped. It matters for
+    // more than completeness: a chronic training load is an exponential
+    // average over months, and days four months back still carry a few per
+    // cent of today's figure.
+    //
+    // The caller pages: ask for `limit`, and if `limit` came back there is
+    // probably more.
+    void listWorkouts(const QString &sessionKey, int limit, int offset,
+                       WorkoutListCallback callback);
 
     // GET /v1/workouts/{key} - the same fields as the list entry plus an
     // "extensions" array, which is where the cloud keeps the analysis the

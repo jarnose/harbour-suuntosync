@@ -481,6 +481,33 @@ The names map onto the vocabulary the BLE decoder already uses for the
 watch's own markers: `Autolap` is a distance lap and `Lap` is a manual one.
 Both sources therefore produce the same words in the lap list.
 
+## The workout list is paginated, and was not being paged (2026-10-05)
+
+`GET /v1/workouts?since=0&limit=100&offset=0` - with the offset hard-coded.
+So the hundred most recent workouts arrived and nothing older ever did. The
+database here had 104 cloud workouts only because several syncs over weeks
+each brought the latest hundred and the older ones stayed.
+
+It matters for more than tidiness. A chronic training load is an
+exponential average with a 42-day time constant, so days four months back
+still carry about six per cent of today's figure - and six per cent of a
+CTL of 15 is most of the 1.2 that this app's figure was short of the
+Android app's.
+
+Paged now: ask for 100, store the page, and ask again at the next offset
+while a full page keeps coming back, to a ceiling of ten thousand so a
+server that always answers with a full page cannot loop for ever. Pages
+already stored stay stored if a later one fails.
+
+**A wrong explanation, recorded because it was stated confidently.** The
+first account of that 1.2 was that the database's newest workout was three
+days old and the Android app was counting newer ones. Jarno pointed out
+what that overlooks: CTL *decays* without training, which this
+implementation already does - 14.8 on the day of the last workout, 13.8
+three days later. If there was nothing newer to count then both figures are
+today's and the gap is real. The missing history is the better candidate,
+and unlike the first one it is measurable.
+
 ## Still open
 
 1. **The rest of a lap window.** Nine `{Avg, Max, Min}` groups and a dozen

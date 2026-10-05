@@ -484,6 +484,12 @@ private:
     void fetchWatchEntryAt(const QVector<QString> &logbookIds, int index, int succeeded,
                             const QStringList &failures);
 
+    // One page of the cloud's workout list, then the next. The list used to
+    // be a single request for the hundred most recent, so anything older was
+    // never fetched at all - which is a hole in the history and therefore in
+    // the chronic load computed over it.
+    void fetchCloudWorkoutPage(const QString &sessionKey, int offset, int stored);
+
     // Whiteboard is one request, one response: only one process may hold a
     // session with the watch. The app takes the link whenever it attaches
     // and gives it back when it detaches, which makes the notification

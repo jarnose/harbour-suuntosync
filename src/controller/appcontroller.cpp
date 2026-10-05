@@ -2364,46 +2364,74 @@ void AppController::syncCloudWorkouts()
             return;
         }
 
-        const QString sessionKey = QString::fromUtf8(data);
-        m_cloudClient->listWorkouts(sessionKey, 100,
-                [this](bool listOk, const QVector<Workout> &workouts, const QString &listError) {
+        fetchCloudWorkoutPage(QString::fromUtf8(data), 0, 0);
+    });
+}
+
+void AppController::fetchCloudWorkoutPage(const QString &sessionKey, int offset, int stored)
+{
+    // One page at a time, stored as it arrives, so a long history does not
+    // have to be held in memory to be saved.
+    const int pageSize = 100;
+    // A server that always returns a full page would otherwise loop for
+    // ever. Ten thousand workouts is more than anybody has and far more
+    // than a chronic load needs.
+    const int maximum = 10000;
+
+    m_cloudClient->listWorkouts(sessionKey, pageSize, offset,
+            [this, sessionKey, offset, stored, pageSize, maximum](
+                    bool listOk, const QVector<Workout> &workouts, const QString &listError) {
+        if (!listOk) {
             m_workoutSyncInProgress = false;
             emit workoutSyncInProgressChanged();
+            // Pages already stored stay stored: a history that got half way
+            // is better than one that got nowhere, and the next sync starts
+            // over anyway.
+            loadCachedWorkouts();
+            emit errorOccurred(tr("Failed to sync workouts: %1").arg(listError));
+            return;
+        }
 
-            if (!listOk) {
-                emit errorOccurred(tr("Failed to sync workouts: %1").arg(listError));
+        for (const Workout &w : workouts) {
+            // The cloud carries the route as an encoded polyline in the
+            // same list response, so a cloud workout gets a map too -
+            // stored in exactly the format a BLE one uses, which means
+            // the drawing code doesn't care where it came from.
+            if (!w.polyline.isEmpty()) {
+                const auto points = Polyline::decode(w.polyline.toStdString());
+                if (!points.empty())
+                    m_workoutStore->saveRoute(w.key, packTrack(points), nullptr);
+            }
+
+            QString storeError;
+            if (!m_workoutStore->upsert(w, &storeError)) {
+                m_workoutSyncInProgress = false;
+                emit workoutSyncInProgressChanged();
+                loadCachedWorkouts();
+                emit errorOccurred(tr("Failed to save workout: %1").arg(storeError));
                 return;
             }
+        }
 
-            for (const Workout &w : workouts) {
-                // The cloud carries the route as an encoded polyline in the
-                // same list response, so a cloud workout gets a map too -
-                // stored in exactly the format a BLE one uses, which means
-                // the drawing code doesn't care where it came from.
-                if (!w.polyline.isEmpty()) {
-                    const auto points = Polyline::decode(w.polyline.toStdString());
-                    if (!points.empty())
-                        m_workoutStore->saveRoute(w.key, packTrack(points), nullptr);
-                }
+        const int now = stored + workouts.size();
+        if (workouts.size() == pageSize && now < maximum) {
+            fetchCloudWorkoutPage(sessionKey, offset + workouts.size(), now);
+            return;
+        }
 
-                QString storeError;
-                if (!m_workoutStore->upsert(w, &storeError)) {
-                    emit errorOccurred(tr("Failed to save workout: %1").arg(storeError));
-                    return;
-                }
-            }
+        m_workoutSyncInProgress = false;
+        emit workoutSyncInProgressChanged();
 
-            // currentSecsSinceEpoch() is Qt 5.8+ - newer than Sailfish OS's
-            // Qt5 (same vintage issue as QRandomGenerator elsewhere in this
-            // project); currentMSecsSinceEpoch() has been available since
-            // Qt 4.7 and works everywhere.
-            m_cloudAccount.lastSync = QDateTime::currentMSecsSinceEpoch() / 1000;
-            QString saveError;
-            if (!m_cloudAccountStore->save(m_cloudAccount, &saveError))
-                emit errorOccurred(tr("Failed to save account: %1").arg(saveError));
+        // currentSecsSinceEpoch() is Qt 5.8+ - newer than Sailfish OS's
+        // Qt5 (same vintage issue as QRandomGenerator elsewhere in this
+        // project); currentMSecsSinceEpoch() has been available since
+        // Qt 4.7 and works everywhere.
+        m_cloudAccount.lastSync = QDateTime::currentMSecsSinceEpoch() / 1000;
+        QString saveError;
+        if (!m_cloudAccountStore->save(m_cloudAccount, &saveError))
+            emit errorOccurred(tr("Failed to save account: %1").arg(saveError));
 
-            loadCachedWorkouts();
-        });
+        loadCachedWorkouts();
     });
 }
 

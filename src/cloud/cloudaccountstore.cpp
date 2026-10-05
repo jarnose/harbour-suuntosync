@@ -46,6 +46,14 @@ bool CloudAccountStore::open(QString *error)
             *error = q.lastError().text();
         return false;
     }
+
+    // Added after the table was already in use on-device, so it needs its
+    // own ALTER: CREATE TABLE IF NOT EXISTS does not retroactively widen an
+    // existing table (the same lesson paired_watch and workouts each taught
+    // once already). A failure here is the column already existing, which
+    // is the normal case on every run but the first.
+    q.exec(QStringLiteral(
+            "ALTER TABLE cloud_account ADD COLUMN workout_cursor INTEGER NOT NULL DEFAULT 0"));
     return true;
 }
 
@@ -55,7 +63,8 @@ CloudAccount CloudAccountStore::load(QString *error) const
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-            "SELECT email, athlete_id, token_expiry, last_sync FROM cloud_account WHERE id = ?"));
+            "SELECT email, athlete_id, token_expiry, last_sync, workout_cursor "
+            "FROM cloud_account WHERE id = ?"));
     q.addBindValue(kSingletonRowId);
     if (!q.exec()) {
         if (error)
@@ -67,6 +76,7 @@ CloudAccount CloudAccountStore::load(QString *error) const
         account.athleteId = q.value(1).toString();
         account.tokenExpiry = q.value(2).toLongLong();
         account.lastSync = q.value(3).toLongLong();
+        account.workoutCursor = q.value(4).toLongLong();
     }
     return account;
 }
@@ -78,16 +88,18 @@ bool CloudAccountStore::save(const CloudAccount &account, QString *error)
     // Single-row upsert - id is always kSingletonRowId, so this always
     // replaces whatever account was previously saved.
     q.prepare(QStringLiteral(
-            "INSERT INTO cloud_account (id, email, athlete_id, token_expiry, last_sync) "
-            "VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO cloud_account (id, email, athlete_id, token_expiry, last_sync, "
+            "workout_cursor) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET email = excluded.email, "
             "athlete_id = excluded.athlete_id, token_expiry = excluded.token_expiry, "
-            "last_sync = excluded.last_sync"));
+            "last_sync = excluded.last_sync, "
+            "workout_cursor = excluded.workout_cursor"));
     q.addBindValue(kSingletonRowId);
     q.addBindValue(account.email);
     q.addBindValue(account.athleteId);
     q.addBindValue(account.tokenExpiry);
     q.addBindValue(account.lastSync);
+    q.addBindValue(account.workoutCursor);
     if (!q.exec()) {
         if (error)
             *error = q.lastError().text();

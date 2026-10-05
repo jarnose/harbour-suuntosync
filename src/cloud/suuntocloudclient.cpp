@@ -399,11 +399,13 @@ void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
     });
 }
 
-void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit, int offset,
-                                      WorkoutListCallback callback)
+void SuuntoCloudClient::listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit,
+                                      int offset, WorkoutListCallback callback)
 {
-    const QString path =
-            QStringLiteral("workouts?since=0&limit=%1&offset=%2").arg(limit).arg(offset);
+    const QString path = QStringLiteral("workouts?since=%1&limit=%2&offset=%3")
+                                 .arg(sinceMs)
+                                 .arg(limit)
+                                 .arg(offset);
     const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
@@ -411,7 +413,7 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit, int o
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            callback(false, {}, reply->errorString());
+            callback(false, {}, WorkoutPageInfo(), reply->errorString());
             return;
         }
 
@@ -419,13 +421,14 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit, int o
         // {"error": null|{"code":int,"description":string}, "metadata": {...}, "payload": T}
         const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
         if (!doc.isObject()) {
-            callback(false, {}, tr("Unexpected response from server"));
+            callback(false, {}, WorkoutPageInfo(),
+                     tr("Unexpected response from server"));
             return;
         }
         const QJsonObject envelope = doc.object();
         if (!envelope.value(QStringLiteral("error")).isNull()) {
             const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
-            callback(false, {},
+            callback(false, {}, WorkoutPageInfo(),
                      tr("Server error %1: %2")
                              .arg(err.value(QStringLiteral("code")).toInt())
                              .arg(err.value(QStringLiteral("description")).toString()));
@@ -477,6 +480,24 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, int limit, int o
             w.polyline = o.value(QStringLiteral("polyline")).toString();
             workouts.append(w);
         }
-        callback(true, workouts, QString());
+
+        // metadata.until is the server's own clock, and both it and
+        // workoutcount arrive as JSON *strings* rather than numbers -
+        // "1791205512579", "7" - so they are parsed rather than read as
+        // doubles. A missing or unparseable value leaves the defaults,
+        // which make the caller keep whatever cursor it already had.
+        WorkoutPageInfo page;
+        const QJsonObject metadata = envelope.value(QStringLiteral("metadata")).toObject();
+        bool parsed = false;
+        const qint64 until =
+                metadata.value(QStringLiteral("until")).toString().toLongLong(&parsed);
+        if (parsed)
+            page.untilMs = until;
+        const int count =
+                metadata.value(QStringLiteral("workoutcount")).toString().toInt(&parsed);
+        if (parsed)
+            page.reportedCount = count;
+
+        callback(true, workouts, page, QString());
     });
 }

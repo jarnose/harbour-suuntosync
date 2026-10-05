@@ -44,7 +44,24 @@ public:
 
     using LoginCallback = std::function<void(bool ok, const Session &session,
                                                const QString &error)>;
+    // What the list response's own `metadata` object carries alongside the
+    // workouts. `untilMs` is the server's clock at the moment it answered -
+    // the cursor to pass back as `since` next time, and the reason to use
+    // it rather than the newest workout's own timestamp: a workout created
+    // between the query and the reply would otherwise be skipped for ever.
+    // `reportedCount` is `metadata.workoutcount`. Whether that counts every
+    // match or only the ones on this page is NOT established - the captured
+    // app only ever asked for one page, and got 7 of a possible 50, which
+    // the two readings agree on. So it is carried for diagnostics and
+    // nothing paginates off it.
+    struct WorkoutPageInfo
+    {
+        qint64 untilMs = 0;
+        int reportedCount = -1; // -1 = the server did not say
+    };
+
     using WorkoutListCallback = std::function<void(bool ok, const QVector<Workout> &workouts,
+                                                      const WorkoutPageInfo &page,
                                                       const QString &error)>;
     using WorkoutDetailCallback = std::function<void(bool ok, const QJsonObject &workout,
                                                         const QString &error)>;
@@ -60,28 +77,43 @@ public:
     // callback is invoked exactly once, on this object's thread.
     void login(const QString &email, const QString &password, LoginCallback callback);
 
-    // GET /v1/workouts?since=0&limit=<limit>&offset=0, authenticated with
-    // sessionKey (the STTAuthorization header). Only the first page (most
-    // recent `limit` workouts, server max 100) - older-than-that pagination
-    // isn't implemented yet.
-    // One page of the workout list. `offset` was hard-coded to 0 and the
-    // limit to 100, which meant everything past the hundredth most recent
-    // workout never arrived - the history simply stopped. It matters for
-    // more than completeness: a chronic training load is an exponential
-    // average over months, and days four months back still carry a few per
-    // cent of today's figure.
+    // GET /v1/workouts?since=<sinceMs>&limit=<limit>&offset=<offset>,
+    // authenticated with sessionKey (the STTAuthorization header).
+    //
+    // `offset` was once hard-coded to 0 and the limit to 100, which meant
+    // everything past the hundredth most recent workout never arrived - the
+    // history simply stopped. It matters for more than completeness: a
+    // chronic training load is an exponential average over months, and days
+    // four months back still carry a few per cent of today's figure.
     //
     // The caller pages: ask for `limit`, and if `limit` came back there is
     // probably more.
-    void listWorkouts(const QString &sessionKey, int limit, int offset,
+    //
+    // `sinceMs` is unix milliseconds, 0 for the whole history. It filters on
+    // the cloud's own ingest time, not on when the workout was recorded -
+    // measured, not assumed: a capture of the official app asking for
+    // since = 5.10 09:00 got back workouts started on 25.9, because those
+    // reached the cloud at 15:48 that same afternoon. Which server-side
+    // field exactly (the payload carries both `created`, at second
+    // granularity, and `lastModified`, at millisecond) that capture cannot
+    // say, since every workout in it was newer than the cursor by both.
+    void listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit, int offset,
                        WorkoutListCallback callback);
 
     // GET /v1/workouts/{key} - the same fields as the list entry plus an
     // "extensions" array, which is where the cloud keeps the analysis the
     // list doesn't carry. Handed back as the raw payload object rather than
-    // a struct: the extensions are typed by a discriminator and this
-    // project has no captured example to model them from, so the caller
+    // a struct: the extensions are typed by a discriminator, so the caller
     // decides what to make of whatever arrives.
+    //
+    // The official app does not use this endpoint for the extensions. It
+    // POSTs the list of types it wants to /v1/workout/extensions/{key},
+    // once per workout, and gets back VO2max, fitness age, EPOC, PTE, the
+    // heart-rate zone boundaries and the recording watch's own serial and
+    // firmware version. A capture of all of that, and of the nine workouts
+    // that answer 403 to it, is written up in docs/workout-upload.md. Not
+    // implemented here - it is the obvious way to give a cloud workout the
+    // analysis panel a watch-fetched one already gets from /Summary.
     void fetchWorkoutDetail(const QString &sessionKey, const QString &workoutKey,
                              WorkoutDetailCallback callback);
 

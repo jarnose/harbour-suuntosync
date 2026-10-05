@@ -511,11 +511,10 @@ Suunto's own per-workout stress scores through the standard 42- and 7-day
 averages. Nothing is being approximated.
 
 Worth knowing about the first such sync: it fetches twelve pages and more
-than a thousand workouts, and `since` is still hard-coded to 0, so every
-later sync re-fetches the lot. Using the stored `lastSync` would make
-routine syncs cheap, but what `since` means - started after, or modified
-after - has not been established, and guessing it would quietly drop edited
-workouts.
+than a thousand workouts. Every later sync used to re-fetch the lot,
+because `since` was hard-coded to 0 - what it meant had not been
+established, and guessing it would quietly drop edited workouts. A capture
+settled it; see the next section.
 
 **A wrong explanation, recorded because it was stated confidently.** The
 first account of that 1.2 was that the database's newest workout was three
@@ -525,6 +524,137 @@ implementation already does - 14.8 on the day of the last workout, 13.8
 three days later. If there was nothing newer to count then both figures are
 today's and the gap is real. The missing history is the better candidate,
 and unlike the first one it is measurable.
+
+## What `since` means, and where Progress comes from (2026-10-05)
+
+A second capture, the same bind-mounted-CA recipe as before, with the
+official app's own cold start and then every screen scrolled through:
+238 flows, 91 of them to `api.sports-tracker.com`.
+
+### `since` is the cloud's clock, not the workout's
+
+```
+GET /v1/workouts?since=1791180021266&limit=50&offset=0
+  -> metadata: { "workoutcount": "7", "until": "1791205512579" }
+```
+
+`since` = 5.10 09:00:21. The seven workouts that came back **started**
+between 25.9 and 5.10 - so it is not filtering on `startTime`. All seven
+were `created` 5.10 15:48, which is when they reached the cloud. So `since`
+is a server-side ingest time, and a workout recorded a fortnight ago but
+uploaded this afternoon still arrives.
+
+Which server-side field exactly, this capture cannot say: the payload
+carries both `created` (second granularity - it is the Mongo ObjectId's own
+timestamp, which the id's first four bytes also give) and `lastModified`
+(milliseconds, 0.4-1.2 s later), and every workout here was newer than the
+cursor by both. It does not matter for the cursor's correctness, only for
+whether an *edited* workout comes back. That stays open.
+
+The cursor the app carries forward is `metadata.until`, which is the
+server's own clock at the moment it answered - 16:05:12.579, against a
+request sent at 16:05:12.535. Not the newest workout's timestamp: a workout
+created between the query and the reply would fall in the gap between the
+two and never be asked for again. Both numbers arrive as JSON **strings**,
+not numbers.
+
+`metadata.workoutcount` was 7, for 7 returned out of a possible 50 - which
+is exactly as consistent with "all matches" as with "this page", and the
+app only ever asked for one page. So this client carries it for diagnostics
+and pages off a full page coming back, as before.
+
+**Implemented**: `CloudAccount.workoutCursor` (unix ms, its own column,
+*not* `lastSync` - that one is this phone's clock and the comparison happens
+on the server's), stored only when a sync finishes, and only ever moved
+forward. The first page's `until` is the one stored, not the last page's,
+for the same gap reason. Settings has "Fetch all workouts again" for when
+the local copy is suspect rather than merely stale.
+
+### There is no Progress endpoint
+
+This is the question the capture was taken to answer, and the answer is a
+negative worth having. With the home screen's eleven widgets rendered and
+every page scrolled, the official app fetched:
+
+- `workouts?since=…` (7 workouts),
+- `247.sports-tracker.com/v1/{activity,recovery,sleep,sleepstages}/export`,
+- `GET /apiserver/v2/personal/best/records?statsVersion=V2&tz=Europe/Helsinki`,
+- and configuration: `/v1/user/settings`, `/v1/user/appconfig`.
+
+Nothing that returns a fitness, fatigue or form figure. `/v1/user/appconfig`
+confirms what the widgets even are - the server sends the home screen's
+layout, `FitnessProgressTrend` and `TrainingTrend` among them - but sends no
+data for them. **So CTL, ATL, TSB and the "Kunto pysyy samana" verdict are
+computed on the device, from the per-workout stress scores in the local
+database.** Which is what this app does, and why the three figures matched
+exactly rather than approximately.
+
+The relevant settings the app computes against, for the record:
+`hr_max: 192`, `hr_rest: 45`, `hr_threshold_2: null`,
+`preferredTssCalculationMethods: null`, `intensityZones.heartRateZoneType:
+"max"`, and goals (`weeklyTrainingDuration: 10800`, `dailySteps: 8000`).
+
+### `tssList`: two scores per workout, and the list field is one of them
+
+```json
+"tss":     {"calculationMethod":"PACE","trainingStressScore":10.29,
+            "intensityFactor":0.194,"averageGradeAdjustedPace":1.87},
+"tssList": [ {...PACE, 10.29...}, {"calculationMethod":"MET",
+             "trainingStressScore":31.12} ]
+```
+
+The two methods disagree by a factor of three, so which one the load is
+built from is not a detail. `tss` is the PACE one here, and `tss` is what
+this app reads - confirmed correct by the match against the official app's
+own 15 / 5 / +9 rather than by reasoning about it.
+
+### A new endpoint: `POST /v1/workout/extensions/<workoutKey>`
+
+Not a GET. The body is a JSON array of the extension types wanted:
+
+```json
+["SummaryExtension","FitnessExtension","SkiExtension","IntensityExtension",
+ "DiveHeaderExtension","SwimmingHeaderExtension","WeatherExtension",
+ "WeatherStreamExtension","JumpRopeExtension"]
+```
+
+The app fires one per workout on the list - 50 of them at startup. What
+comes back is everything the list response does not carry:
+
+- **FitnessExtension**: `maxHeartRate`, `vo2Max`, `estimatedVo2Max`,
+  `fitnessAge`.
+- **IntensityExtension**: `zones.heartRate.zone1..5` as
+  `{totalTime, lowerLimit}`, so the zone boundaries come from the server
+  rather than being derived from `hr_max`.
+- **SummaryExtension**: `pte`, `peakEpoc`, `recoveryTime`, `ascentTime`,
+  `descentTime`, min/avg/max temperature **in kelvin** (299.7, 300.6,
+  303.3), `heartRateRecovery`, and `gear` - manufacturer, `displayName`,
+  `serialNumber`, `softwareVersion`, `hardwareVersion`. Also `apps`: the
+  SuuntoPlus app outputs, with localised names ("Rasva", "Hiilihydraatit").
+
+`{"extensions": []}` for a workout that has none - an empty list is a 200,
+so an absent extension document is not what the 403s below are.
+
+This is not wired up. It is the obvious way to give a *cloud* workout the
+EPOC, PTE and VO2max panel that a watch-fetched one already gets from the
+watch's own `/Summary`.
+
+### Nine workouts answer 403, and they look like ours
+
+Of 50 unique workout keys, 41 answered 200 and **nine answered
+`403 Forbidden`**, retried and refused again. Their ObjectId timestamps -
+the server's own creation time, in the key's first four bytes - cluster in
+evening pairs: 22.9 21:29-21:39, 23.9 21:10 and 21:35, 25.9 21:17. Those
+are the evenings this project's upload path was being tested, and the
+200-answering keys are bulk bursts from the official app instead.
+
+Suggestive, not established: no upload here ever recorded the workout key
+the server returned, so there is nothing local to match against. If it is
+right, a workout uploaded by this app is stored and listed and summarised
+correctly - the official app shows it - but its extensions subresource is
+not readable, which would show up as a missing analysis panel rather than a
+missing workout. Worth settling the next time something is uploaded, by
+keeping the returned key and asking for its extensions.
 
 ## Still open
 
@@ -540,6 +670,15 @@ and unlike the first one it is measurable.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
+5. **Whether `since` matches `created` or `lastModified`.** It matches a
+   server-side ingest time either way (measured), which is what the cursor
+   needs. The difference only decides whether a workout *edited* in the
+   official app comes back on a later incremental sync. Settling it takes
+   one capture with a cursor that falls between some workout's `created`
+   and its `lastModified`, or simply editing a workout and syncing.
+6. **The nine 403s on `/v1/workout/extensions/<key>`** - whether they are
+   the workouts this app uploaded, and if so what about them the server
+   objects to.
 
 ## Setting up HTTPS interception again (2026-09-25)
 

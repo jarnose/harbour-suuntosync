@@ -1266,6 +1266,21 @@ exists - %2 bytes
 <context>
     <name>SettingsPage</name>
     <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="90"/>
+        <source>A normal sync asks the cloud only for what is new. Fetch everything again if a workout was edited elsewhere, or if this phone&apos;s copy looks wrong.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="99"/>
+        <source>Fetching…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="99"/>
+        <source>Fetch all workouts again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../qml/pages/SettingsPage.qml" line="54"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>

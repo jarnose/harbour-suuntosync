@@ -292,7 +292,18 @@ public:
     // no-ops (no errorOccurred) if not signed in - MainPage's placeholder
     // text already explains that, no need to also toast it.
     Q_INVOKABLE void loadCachedWorkouts();
+    // Incremental: asks the cloud only for what reached it since the last
+    // successful sync, which is what the official app does (measured, not
+    // assumed - see SuuntoCloudClient::listWorkouts). A decade of history
+    // is twelve pages, and re-fetching all of it to learn about one new
+    // walk was the reason a routine sync took as long as it did.
     Q_INVOKABLE void syncCloudWorkouts();
+    // The same thing from the beginning of time, for when the local copy is
+    // suspect rather than merely out of date - a workout edited in the
+    // official app, say, or a database restored from elsewhere. Separate
+    // because it is slow enough that it should be the user's choice, not a
+    // thing that happens on every pull-to-refresh.
+    Q_INVOKABLE void resyncCloudWorkouts();
 
     // A BLE-synced workout's GPS track, projected for drawing: a list of
     // { "x": 0..1, "y": 0..1 } points, already aspect-corrected (longitude
@@ -488,7 +499,11 @@ private:
     // be a single request for the hundred most recent, so anything older was
     // never fetched at all - which is a hole in the history and therefore in
     // the chronic load computed over it.
-    void fetchCloudWorkoutPage(const QString &sessionKey, int offset, int stored);
+    // `untilMs` threads the first page's server cursor through the chain so
+    // the last page can store it; 0 on the initial call.
+    void fetchCloudWorkoutPage(const QString &sessionKey, qint64 sinceMs, int offset, int stored,
+                                qint64 untilMs);
+    void startCloudSync(bool full);
 
     // Whiteboard is one request, one response: only one process may hold a
     // session with the watch. The app takes the link whenever it attaches

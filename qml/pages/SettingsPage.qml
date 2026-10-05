@@ -90,6 +90,27 @@ Page {
                 }
             }
 
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: AppController.cloudSignedIn
+                text: qsTr("A normal sync asks the cloud only for what is new. "
+                           + "Fetch everything again if a workout was edited "
+                           + "elsewhere, or if this phone's copy looks wrong.")
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                visible: AppController.cloudSignedIn
+                text: AppController.workoutSyncInProgress
+                      ? qsTr("Fetching…") : qsTr("Fetch all workouts again")
+                enabled: !AppController.workoutSyncInProgress
+                onClicked: AppController.resyncCloudWorkouts()
+            }
+
             // ---- watch ----
             SectionHeader { text: qsTr("Watch") }
 

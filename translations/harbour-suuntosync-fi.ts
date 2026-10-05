@@ -1274,6 +1274,21 @@ löytyy - %2 tavua
 <context>
     <name>SettingsPage</name>
     <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="90"/>
+        <source>A normal sync asks the cloud only for what is new. Fetch everything again if a workout was edited elsewhere, or if this phone&apos;s copy looks wrong.</source>
+        <translation>Tavallinen synkronointi hakee pilvestä vain uudet. Hae kaikki uudelleen, jos harjoitusta on muokattu muualla tai jos tämän puhelimen kopio näyttää väärältä.</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="99"/>
+        <source>Fetching…</source>
+        <translation>Haetaan…</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SettingsPage.qml" line="99"/>
+        <source>Fetch all workouts again</source>
+        <translation>Hae kaikki harjoitukset uudelleen</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/SettingsPage.qml" line="54"/>
         <source>Settings</source>
         <translation>Asetukset</translation>

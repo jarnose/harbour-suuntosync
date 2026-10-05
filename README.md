@@ -14,6 +14,12 @@ Confirmed on real hardware, not just in tests:
   against the official app on the same account: 15, 5 and +9 both ways.
   Nothing here invents a training load from duration or heart rate; a figure
   that looked like Suunto's and was not would be worse than none.
+
+  Computing them here rather than asking for them is not a shortcut: a
+  capture of the official app with every screen opened shows it fetching no
+  fitness, fatigue or form figure at all. The cloud sends the home screen's
+  widget *layout* and no data for it, so the numbers are the device's own
+  arithmetic over the per-workout stress scores — in both apps.
 - **This month at a glance.** The main page leads with how long and how
   often, the way Suunto's own app does. Deduplicated: the same outing can be
   in the database twice, once from the watch and once from the cloud, and a
@@ -36,6 +42,13 @@ Confirmed on real hardware, not just in tests:
 - **Workouts from the Suunto cloud**, with route, training metrics, sample
   data and laps — automatic and manual ones, which the cloud keeps as two
   parallel partitions of the same workout rather than one sequence.
+  Incremental: a routine sync asks only for what has reached the cloud
+  since the last one, carrying the server's own cursor rather than this
+  phone's clock. What the cloud's `since` compares against was measured
+  from a capture of the official app rather than guessed — it is an
+  ingest time, so a workout recorded a fortnight ago and uploaded this
+  afternoon still arrives. Settings has a full re-fetch for when the local
+  copy is suspect rather than merely stale.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
   payload is converted to the JSON the cloud expects, zipped and posted. A
   workout recorded on the watch shows up in the official app afterwards.

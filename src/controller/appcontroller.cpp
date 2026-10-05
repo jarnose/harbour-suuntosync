@@ -2349,6 +2349,16 @@ void AppController::loadCachedWorkouts()
 
 void AppController::syncCloudWorkouts()
 {
+    startCloudSync(false);
+}
+
+void AppController::resyncCloudWorkouts()
+{
+    startCloudSync(true);
+}
+
+void AppController::startCloudSync(bool full)
+{
     if (!m_cloudAccount.isSignedIn() || m_workoutSyncInProgress)
         return;
 
@@ -2356,7 +2366,7 @@ void AppController::syncCloudWorkouts()
     emit workoutSyncInProgressChanged();
 
     m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-            [this](bool ok, const QByteArray &data, const QString &loadError) {
+            [this, full](bool ok, const QByteArray &data, const QString &loadError) {
         if (!ok) {
             m_workoutSyncInProgress = false;
             emit workoutSyncInProgressChanged();
@@ -2364,11 +2374,21 @@ void AppController::syncCloudWorkouts()
             return;
         }
 
-        fetchCloudWorkoutPage(QString::fromUtf8(data), 0, 0);
+        // Incremental by default: the cursor is the server's own clock
+        // from the last successful sync, so a routine one asks for the
+        // handful of workouts that reached the cloud since - not all
+        // twelve pages of a decade's history, which is what this did
+        // before the capture showed the official app doing otherwise.
+        // Everything already synced stays in the local database, which is
+        // where the monthly totals and the training load are computed
+        // from anyway.
+        const qint64 since = full ? 0 : m_cloudAccount.workoutCursor;
+        fetchCloudWorkoutPage(QString::fromUtf8(data), since, 0, 0, 0);
     });
 }
 
-void AppController::fetchCloudWorkoutPage(const QString &sessionKey, int offset, int stored)
+void AppController::fetchCloudWorkoutPage(const QString &sessionKey, qint64 sinceMs, int offset,
+                                           int stored, qint64 untilMs)
 {
     // One page at a time, stored as it arrives, so a long history does not
     // have to be held in memory to be saved.
@@ -2378,9 +2398,11 @@ void AppController::fetchCloudWorkoutPage(const QString &sessionKey, int offset,
     // than a chronic load needs.
     const int maximum = 10000;
 
-    m_cloudClient->listWorkouts(sessionKey, pageSize, offset,
-            [this, sessionKey, offset, stored, pageSize, maximum](
-                    bool listOk, const QVector<Workout> &workouts, const QString &listError) {
+    m_cloudClient->listWorkouts(sessionKey, sinceMs, pageSize, offset,
+            [this, sessionKey, sinceMs, offset, stored, untilMs, pageSize, maximum](
+                    bool listOk, const QVector<Workout> &workouts,
+                    const SuuntoCloudClient::WorkoutPageInfo &page,
+                    const QString &listError) {
         if (!listOk) {
             m_workoutSyncInProgress = false;
             emit workoutSyncInProgressChanged();
@@ -2413,9 +2435,16 @@ void AppController::fetchCloudWorkoutPage(const QString &sessionKey, int offset,
             }
         }
 
+        // The first page's `until` is the one that becomes the next
+        // cursor, not the last page's: a workout that reaches the cloud
+        // while this run is still paging would otherwise fall into the gap
+        // between the two and never be asked for again. Erring early means
+        // re-fetching a few, which upsert-by-key makes free.
+        const qint64 until = untilMs != 0 ? untilMs : page.untilMs;
+
         const int now = stored + workouts.size();
         if (workouts.size() == pageSize && now < maximum) {
-            fetchCloudWorkoutPage(sessionKey, offset + workouts.size(), now);
+            fetchCloudWorkoutPage(sessionKey, sinceMs, offset + workouts.size(), now, until);
             return;
         }
 
@@ -2427,6 +2456,11 @@ void AppController::fetchCloudWorkoutPage(const QString &sessionKey, int offset,
         // project); currentMSecsSinceEpoch() has been available since
         // Qt 4.7 and works everywhere.
         m_cloudAccount.lastSync = QDateTime::currentMSecsSinceEpoch() / 1000;
+        // Only ever moved forward, and only on a sync that finished: a
+        // partial one leaves the old cursor so the next attempt covers the
+        // same ground again.
+        if (until > m_cloudAccount.workoutCursor)
+            m_cloudAccount.workoutCursor = until;
         QString saveError;
         if (!m_cloudAccountStore->save(m_cloudAccount, &saveError))
             emit errorOccurred(tr("Failed to save account: %1").arg(saveError));

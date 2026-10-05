@@ -719,7 +719,9 @@ rounded, kept as a fallback), the fitness age and the five heart-rate zones
 are new on the workout page. The zone *boundaries* matter more than they
 look: they come from the server rather than being derived from the
 configured maximum, and 0/131/146/161/176 against an `hr_max` of 192 is not
-an even division of anything. EPOC, PTE and the recovery time were already
+an even division of anything. They are also **per workout**, not per
+account - another on the same phone reads 0/126/135/144/152 - so there was
+never a single set to cache and reuse. EPOC, PTE and the recovery time were already
 arriving from the detail GET, so those rows are unchanged.
 
 **Confirmed on hardware, 2026-10-05**: a cloud workout shows VO2max, the
@@ -744,19 +746,44 @@ summarised correctly - the official app shows it - but its extensions
 subresource is not readable, which shows up as a missing analysis panel
 rather than a missing workout.
 
-**This is settleable, and an earlier version of this section said it was
-not.** The claim was that no upload here ever kept the key the server
-returned. It does: `WorkoutStore::markSmlUploaded()` writes it to
-`workout_sml.uploaded_key` and has since the upload path was built. So the
-nine ids can simply be looked up on the phone:
+**Two attempts to settle this, both recorded because both were wrong about
+something.**
 
-```
-sqlite3 ~/.local/share/io.github.jarnose/suuntosync/suuntosync.sqlite \
-  "SELECT key, uploaded_key FROM workout_sml WHERE uploaded_key IS NOT NULL;"
+The first version of this section said no upload here ever kept the key the
+server returned. It does - `WorkoutStore::markSmlUploaded()` writes
+`workout_sml.uploaded_key`. So the second version said the question was one
+query away. It is not, and the query is what showed why.
+
+The phone's database has exactly **one** upload on record, and the key it
+kept is `6vuh9b4s5jlblmhi` - sixteen characters, not a twenty-four-digit
+ObjectId. Which brings out something this project had backwards:
+
+### `key` and `workoutKey` are two different identifiers, and not the way round it looks
+
+```json
+"key":        "29sc0l5ro6vvnfpo",
+"workoutKey": "6ac39c973e7e17771cad991b"
 ```
 
-Every one of the nine that appears in that second column is a workout this
-app uploaded.
+`key` is the short one. `workoutKey` is the ObjectId - whose first four
+bytes are a unix timestamp, which is where the creation times used above
+come from. An earlier pass through this capture printed `workoutKey` under
+the label "key" and reasoned from that; the mix-up is recorded rather than
+quietly fixed because the two look nothing alike and the error was in the
+labelling, not the data.
+
+This client stores `key`, the short one, and the upload returns one of
+those too. So `uploaded_key` cannot be compared with the nine ObjectIds at
+all, and the hypothesis is back to unsupported rather than disproved: an
+uploaded workout has both identifiers, and this app keeps only one of them.
+Storing `workoutKey` as well - it is free in the list response - is the
+one-line change that would make the question answerable.
+
+**Measured while looking**: `POST /v1/workout/extensions/<key>` accepts the
+**short** key, not only the ObjectId the official app sends. Nine of the
+thirteen detail rows on the phone carry a `FitnessExtension` and an
+`IntensityExtension` fetched that way. Worth having written down, because
+the capture alone would suggest the ObjectId is required.
 
 ## Still open
 
@@ -778,10 +805,18 @@ app uploaded.
    official app comes back on a later incremental sync. Settling it takes
    one capture with a cursor that falls between some workout's `created`
    and its `lastModified`, or simply editing a workout and syncing.
-6. **The nine 403s on `/v1/workout/extensions/<key>`** - what about those
-   workouts the server objects to. *Whether* they are this app's uploads is
-   no longer open-ended: `workout_sml.uploaded_key` has the keys, so it is
-   one query away (see above).
+6. **The nine 403s on `/v1/workout/extensions/<key>`** - still open, and
+   not answerable from this app's own data until it stores `workoutKey`
+   alongside `key`. See the two failed attempts above.
+7. **`IntensityExtension` also carries power zones**, `zones.power.zone1..5`
+   with the same `{totalTime, lowerLimit}` shape (0/100/150/200/250 W on
+   this account, all with zero time - no power meter here). Read and
+   stored, not shown.
+8. **`FitnessExtension` does not always carry VO2max and the fitness age.**
+   The captured workout has `vo2Max`, `estimatedVo2Max` and `fitnessAge`;
+   nine real ones on the phone carry only `maxHeartRate`. So those two rows
+   appear on some workouts and not others, which is the data's doing rather
+   than a bug.
 
 ## Setting up HTTPS interception again (2026-09-25)
 

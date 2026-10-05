@@ -499,6 +499,12 @@ while a full page keeps coming back, to a ceiling of ten thousand so a
 server that always answers with a full page cannot loop for ever. Pages
 already stored stay stored if a later one fails.
 
+**What paging actually brought.** 104 cloud workouts became **1162**, with
+history back to 2010-09-20 - and the six-month hole in early 2026 that
+looked like a training break was simply the hundred-row cut. Recomputed over
+the whole history: CTL 14.58, ATL 4.68, TSB +9.47, against the Android
+app's 15, 5 and 9. All three agree to the rounding.
+
 **A wrong explanation, recorded because it was stated confidently.** The
 first account of that 1.2 was that the database's newest workout was three
 days old and the Android app was counting newer ones. Jarno pointed out

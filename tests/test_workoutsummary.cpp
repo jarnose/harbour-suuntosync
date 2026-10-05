@@ -67,12 +67,25 @@ int main()
     check(back2back.count == 2, "two minutes apart is two workouts ("
                                         + std::to_string(back2back.count) + ")");
 
-    // Three copies a minute apart each - chained, so still one workout.
-    const WorkoutSummary::Totals chained =
+    // A run of entries each a minute from the last is NOT one workout. The
+    // window is measured from the group's first member, so this is two: the
+    // first two collapse and the third is beyond ninety seconds of the
+    // first. Chaining instead would swallow a multisport outing recorded as
+    // back-to-back legs, which is what the figures looked like against
+    // Suunto's own app.
+    const WorkoutSummary::Totals run3 =
             run({ { kOct + 1000, 10 }, { kOct + 61000, 20 }, { kOct + 121000, 30 } });
-    check(chained.count == 1 && chained.seconds == 30,
-          "copies chained a minute apart collapse into one ("
-                  + std::to_string(chained.count) + ")");
+    check(run3.count == 2, "a minute-apart run is not collapsed without limit ("
+                                   + std::to_string(run3.count) + ")");
+    check(close(run3.seconds, 50.0), "and keeps 20 + 30 rather than 30 alone ("
+                                              + std::to_string(run3.seconds) + ")");
+
+    // Two copies seconds apart, which is what a duplicate actually looks
+    // like, still collapse.
+    const WorkoutSummary::Totals seconds =
+            run({ { kOct + 1000, 2663 }, { kOct + 31000, 2663 } });
+    check(seconds.count == 1, "copies seconds apart still collapse ("
+                                      + std::to_string(seconds.count) + ")");
 
     // The range is half-open, and anything outside it is ignored. Spaced
     // hours apart so the dedupe window has no say in it.

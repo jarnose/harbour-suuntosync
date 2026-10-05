@@ -13,21 +13,21 @@ std::vector<Entry> collapseDuplicates(std::vector<Entry> entries)
     std::vector<Entry> out;
     size_t i = 0;
     while (i < entries.size()) {
-        // Everything starting within the window of this one is the same
-        // workout. Chained deliberately: the window is measured from the
-        // previous member rather than the first, so three copies a minute
-        // apart each collapse into the same one.
+        // Everything starting within the window of *this* one is the same
+        // workout. Measured from the group's first member and not chained
+        // from the previous: chaining let a run of entries each 90 seconds
+        // from the last collapse into one, however long the run, and a
+        // multisport outing recorded as back-to-back legs looks exactly
+        // like that. Two copies of one workout differ by seconds, so a
+        // window from the first is all a duplicate needs.
         Entry merged = entries[i];
         size_t j = i + 1;
-        while (j < entries.size() && entries[j].startMs - merged.startMs <= kSameWorkoutWindowMs) {
+        while (j < entries.size()
+                && entries[j].startMs - entries[i].startMs <= kSameWorkoutWindowMs) {
             merged.seconds = std::max(merged.seconds, entries[j].seconds);
             merged.tss = std::max(merged.tss, entries[j].tss);
-            merged.startMs = entries[j].startMs;
             ++j;
         }
-        // The earliest start of the group is the one to keep: it is the
-        // workout's own, and a day boundary should fall where it fell.
-        merged.startMs = entries[i].startMs;
         out.push_back(merged);
         i = j;
     }

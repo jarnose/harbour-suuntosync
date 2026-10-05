@@ -336,7 +336,12 @@ public:
     // <cache>/sml-<key>.json and errorOccurred() names the file, so it can
     // be pulled off the phone and the parser corrected against the real
     // thing instead of another guess.
-    Q_INVOKABLE void loadCloudSamples(const QString &key);
+    // `saveRaw` writes the response to <cache>/sml-<key>.json whether or not
+    // the parser recognises it, which is the only way to get at a part of
+    // the JSON this parser does not read - the laps, as it happens. Not the
+    // default, because the responses run to megabytes and the cache is not
+    // the place to keep one per workout anybody ever looked at.
+    Q_INVOKABLE void loadCloudSamples(const QString &key, bool saveRaw = false);
 
     // The watch's round-the-clock data from the cloud: sleep, sleep stages,
     // recovery and activity (see SuuntoCloudClient::fetchHealthEntries()).

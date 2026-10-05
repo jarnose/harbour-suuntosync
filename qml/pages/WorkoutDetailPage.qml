@@ -186,6 +186,15 @@ Page {
                          && page.workoutKey.length > 0
                 onClicked: AppController.loadCloudSamples(page.workoutKey)
             }
+            MenuItem {
+                // The parser reads the curves and nothing else, so anything
+                // else in that JSON - the laps, for instance - can only be
+                // looked at by keeping a copy. The path is reported where
+                // the other watch-side results appear.
+                text: qsTr("Save the raw sample data")
+                visible: page.source !== "ble" && page.workoutKey.length > 0
+                onClicked: AppController.loadCloudSamples(page.workoutKey, true)
+            }
         }
 
         Column {

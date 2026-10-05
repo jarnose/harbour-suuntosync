@@ -27,170 +27,170 @@
         <translation>Suojatun säilön avaaminen epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="723"/>
+        <location filename="../src/controller/appcontroller.cpp" line="721"/>
         <source>Could not connect to watch: %1</source>
         <translation>Kelloon ei saatu yhteyttä: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="775"/>
+        <location filename="../src/controller/appcontroller.cpp" line="772"/>
         <source>Failed to save paired watch: %1</source>
         <translation>Paritetun kellon tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="819"/>
+        <location filename="../src/controller/appcontroller.cpp" line="816"/>
         <source>Could not read the remembered watches: %1</source>
         <translation>Muistettujen kellojen lukeminen epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="828"/>
+        <location filename="../src/controller/appcontroller.cpp" line="825"/>
         <source>That watch is not remembered any more - pair it again.</source>
         <translation>Tuota kelloa ei enää muisteta - parita se uudelleen.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="835"/>
+        <location filename="../src/controller/appcontroller.cpp" line="832"/>
         <source>Failed to forget watch: %1</source>
         <translation>Kellon unohtaminen epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="851"/>
-        <location filename="../src/controller/appcontroller.cpp" line="877"/>
-        <location filename="../src/controller/appcontroller.cpp" line="936"/>
-        <location filename="../src/controller/appcontroller.cpp" line="978"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1026"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1077"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1149"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1171"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1356"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1461"/>
+        <location filename="../src/controller/appcontroller.cpp" line="848"/>
+        <location filename="../src/controller/appcontroller.cpp" line="874"/>
+        <location filename="../src/controller/appcontroller.cpp" line="933"/>
+        <location filename="../src/controller/appcontroller.cpp" line="975"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1023"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1074"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1160"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1182"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1367"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1472"/>
         <source>Whiteboard channel isn&apos;t ready yet</source>
         <translation>Yhteyskanava ei ole vielä valmis</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="855"/>
+        <location filename="../src/controller/appcontroller.cpp" line="852"/>
         <source>A test request is already in flight</source>
         <translation>Testipyyntö on jo menossa</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="864"/>
+        <location filename="../src/controller/appcontroller.cpp" line="861"/>
         <source>Request failed: %1</source>
         <translation>Pyyntö epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="867"/>
+        <location filename="../src/controller/appcontroller.cpp" line="864"/>
         <source>OK - type=0x%1 requestId=%2 body=%3 bytes</source>
         <translation>OK – tyyppi=0x%1 pyyntö=%2 runko=%3 tavua</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="881"/>
-        <location filename="../src/controller/appcontroller.cpp" line="940"/>
+        <location filename="../src/controller/appcontroller.cpp" line="878"/>
+        <location filename="../src/controller/appcontroller.cpp" line="937"/>
         <source>A logbook fetch is already in flight</source>
         <translation>Harjoitushaku on jo menossa</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="885"/>
-        <location filename="../src/controller/appcontroller.cpp" line="945"/>
+        <location filename="../src/controller/appcontroller.cpp" line="882"/>
+        <location filename="../src/controller/appcontroller.cpp" line="942"/>
         <source>A watch sync is already in progress</source>
         <translation>Kellon synkronointi on jo käynnissä</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="898"/>
+        <location filename="../src/controller/appcontroller.cpp" line="895"/>
         <source>Fetch failed: %1</source>
         <translation>Haku epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="908"/>
+        <location filename="../src/controller/appcontroller.cpp" line="905"/>
         <source>Decoded OK but failed to save: %1</source>
         <translation>Purku onnistui mutta tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="914"/>
+        <location filename="../src/controller/appcontroller.cpp" line="911"/>
         <source>OK - saved. %1 bytes compressed, activity=%2 duration=%3s distance=%4m maxSpeed=%5m/s avgHR=%6 maxHR=%7 steps=%8</source>
         <translation>OK – tallennettu. %1 tavua pakattuna, laji=%2 kesto=%3 s matka=%4 m huippunopeus=%5 m/s keskisyke=%6 maksimisyke=%7 askeleet=%8</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="925"/>
+        <location filename="../src/controller/appcontroller.cpp" line="922"/>
         <source>Fetched %1 bytes but decoding failed: %2</source>
         <translation>Haettiin %1 tavua mutta purku epäonnistui: %2</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="961"/>
+        <location filename="../src/controller/appcontroller.cpp" line="958"/>
         <source>/Entries fetch failed: %1</source>
         <translation>/Entries-haku epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="969"/>
+        <location filename="../src/controller/appcontroller.cpp" line="966"/>
         <source>OK - %1 entries: %2</source>
         <translation>OK – %1 merkintää: %2</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="982"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1030"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1085"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1175"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1360"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1465"/>
+        <location filename="../src/controller/appcontroller.cpp" line="979"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1027"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1082"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1186"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1371"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1476"/>
         <source>Another fetch is already in progress</source>
         <translation>Toinen haku on jo käynnissä</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="992"/>
+        <location filename="../src/controller/appcontroller.cpp" line="989"/>
         <source>Descriptors fetch failed: %1</source>
         <translation>Kenttätaulun haku epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1017"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1014"/>
         <source>Descriptors: %1 bytes, %2 field paths, saved as %3</source>
         <translation>Kenttätaulu: %1 tavua, %2 kenttäpolkua, tallennettu nimellä %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1069"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1066"/>
         <source>The watch took the notification, with the text trimmed to fit</source>
         <translation>Kello otti ilmoituksen vastaan, teksti lyhennettiin mahtumaan</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1070"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1067"/>
         <source>The watch took the notification</source>
         <translation>Kello otti ilmoituksen vastaan</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1081"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1078"/>
         <source>Nothing has been sent from here yet</source>
         <translation>Täältä ei ole vielä lähetetty mitään</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1094"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1091"/>
         <source>The watch removed it</source>
         <translation>Kello poisti sen</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1125"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1136"/>
         <source>not connected to the watch</source>
         <translation>ei yhteyttä kelloon</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1136"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1147"/>
         <source>the watch answered with %1 bytes</source>
         <translation>kello vastasi %1 tavulla</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1162"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1173"/>
         <source>The watch will accept notifications now</source>
         <translation>Kello ottaa ilmoitukset vastaan nyt</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1163"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1174"/>
         <source>The watch will ignore notifications now</source>
         <translation>Kello ohittaa ilmoitukset nyt</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1186"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1197"/>
         <source>%1
 %2</source>
         <translation>%1
 %2</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1198"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1209"/>
         <source>%1
 exists - %2 bytes
 %3
@@ -201,58 +201,58 @@ löytyy - %2 tavua
 &quot;%4&quot;</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1255"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1266"/>
         <source>Something else is using the watch connection.</source>
         <translation>Jokin muu käyttää kelloyhteyttä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1268"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1279"/>
         <source>Could not ask the watch which GPS data it wants: %1</source>
         <translation>Kellolta ei saatu kysyttyä, mitä GPS-dataa se haluaa: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1276"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1287"/>
         <source>The watch&apos;s GPS format answer was unreadable.</source>
         <translation>Kellon vastaus GPS-muodosta ei ollut luettavissa.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1284"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1295"/>
         <source>Could not download GPS data: %1</source>
         <translation>GPS-datan lataus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1291"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1302"/>
         <source>Sending %1 kB of GPS data to the watch…</source>
         <translation>Lähetetään %1 kt GPS-dataa kelloon…</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1325"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1336"/>
         <source>GPS data updated - the watch reports %1, after %2 s of processing.</source>
         <translation>GPS-data päivitetty - kello ilmoittaa %1, %2 s käsittelyn jälkeen.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1327"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1338"/>
         <source>GPS data updated - the watch now reports %1.</source>
         <translation>GPS-data päivitetty - kello ilmoittaa nyt %1.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1332"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1343"/>
         <source>GPS data sent (format %1) and accepted, but the watch still reports no date after %2 minutes. Check it again later - older watches take a while.</source>
         <translation>GPS-data lähetetty (muoto %1) ja hyväksytty, mutta kello ei vieläkään ilmoita päivämäärää %2 minuutin jälkeen. Tarkista myöhemmin uudelleen - vanhemmilla kelloilla kestää.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1376"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1387"/>
         <source>No timeline file is known for %1.</source>
         <translation>Kohteelle %1 ei tunneta aikajanatiedostoa.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1392"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1498"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1403"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1509"/>
         <source>%1 (%2): %3</source>
         <translation>%1 (%2): %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1416"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1427"/>
         <source>%1: %2 bytes
 %3
 &quot;%4&quot;</source>
@@ -261,12 +261,12 @@ löytyy - %2 tavua
 &quot;%4&quot;</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1478"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1489"/>
         <source>/Activity/TrendData rejected every cursor encoding tried. The parameter is shaped differently than assumed.</source>
         <translation>/Activity/TrendData hylkäsi kaikki kokeillut kursorimuodot. Parametri on erimuotoinen kuin oletettiin.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1532"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1543"/>
         <source>/Activity/TrendData accepted %1 (cursor %2)
 %3 bytes, status %4, saved as trenddata.bin
 %5</source>
@@ -275,227 +275,237 @@ löytyy - %2 tavua
 %5</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1552"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1563"/>
         <source>Cloud login failed: %1</source>
         <translation>Pilveen kirjautuminen epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1562"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1573"/>
         <source>Failed to store login session: %1</source>
         <translation>Istunnon tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1572"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2297"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1583"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2308"/>
         <source>Failed to save account: %1</source>
         <translation>Tilin tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1585"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1596"/>
         <source>Failed to clear account: %1</source>
         <translation>Tilin tyhjennys epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1604"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1713"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1796"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2078"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1615"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1724"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1807"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2089"/>
         <source>Sign in to the Suunto cloud first.</source>
         <translation>Kirjaudu ensin Suunto-tilille.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1620"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1631"/>
         <source>Synced %1 health entries (%2)</source>
         <translation>Synkronoitiin %1 terveysmerkintää (%2)</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1637"/>
         <location filename="../src/controller/appcontroller.cpp" line="1648"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1652"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1760"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1770"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2126"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2136"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2722"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1659"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1663"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1771"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1781"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2137"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2147"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2767"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1709"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1720"/>
         <source>An upload is already in progress.</source>
         <translation>Lähetys on jo käynnissä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1719"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1730"/>
         <source>Nothing to upload - every watch workout is already in the cloud.</source>
         <translation>Ei lähetettävää – kaikki kellon harjoitukset ovat jo pilvessä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1734"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1745"/>
         <source>Uploaded %1 workouts to Suunto.</source>
         <translation>Lähetettiin %1 harjoitusta Suuntoon.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1736"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1747"/>
         <source>Uploaded %1 of %2 workouts. Failed: %3</source>
         <translation>Lähetettiin %1/%2 harjoitusta. Epäonnistui: %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1750"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1761"/>
         <source>%1: nothing to build an upload from</source>
         <translation>%1: ei aineistoa lähetyksen rakentamiseen</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1788"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1799"/>
         <source>Nothing to upload - sync this workout from the watch first.</source>
         <translation>Ei lähetettävää – synkronoi harjoitus ensin kellosta.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1792"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1803"/>
         <source>Already uploaded.</source>
         <translation>Jo lähetetty.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1806"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2377"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1817"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2406"/>
         <source>Could not read the stored session: %1</source>
         <translation>Tallennettua istuntoa ei voitu lukea: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1774"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1817"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1785"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1828"/>
         <source>Uploaded to Suunto</source>
         <translation>Lähetetty Suuntoon</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1251"/>
-        <location filename="../src/controller/appcontroller.cpp" line="1872"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1262"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1883"/>
         <source>Connect the watch first.</source>
         <translation>Yhdistä kello ensin.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1876"/>
-        <location filename="../src/controller/appcontroller.cpp" line="2074"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1887"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2085"/>
         <source>A sync is already in progress.</source>
         <translation>Synkronointi on jo käynnissä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1898"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1909"/>
         <source>Could not read sleep from the watch: %1</source>
         <translation>Unta ei voitu lukea kellosta: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1905"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1916"/>
         <source>The watch returned %1 bytes but no readable nights.</source>
         <translation>Kello palautti %1 tavua mutta ei luettavia öitä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1934"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1945"/>
         <source>Could not save sleep data: %1</source>
         <translation>Unidatan tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1962"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1973"/>
         <source>Sleep synced. Recovery failed: %1</source>
         <translation>Uni synkronoitu. Palautuminen epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1969"/>
+        <location filename="../src/controller/appcontroller.cpp" line="1980"/>
         <source>Sleep synced. Recovery returned %1 bytes but no readable samples.</source>
         <translation>Uni synkronoitu. Palautuminen palautti %1 tavua mutta ei luettavia näytteitä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="1991"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2002"/>
         <source>Could not save recovery data: %1</source>
         <translation>Palautumisdatan tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2027"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2038"/>
         <source>Sleep and recovery synced. Daily activity failed: %1</source>
         <translation>Uni ja palautuminen synkronoitu. Päivittäinen aktiivisuus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2064"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2075"/>
         <source>Could not save activity data: %1</source>
         <translation>Aktiivisuusdatan tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2082"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2093"/>
         <source>Nothing to upload - everything the watch gave us is already in the cloud.</source>
         <translation>Ei lähetettävää – kaikki kellosta saatu on jo pilvessä.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2098"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2109"/>
         <source>Uploaded %1 entries (%2)</source>
         <translation>Lähetettiin %1 merkintää (%2)</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2101"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2112"/>
         <source>Uploaded %1 health entries to Suunto.</source>
         <translation>Lähetettiin %1 terveysmerkintää Suuntoon.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2238"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2249"/>
         <source>Failed to load workouts: %1</source>
         <translation>Harjoitusten lataus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2257"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2268"/>
         <source>Failed to load login session: %1</source>
         <translation>Istunnon lataus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2268"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2279"/>
         <source>Failed to sync workouts: %1</source>
         <translation>Harjoitusten synkronointi epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2285"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2296"/>
         <source>Failed to save workout: %1</source>
         <translation>Harjoituksen tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2356"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2385"/>
         <source>Sample data is only available for cloud workouts.</source>
         <translation>Näytedata on saatavilla vain pilviharjoituksille.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2383"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2412"/>
         <source>Could not download sample data: %1</source>
         <translation>Näytedatan lataus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2401"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2421"/>
+        <source>Downloaded %1 kB but could not save it.</source>
+        <translation>Ladattiin %1 kt mutta tallennus epäonnistui.</translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="2433"/>
+        <source>%1 kB saved to %2</source>
+        <translation>%1 kt tallennettu kohteeseen %2</translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="2446"/>
         <source>No charts found in %1 kB of sample data. Raw response saved to %2.</source>
         <translation>Käyriä ei löytynyt %1 kt:n näytedatasta. Raakavastaus tallennettu: %2.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2404"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2449"/>
         <source>No charts found in the sample data, and it could not be saved.</source>
         <translation>Käyriä ei löytynyt näytedatasta, eikä sitä voitu tallentaa.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2543"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2588"/>
         <source>Failed to list watch entries: %1</source>
         <translation>Kellon merkintöjen listaus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2674"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2719"/>
         <source>Re-read %1 stored workouts with this watch&apos;s own field table.</source>
         <translation>Luettiin %1 tallennettua harjoitusta uudelleen tämän kellon omalla kenttätaululla.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2700"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2745"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation>Synkronoitiin %1/%2 kellon harjoitusta. Epäonnistui: %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2734"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2779"/>
         <source>%1: decode failed (%2)</source>
         <translation>%1: purku epäonnistui (%2)</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="2779"/>
+        <location filename="../src/controller/appcontroller.cpp" line="2824"/>
         <source>%1: failed to save (%2)</source>
         <translation>%1: tallennus epäonnistui (%2)</translation>
     </message>
@@ -1435,7 +1445,7 @@ löytyy - %2 tavua
     </message>
     <message>
         <location filename="../qml/pages/WorkoutDetailPage.qml" line="123"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="345"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="354"/>
         <source>%1 km</source>
         <translation>%1 km</translation>
     </message>
@@ -1552,27 +1562,32 @@ löytyy - %2 tavua
         <translation>Lataa näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="200"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="194"/>
+        <source>Save the raw sample data</source>
+        <translation>Tallenna raaka näytedata</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
         <source>%1 · from watch</source>
         <translation>%1 · kellosta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="202"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
         <source>%1 · from Suunto cloud</source>
         <translation>%1 · Suunto-pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="320"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="329"/>
         <source>Laps</source>
         <translation>Kierrokset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="463"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="472"/>
         <source>Hide all recorded fields</source>
         <translation>Piilota kaikki kentät</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="464"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="473"/>
         <source>All recorded fields (%1)</source>
         <translation>Kaikki tallennetut kentät (%1)</translation>
     </message>

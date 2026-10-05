@@ -2359,7 +2359,25 @@ void AppController::loadCloudDetails(const QString &key)
     });
 }
 
-void AppController::loadCloudSamples(const QString &key)
+namespace {
+// Keeps a copy of a cloud sample-data response, and returns where it went -
+// or an empty string if it could not be written. One file per workout,
+// overwritten, in the cache.
+QString writeCloudSamplesCopy(const QString &key, const QByteArray &body)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(dir);
+    const QString path = dir + QStringLiteral("/sml-") + key + QStringLiteral(".json");
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return QString();
+    file.write(body);
+    file.close();
+    return path;
+}
+} // namespace
+
+void AppController::loadCloudSamples(const QString &key, bool saveRaw)
 {
     if (m_cloudSamplesInProgress)
         return;
@@ -2383,15 +2401,38 @@ void AppController::loadCloudSamples(const QString &key)
     };
 
     m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-            [this, key, finish](bool ok, const QByteArray &data, const QString &error) {
+            [this, key, saveRaw, finish](bool ok, const QByteArray &data, const QString &error) {
         if (!ok) {
             finish(tr("Could not read the stored session: %1").arg(error));
             return;
         }
         m_cloudClient->fetchWorkoutSml(QString::fromUtf8(data), key,
-                [this, key, finish](bool smlOk, const QByteArray &body, const QString &smlError) {
+                [this, key, saveRaw, finish](bool smlOk, const QByteArray &body,
+                                              const QString &smlError) {
             if (!smlOk) {
                 finish(tr("Could not download sample data: %1").arg(smlError));
+                return;
+            }
+
+            // Asked for explicitly: keep the body regardless of whether the
+            // parser understands it.
+            if (saveRaw) {
+                const QString path = writeCloudSamplesCopy(key, body);
+                if (path.isEmpty()) {
+                    finish(tr("Downloaded %1 kB but could not save it.")
+                           .arg(body.size() / 1024));
+                    return;
+                }
+                // The series still get built, so saving a copy is not a
+                // different action from downloading one.
+                const QByteArray saved = buildCloudSeriesJson(body);
+                if (!saved.isEmpty())
+                    m_workoutStore->saveSeries(key, saved, nullptr);
+                m_cloudSamplesInProgress = false;
+                emit cloudSamplesInProgressChanged();
+                emit workoutDetailsChanged(key);
+                emit logbookTestResult(tr("%1 kB saved to %2")
+                                        .arg(body.size() / 1024).arg(path));
                 return;
             }
 
@@ -2401,14 +2442,8 @@ void AppController::loadCloudSamples(const QString &key)
                 // away - this is the only copy of the shape this parser was
                 // written blind against. See loadCloudSamples()'s header
                 // comment.
-                const QString dir =
-                        QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-                QDir().mkpath(dir);
-                const QString path = dir + QStringLiteral("/sml-") + key + QStringLiteral(".json");
-                QFile file(path);
-                if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-                    file.write(body);
-                    file.close();
+                const QString path = writeCloudSamplesCopy(key, body);
+                if (!path.isEmpty()) {
                     finish(tr("No charts found in %1 kB of sample data. Raw response saved to %2.")
                            .arg(body.size() / 1024).arg(path));
                 } else {

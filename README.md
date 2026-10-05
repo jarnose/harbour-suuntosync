@@ -51,11 +51,16 @@ Confirmed on real hardware, not just in tests:
   connection, which the Sailjail proxy will not relay, so this half lives
   in **`suuntosync-notifyd`, a separate optional package** outside the
   sandbox — and the app itself stays sandboxed and Store-eligible. Only one
-  process may hold a Whiteboard session at a time, so the two arbitrate
-  with a file lock; a D-Bus name would have been tidier and a sandboxed app
-  is not allowed to own one. The daemon runs as a systemd user service that
-  the package installs and starts. Confirmed on a Race; **untried on a 9
-  Baro**, whose handle differs. See `docs/notifications.md`.
+  process may hold a Whiteboard session at a time, so the two arbitrate with
+  a file lock — a D-Bus name would have been tidier, and a sandboxed app may
+  own only its own, with nothing under it. The daemon runs as a systemd user
+  service that the package installs and starts.
+
+  **Both watch models take one.** Their requests differ by exactly five
+  constants, which are per-firmware metadata rather than protocol — the same
+  kind of difference as the SBEM descriptor ids — and both sets were
+  captured. A watch model nobody has captured is refused rather than sent a
+  guess. See `docs/notifications.md`.
 
 - **Sleep, recovery and daily activity.** Read from the cloud, and read
   *directly off the watch* — which matters, because a night that the watch
@@ -68,13 +73,6 @@ Confirmed on real hardware, not just in tests:
 
 ## What doesn't, yet
 
-- **Notifications on a 9 Baro** — one step from done. Its own request was
-  captured on 2026-10-05 and the encoder reproduces it byte for byte: the
-  layout is identical to a Race's and exactly five constants differ, which
-  is per-firmware metadata rather than protocol, the same way the SBEM
-  descriptor ids differ. What has not happened is sending a composed one to
-  it, because the watch is bonded to the Android phone it was captured with
-  and has to be paired back first.
 - **The watch's media controls.** Both watches ask the *phone* for
   `/Media/Player/State`, `/Media/Player/Control` and `/Media/Track/Info`
   at the start of every connection. Nothing here answers them. It is the

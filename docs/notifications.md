@@ -1203,12 +1203,33 @@ Noted and not relied upon: `2 * ack[2] + 1` gives both type bytes. Two
 points fit any line, and the arithmetic does not hold for the other
 structure-carrying resources in the capture.
 
-### Still not run
+### And it takes one (2026-10-05, twenty minutes later)
 
-Sending a composed notification to a 9 Baro. Reproducing its own bytes
-exactly is a strong check on the layout and no check on what it does with
-one of ours - and the watch is currently bonded to the Android phone it was
-captured with, so it has to be paired back to the Sailfish phone first.
+Paired back to the Sailfish phone, switched to in the application, and the
+daemon composed one from the Baro's profile:
+
+```
+11:27:02 paired watch: "Suunto 9 182610000067" "0C:8C:DC:26:57:2C"
+11:27:02 watch connected
+11:27:08 notification 45 from jolla-messages category=x-nemo.messaging.sms -> ancs 6: Baro profiililla / Hyvaksyyko se nyt
+11:27:08 whiteboard session ready
+11:27:08 the watch took notification 2073852380
+11:27:08 whiteboard session gone
+```
+
+And it was on the watch's screen, which is the half of that the log cannot
+report.
+
+**Both watches, then.** Which closes the notification path: the monitor, the
+routing, the encoder, the arbitration, the connect-on-demand, the queue, the
+removal, and two watch models whose requests differ by five constants.
+
+One practical note from the switch. A Suunto watch bonds to one phone at a
+time, so pairing the Baro to the Android phone for the capture removed its
+BlueZ object from the Sailfish phone entirely - the application fell back to
+the Race, and the daemon followed the database. Nothing was broken; it is
+just a thing to know before wondering why a watch that is "right here" is
+not there.
 
 ### A stale watch, found the same minute
 

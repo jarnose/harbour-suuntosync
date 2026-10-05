@@ -73,6 +73,32 @@ jobs:
           release: 5.1.0.11
           arch: ${{ matrix.arch }}
 
+      # The daemon is a second package out of the same tree, and the action
+      # above cannot build it: its docker.sh runs a bare `mb2 build`, with
+      # no way to name a SPEC file. So the same image is driven directly.
+      #
+      # The SPEC is swapped in rather than selected with a flag. mb2 picks
+      # the one SPEC in rpm/, so putting the daemon's there and taking the
+      # application's away is exactly as good as a flag and does not depend
+      # on mb2 having one. It happens inside a throwaway copy in the
+      # container; the checkout is untouched, which is why the daemon's SPEC
+      # can stay out of rpm/ where sfdk and Qt Creator need it to be.
+      - name: Build the daemon RPM
+        run: |
+          mkdir -p RPMS
+          sudo chmod a+w RPMS
+          docker run --rm --privileged \
+            -v "$PWD:/workspace" \
+            coderus/sailfishos-platform-sdk:5.1.0.11 \
+            /bin/bash -euxc '
+              mkdir -p /home/deploy/build && cd /home/deploy/build
+              cp -r /workspace/* .
+              rm -f rpm/*.spec
+              cp daemon/suuntosync-notifyd.spec rpm/
+              mb2 -t SailfishOS-5.1.0.11-${{ matrix.arch }} build
+              cp RPMS/*.rpm /workspace/RPMS/
+            '
+
       - uses: actions/upload-artifact@v4
         with:
           name: rpm-${{ matrix.arch }}
@@ -98,7 +124,16 @@ jobs:
           # Unsigned builds off a CI runner, not Store packages - say so
           # where somebody downloading them will see it.
           body: |
-            Unsigned RPMs built by GitHub Actions for Sailfish OS 5.1.0.11.
+            Unsigned RPMs built by GitHub Actions for Sailfish OS 5.1.0.11,
+            aarch64 and armv7hl.
+
+            - `harbour-suuntosync` - the application. Sandboxed, and all of
+              it works without the daemon below.
+            - `suuntosync-notifyd` - optional. Forwards the phone's own
+              notifications to the watch, which needs to run outside the
+              Sailjail sandbox and is therefore a separate package. Install
+              the application first; this one depends on it.
 
             Install with `devel-su pkcon install-local <file>.rpm`, which
-            will warn that the package is untrusted.
+            will warn that the package is untrusted. It is right: these are
+            CI builds, not Store packages.

@@ -148,9 +148,13 @@ build when it finds two of them there:
 sfdk -c specfile=daemon/suuntosync-notifyd.spec build
 ```
 
-GitHub Actions builds unsigned RPMs of the **app** for 5.1.0.11 on every
-push, aarch64 and armv7hl, and attaches them to a release on a `v*` tag.
-The daemon is built locally with the command above and is not in CI. They are CI
+GitHub Actions builds unsigned RPMs of **both packages** for 5.1.0.11 on
+every push, aarch64 and armv7hl, and attaches all four to a release on a
+`v*` tag. The daemon needs a different SPEC file than the one `mb2` would
+pick, and the build action takes no option for that — so that step drives
+the same container directly and swaps the SPEC inside its own throwaway
+copy, which leaves the checkout alone and keeps the daemon's SPEC out of
+`rpm/` where sfdk and Qt Creator need it not to be. They are CI
 builds, not Store packages: `pkcon install-local` will say the package is
 untrusted, and it is right.
 

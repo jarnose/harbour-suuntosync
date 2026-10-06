@@ -827,11 +827,22 @@ the capture alone would suggest the ObjectId is required.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
-5. **The nine 403s on `/v1/workout/extensions/<key>`** - what the server
-   objects to about those workouts. `Workout::workoutKey` now stores the
-   ObjectId, so once a full re-fetch has filled it in the nine can be
-   looked up directly; before that column existed there was nothing local
-   to match them against.
+5. **The nine 403s on `/v1/workout/extensions/<key>`** - narrowed, and the
+   original guess is now disproved. With `Workout::workoutKey` stored and a
+   full re-fetch done, all 1171 cloud workouts on the phone carry their
+   ObjectId, and **not one of the nine is among them**. They are not in this
+   account's workout list at all - so they cannot simply be workouts this
+   app uploaded, because an uploaded one does appear in the list.
+
+   What is left fits one story: they are in the *Android* app's own local
+   database and nowhere in any response this capture contains (grepped),
+   their ObjectIds were created on the evenings of 22, 23 and 25 September,
+   and the server answers 403 rather than 404 - which is what a workout
+   deleted from the account, still stubbed locally in the official app,
+   would look like. Those evenings are also when this project's upload path
+   was being tested, so the test workouts having been uploaded and then
+   deleted again would explain every observation at once. Not written down
+   as the answer, because nobody has confirmed the deletion.
 6. **`MaxAvgPower`'s unit.** Needs one workout recorded with a power
    meter; there is none here.
 7. **`FitnessExtension` does not always carry VO2max and the fitness age** -

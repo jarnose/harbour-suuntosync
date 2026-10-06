@@ -137,21 +137,51 @@ and the `transportation` classes come out as the OpenMapTiles vocabulary -
 `ferry` - which is a stronger signal than any count: a decoder that was
 subtly wrong would not produce a plausible histogram of real road types.
 
-## Still to build
+## How it is put together
 
-1. ~~The MVT decoder~~ - done, 46 assertions.
-2. **Reproject the route to true Web Mercator.** `AppController::workoutRoute`
-   currently fits a bounding box with a `cos(latitude)` correction, which is
-   equirectangular and *not* what tiles use. Tiles would not line up with the
-   polyline until this changes, and it has to change before any tile is drawn.
-3. **Fetch and cache tiles.** TileJSON once, then the 2x2 to 4x4 tiles
-   covering the route's bounding box at a zoom chosen to fit.
-4. **Draw.** `water`, `waterway`, `landcover`, `landuse`, `park`,
-   `transportation`, under the existing polyline, with the attribution.
-5. **Settings.** A switch, off by default, revealing a URL field prefilled
-   with `https://tiles.openfreemap.org/planet`.
+- **`src/map/mercator.{h,cpp}`** - Web Mercator and the tile arithmetic,
+  Qt-free. `chooseTiles` picks the largest zoom whose grid covers a box in at
+  most three tiles a side, by *trying* each zoom rather than dividing the
+  span: where a box falls decides how many tile boundaries it crosses, so the
+  same span needs one tile or two. Three a side is a bandwidth ceiling, not a
+  drawing one - nine tiles is about a megabyte and a half the first time an
+  area is seen.
+- **`src/map/vectortile.{h,cpp}`** - the MVT decoder above.
+- **`src/map/maptilesource.{h,cpp}`** - turns the setting into a tile
+  template, fetching TileJSON when the setting is not already one.
+- **`src/map/mapcanvas.{h,cpp}`** - a `QQuickPaintedItem` that fetches,
+  decodes and paints. In C++ rather than QML for a measured reason: the layers
+  worth drawing come to roughly four thousand features and sixty thousand
+  points across a four-tile view, and a QML `Canvas` would need a
+  `QVariantMap` per point to get there.
+- **The route's own projection changed with it.**
+  `AppController::workoutRoute` fitted its bounding box with a
+  `cos(latitude)` correction, which is equirectangular. That is invisible at
+  five kilometres and still wrong once there are roads underneath, so both the
+  map and the plain polyline now use Mercator - and the y inversion the old
+  code needed went away, because Mercator's y already increases southwards
+  like a canvas's.
 
-Two decisions taken for step 5 rather than left to the user:
+The view is the track's own bounding box, padded and then **widened** to the
+item's aspect ratio rather than cropped, so the whole outing is always
+visible and the tiles under it are the things that get cut off.
+
+Drawn bottom to top: background, land cover and land use, water, roads by
+class, the track with a dark casing under it so it stays readable over water,
+then the attribution. There is no panning or zooming: the view is the
+workout, which is the question this answers.
+
+## Still open
+
+- **Raster tiles.** A URL that serves images is detected and reported rather
+  than drawn, which is the honest half of supporting one source properly.
+  Adding it is the easier of the two renderers.
+- **Labels.** None are drawn. The `place` layer carries names as attributes,
+  so Qt's own fonts could draw them without the glyph endpoint's SDF fonts -
+  but a name every few hundred metres under a GPS trace may be clutter rather
+  than information, which is a judgement better made while looking at it.
+
+Two decisions taken rather than left to the user:
 
 - **The field accepts either form.** If the string contains `{z}` it is a tile
   template; otherwise it is fetched as TileJSON and `tiles[0]` read from it.

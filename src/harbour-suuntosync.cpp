@@ -11,6 +11,9 @@
 #include <QTranslator>
 
 #include "controller/appcontroller.h"
+#include "map/mapcanvas.h"
+
+#include <QtQml>
 
 int main(int argc, char *argv[])
 {
@@ -33,6 +36,12 @@ int main(int argc, char *argv[])
     // comment/lesson-learned in harbour-otpcove's main.cpp).
     app->setOrganizationName(QStringLiteral("io.github.jarnose"));
     app->setApplicationName(QStringLiteral("suuntosync"));
+
+    // The base map's own item. Registered rather than built in QML because
+    // the vector tiles under a track come to tens of thousands of points, and
+    // a QML Canvas would mean a QVariantMap per point - see
+    // src/map/mapcanvas.h and docs/base-map.md.
+    qmlRegisterType<MapCanvas>("io.github.jarnose.suuntosync", 1, 0, "MapCanvas");
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
 

@@ -46,6 +46,12 @@ class AppController : public QObject
     Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
     Q_PROPERTY(bool healthSyncInProgress READ isHealthSyncInProgress NOTIFY healthSyncInProgressChanged)
     // What the cover shows. Stored in QSettings; see coverMode().
+    // Whether to draw a base map under a workout's track, and where its
+    // tiles come from. Off by default: it is somebody else's bandwidth, and
+    // a map is a want rather than a need. See docs/base-map.md.
+    Q_PROPERTY(bool baseMapEnabled READ baseMapEnabled WRITE setBaseMapEnabled NOTIFY baseMapChanged)
+    Q_PROPERTY(QString mapTileUrl READ mapTileUrl WRITE setMapTileUrl NOTIFY baseMapChanged)
+    Q_PROPERTY(QString defaultMapTileUrl READ defaultMapTileUrl CONSTANT)
     Q_PROPERTY(bool recordsSyncInProgress READ isRecordsSyncInProgress NOTIFY recordsSyncInProgressChanged)
     // Unix ms of the cached records' own fetch, 0 if never. The page shows
     // it, because an all-time best that is a month stale is still right and
@@ -69,6 +75,14 @@ public:
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
     bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
+    bool baseMapEnabled() const { return m_baseMapEnabled; }
+    void setBaseMapEnabled(bool enabled);
+    // Either a {z}/{x}/{y} tile template or a TileJSON endpoint - see
+    // MapTileSource, which decides by looking for "{z}".
+    QString mapTileUrl() const { return m_mapTileUrl; }
+    void setMapTileUrl(const QString &url);
+    QString defaultMapTileUrl() const;
+
     bool isRecordsSyncInProgress() const { return m_recordsSyncInProgress; }
     qint64 recordsFetchedAt() const;
 
@@ -327,6 +341,12 @@ public:
     Q_INVOKABLE QVariantList personalRecords() const;
     Q_INVOKABLE void syncPersonalRecords();
 
+    // The stored track as real degrees, one { latitude, longitude } per point,
+    // for the map item - it projects them itself against the tile grid it
+    // chose, so a pre-fitted route is no use to it. Empty when the workout
+    // has fewer than two points.
+    Q_INVOKABLE QVariantList workoutTrack(const QString &key) const;
+
     // The centre of a workout's track in real degrees, { latitude, longitude },
     // or an empty map when it has no track. For handing the place to a map
     // application; see workoutCenter() for why the centre and not the start.
@@ -495,6 +515,7 @@ signals:
     void healthSyncInProgressChanged();
     void gpsUpdateInProgressChanged();
     void healthDataChanged();
+    void baseMapChanged();
     void recordsSyncInProgressChanged();
     void personalRecordsChanged();
     void coverModeChanged();
@@ -597,6 +618,8 @@ private:
     // has no idempotency key, so a double send would create two workouts.
     bool m_uploadInProgress = false;
 
+    bool m_baseMapEnabled = false;
+    QString m_mapTileUrl;
     bool m_recordsSyncInProgress = false;
     QString m_coverMode;
     bool m_syncOnConnect = false;

@@ -8,6 +8,7 @@
 #include "../store/workoutstore.h"
 #include "../store/workout.h"
 #include "../store/workoutsummary.h"
+#include "../map/mercator.h"
 #include "../model/workoutlistmodel.h"
 #include "../health/healthstore.h"
 #include "../ble/logbookdecoder.h"
@@ -75,6 +76,17 @@ QString dataDirectory()
 // this marker, every workout whose page had already been opened once would
 // have kept a row that silently lacked them for ever.
 const int kCloudDetailsSchema = 2;
+
+// The default, and the reason it can be one at all: OpenFreeMap needs no API
+// key, sets no request limit and permits commercial use, where every raster
+// source that would have been simpler to draw wants a key that cannot live in
+// a public repository. See docs/base-map.md.
+//
+// This is the TileJSON endpoint rather than a {z}/{x}/{y} template on purpose:
+// OpenFreeMap's own tile path carries the date of the planet build it came
+// from, so a template hardcoded today stops being current. setMapTileUrl
+// accepts either form.
+const QString kDefaultMapTileUrl = QStringLiteral("https://tiles.openfreemap.org/planet");
 
 // The cloud_cache kind for the personal records. One name, in one place,
 // because a typo would silently cache into a second row that nothing reads.
@@ -742,6 +754,8 @@ AppController::AppController(QObject *parent)
         m_coverMode = settings.value(QStringLiteral("cover/mode"),
                                       QStringLiteral("latest")).toString();
         m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
+        m_baseMapEnabled = settings.value(QStringLiteral("map/enabled"), false).toBool();
+        m_mapTileUrl = settings.value(QStringLiteral("map/tileUrl"), kDefaultMapTileUrl).toString();
     }
 
     // Until a watch's own table has been read, the compiled-in Race one
@@ -2335,6 +2349,33 @@ int AppController::pendingHealthUploads() const
     return m_healthStore->pendingUploadCount();
 }
 
+void AppController::setBaseMapEnabled(bool enabled)
+{
+    if (enabled == m_baseMapEnabled)
+        return;
+    m_baseMapEnabled = enabled;
+    QSettings().setValue(QStringLiteral("map/enabled"), enabled);
+    emit baseMapChanged();
+}
+
+void AppController::setMapTileUrl(const QString &url)
+{
+    // An emptied field means "back to the default" rather than "no map":
+    // leaving it blank with the switch still on would be a switch that does
+    // nothing, which is the one thing this project has learned to avoid.
+    const QString value = url.trimmed().isEmpty() ? kDefaultMapTileUrl : url.trimmed();
+    if (value == m_mapTileUrl)
+        return;
+    m_mapTileUrl = value;
+    QSettings().setValue(QStringLiteral("map/tileUrl"), value);
+    emit baseMapChanged();
+}
+
+QString AppController::defaultMapTileUrl() const
+{
+    return kDefaultMapTileUrl;
+}
+
 void AppController::setCoverMode(const QString &mode)
 {
     if (mode == m_coverMode)
@@ -2985,6 +3026,33 @@ QVariantList AppController::workoutSeries(const QString &key) const
 // Empty map when the workout has no stored track - a treadmill run, or a
 // cloud workout whose polyline was absent - which is the page's cue not to
 // offer the action at all.
+// The stored track as real degrees, { latitude, longitude } per point, for
+// the map item - which needs to project them itself against whatever tile
+// grid it chose, so a pre-fitted 0..1 route is no use to it.
+QVariantList AppController::workoutTrack(const QString &key) const
+{
+    const QByteArray packed = m_workoutStore->loadRoute(key);
+    const int count = packed.size() / (2 * static_cast<int>(sizeof(qint32)));
+    QVariantList out;
+    if (count < 2)
+        return out;
+
+    out.reserve(count);
+    const char *p = packed.constData();
+    for (int i = 0; i < count; ++i) {
+        qint32 rawLat = 0, rawLon = 0;
+        std::memcpy(&rawLat, p, sizeof(qint32));
+        p += sizeof(qint32);
+        std::memcpy(&rawLon, p, sizeof(qint32));
+        p += sizeof(qint32);
+        QVariantMap point;
+        point.insert(QStringLiteral("latitude"), rawLat / 1e7);
+        point.insert(QStringLiteral("longitude"), rawLon / 1e7);
+        out.append(point);
+    }
+    return out;
+}
+
 QVariantMap AppController::workoutCenter(const QString &key) const
 {
     const QByteArray packed = m_workoutStore->loadRoute(key);
@@ -3041,17 +3109,31 @@ QVariantList AppController::workoutRoute(const QString &key) const
         lons.append(lon / 1e7);
     }
 
-    const auto latRange = std::minmax_element(lats.begin(), lats.end());
-    const auto lonRange = std::minmax_element(lons.begin(), lons.end());
-    const double minLat = *latRange.first, maxLat = *latRange.second;
-    const double minLon = *lonRange.first, maxLon = *lonRange.second;
+    // Web Mercator, the projection the tiles use. This was equirectangular
+    // with a cos(latitude) correction, which looks the same for a five
+    // kilometre route and is not the same - and once a base map is drawn
+    // underneath, a route projected any other way does not sit on its own
+    // roads. One projection for both, in Mercator, is the only version of
+    // this that can be right.
+    QVector<Mercator::Global> projected;
+    projected.reserve(count);
+    double minX = 0, maxX = 0, minY = 0, maxY = 0;
+    for (int i = 0; i < count; ++i) {
+        const Mercator::Global g = Mercator::fromLatLon(lats[i], lons[i]);
+        projected.append(g);
+        if (i == 0) {
+            minX = maxX = g.x;
+            minY = maxY = g.y;
+        } else {
+            minX = std::min(minX, g.x);
+            maxX = std::max(maxX, g.x);
+            minY = std::min(minY, g.y);
+            maxY = std::max(maxY, g.y);
+        }
+    }
 
-    // Equirectangular: a degree of longitude covers cos(latitude) as much
-    // ground as a degree of latitude, so scale it that way before fitting,
-    // otherwise a route at 60N comes out stretched to twice its real width.
-    const double lonScale = std::cos(qDegreesToRadians((minLat + maxLat) / 2.0));
-    const double spanX = (maxLon - minLon) * lonScale;
-    const double spanY = maxLat - minLat;
+    const double spanX = maxX - minX;
+    const double spanY = maxY - minY;
     const double span = std::max(spanX, spanY);
     if (span <= 0)
         return points;
@@ -3062,9 +3144,10 @@ QVariantList AppController::workoutRoute(const QString &key) const
 
     for (int i = 0; i < count; ++i) {
         QVariantMap point;
-        point.insert(QStringLiteral("x"), ((lons[i] - minLon) * lonScale + offsetX) / span);
-        // y inverted: north should be up, canvas y grows downwards.
-        point.insert(QStringLiteral("y"), 1.0 - ((lats[i] - minLat) + offsetY) / span);
+        point.insert(QStringLiteral("x"), (projected[i].x - minX + offsetX) / span);
+        // No inversion: Mercator's y already increases southwards, which is
+        // the direction a canvas's y grows, so north comes out up by itself.
+        point.insert(QStringLiteral("y"), (projected[i].y - minY + offsetY) / span);
         points.append(point);
     }
     return points;

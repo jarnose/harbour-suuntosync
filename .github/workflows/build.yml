@@ -40,6 +40,7 @@ jobs:
                                  ../src/notify/notificationrouter.cpp
           run polyline          ../src/cloud/polyline.cpp
           run vectortile        ../src/map/vectortile.cpp
+          run mercator          ../src/map/mercator.cpp
           run workoutsummary    ../src/store/workoutsummary.cpp
           run suuntoauth        ../src/cloud/suuntoauth.cpp
           run zipwriter         ../src/cloud/zipwriter.cpp -lz

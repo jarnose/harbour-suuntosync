@@ -39,6 +39,17 @@ Confirmed on real hardware, not just in tests:
   turned out to be a speed in metres per second despite its name. The one
   type left showing a bare number is average power, because there is no
   power meter here to check it against.
+- **A base map under the GPS track**, off by default, from OpenFreeMap.
+  Sailfish has no QtLocation QML module, so there is no `Map` element and no
+  geoservices plugin: the tiles are fetched, decoded and painted here. The
+  source matters as much as the code — OpenFreeMap needs no API key, sets
+  no request limit and permits commercial use, which is what lets it be the
+  default in a public repository where every raster provider's key could not
+  be. Its tiles are vector, so this project has a Mapbox Vector Tile decoder:
+  Qt-free, 46 assertions, golden-vector tested against a real tile whose
+  expected contents were read out by an independent script first. Settings
+  takes any TileJSON address or `{z}/{x}/{y}` template; the attribution its
+  terms require is drawn on the map. See `docs/base-map.md`.
 - **A cover that shows one thing, chosen.** The latest workout, lifetime
   totals, fitness/fatigue/form, last night's sleep, or nothing — because
   there is no one right answer: somebody training for a distance wants the

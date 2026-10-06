@@ -126,6 +126,9 @@ add_executable(harbour-suuntosync
     src/store/workoutstore.cpp
     src/store/workoutsummary.cpp
     src/map/vectortile.cpp
+    src/map/mercator.cpp
+    src/map/maptilesource.cpp
+    src/map/mapcanvas.cpp
     src/model/workoutlistmodel.cpp
     src/health/healthstore.cpp
 )

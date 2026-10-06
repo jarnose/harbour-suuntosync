@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import io.github.jarnose.suuntosync 1.0
 
 Page {
     id: page
@@ -181,6 +182,12 @@ Page {
     property var laps: workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
     property bool detailsExpanded: false
 
+    // The same track in real degrees, which the map item projects itself
+    // against whatever tile grid it chooses. Only fetched when there is a map
+    // to draw it on - it is a couple of thousand points.
+    property var mapTrack: (AppController.baseMapEnabled && workoutKey.length > 0)
+                           ? AppController.workoutTrack(workoutKey) : []
+
     // { latitude, longitude } when the workout has a track, empty otherwise -
     // which is what decides whether tapping it does anything.
     property var mapCenter: workoutKey.length > 0
@@ -344,9 +351,35 @@ Page {
                 height: visible ? width * 0.75 : 0
                 visible: page.route.length > 1
 
+                // The base map, when it is switched on and this workout has a
+                // track. It draws the route itself, so the plain Canvas below
+                // stands down rather than both drawing one.
+                MapCanvas {
+                    id: baseMap
+                    anchors.fill: parent
+                    visible: AppController.baseMapEnabled && page.mapTrack.length > 1
+                    track: visible ? page.mapTrack : []
+                    tileUrl: AppController.mapTileUrl
+                    darkMode: Theme.colorScheme === Theme.LightOnDark
+                    routeColor: Theme.highlightColor
+
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        size: BusyIndicatorSize.Medium
+                        running: baseMap.loading
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: page.mapCenter.latitude !== undefined
+                        onClicked: page.openInMaps()
+                    }
+                }
+
                 Canvas {
                     id: routeCanvas
                     anchors.fill: parent
+                    visible: !baseMap.visible
                     renderStrategy: Canvas.Cooperative
 
                     // Tapping the track hands the place to Pure Maps, which
@@ -407,6 +440,19 @@ Page {
                         dot(pts[pts.length - 1], Theme.highlightColor)
                     }
                 }
+            }
+
+            // Why the map is blank, when it is. A tile source that cannot be
+            // used is worth saying out loud: the alternative is a switch that
+            // looks broken.
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: baseMap.visible && baseMap.error.length > 0
+                wrapMode: Text.Wrap
+                text: baseMap.error
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
             }
 
             // A tap target with no affordance is a tap target nobody finds.

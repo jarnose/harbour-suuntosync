@@ -327,6 +327,11 @@ public:
     Q_INVOKABLE QVariantList personalRecords() const;
     Q_INVOKABLE void syncPersonalRecords();
 
+    // The centre of a workout's track in real degrees, { latitude, longitude },
+    // or an empty map when it has no track. For handing the place to a map
+    // application; see workoutCenter() for why the centre and not the start.
+    Q_INVOKABLE QVariantMap workoutCenter(const QString &key) const;
+
     // A BLE-synced workout's GPS track, projected for drawing: a list of
     // { "x": 0..1, "y": 0..1 } points, already aspect-corrected (longitude
     // degrees are scaled by cos(latitude), so the shape isn't stretched) and

@@ -2977,6 +2977,48 @@ QVariantList AppController::workoutSeries(const QString &key) const
     return out;
 }
 
+// The middle of a workout's own bounding box, in real degrees, for handing
+// to a map application. Not the start point: the receiving app is centred on
+// whatever it is given and cannot be told a zoom, so the centre keeps the
+// whole outing in view where a start point would put it at the edge.
+//
+// Empty map when the workout has no stored track - a treadmill run, or a
+// cloud workout whose polyline was absent - which is the page's cue not to
+// offer the action at all.
+QVariantMap AppController::workoutCenter(const QString &key) const
+{
+    const QByteArray packed = m_workoutStore->loadRoute(key);
+    const int count = packed.size() / (2 * static_cast<int>(sizeof(qint32)));
+    QVariantMap out;
+    if (count < 1)
+        return out;
+
+    double minLat = 0, maxLat = 0, minLon = 0, maxLon = 0;
+    const char *p = packed.constData();
+    for (int i = 0; i < count; ++i) {
+        qint32 rawLat = 0, rawLon = 0;
+        std::memcpy(&rawLat, p, sizeof(qint32));
+        p += sizeof(qint32);
+        std::memcpy(&rawLon, p, sizeof(qint32));
+        p += sizeof(qint32);
+        const double lat = rawLat / 1e7;
+        const double lon = rawLon / 1e7;
+        if (i == 0) {
+            minLat = maxLat = lat;
+            minLon = maxLon = lon;
+        } else {
+            minLat = std::min(minLat, lat);
+            maxLat = std::max(maxLat, lat);
+            minLon = std::min(minLon, lon);
+            maxLon = std::max(maxLon, lon);
+        }
+    }
+
+    out.insert(QStringLiteral("latitude"), (minLat + maxLat) / 2.0);
+    out.insert(QStringLiteral("longitude"), (minLon + maxLon) / 2.0);
+    return out;
+}
+
 QVariantList AppController::workoutRoute(const QString &key) const
 {
     const QByteArray packed = m_workoutStore->loadRoute(key);

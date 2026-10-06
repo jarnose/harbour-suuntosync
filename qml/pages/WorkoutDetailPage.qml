@@ -181,6 +181,20 @@ Page {
     property var laps: workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
     property bool detailsExpanded: false
 
+    // { latitude, longitude } when the workout has a track, empty otherwise -
+    // which is what decides whether tapping it does anything.
+    property var mapCenter: workoutKey.length > 0
+                            ? AppController.workoutCenter(workoutKey) : ({})
+
+    function openInMaps() {
+        if (mapCenter.latitude === undefined)
+            return
+        // Five decimals is about a metre, which is more than enough to put a
+        // map on the right hillside and keeps the URI short.
+        Qt.openUrlExternally("geo:" + mapCenter.latitude.toFixed(5)
+                             + "," + mapCenter.longitude.toFixed(5))
+    }
+
     function formatDuration(seconds) {
         var h = Math.floor(seconds / 3600)
         var m = Math.floor((seconds % 3600) / 60)
@@ -335,6 +349,19 @@ Page {
                     anchors.fill: parent
                     renderStrategy: Canvas.Cooperative
 
+                    // Tapping the track hands the place to Pure Maps, which
+                    // is the only map application here with a registered URI
+                    // handler - x-scheme-handler/geo, and nothing else. That
+                    // handler takes one coordinate: its own geocoder matches
+                    // `geo:<lat>,<lon>` and ignores the rest, so there is no
+                    // way to hand over the track itself, nor a zoom. It
+                    // opens the area, it does not draw the outing.
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: page.mapCenter.latitude !== undefined
+                        onClicked: page.openInMaps()
+                    }
+
                     // A Canvas only repaints when asked - it has no idea
                     // page.route is something onPaint reads.
                     Connections {
@@ -380,6 +407,17 @@ Page {
                         dot(pts[pts.length - 1], Theme.highlightColor)
                     }
                 }
+            }
+
+            // A tap target with no affordance is a tap target nobody finds.
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: page.route.length > 1 && page.mapCenter.latitude !== undefined
+                horizontalAlignment: Text.AlignHCenter
+                text: qsTr("Tap the track to open the area in a map app")
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
             }
 
             Grid {

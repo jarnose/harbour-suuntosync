@@ -316,7 +316,7 @@ löytyy - %2 tavua
         <location filename="../src/controller/appcontroller.cpp" line="1953"/>
         <location filename="../src/controller/appcontroller.cpp" line="2309"/>
         <location filename="../src/controller/appcontroller.cpp" line="2319"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3223"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3265"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
@@ -506,27 +506,27 @@ löytyy - %2 tavua
         <translation>Ennätysten tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3044"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3086"/>
         <source>Failed to list watch entries: %1</source>
         <translation>Kellon merkintöjen listaus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3175"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3217"/>
         <source>Re-read %1 stored workouts with this watch&apos;s own field table.</source>
         <translation>Luettiin %1 tallennettua harjoitusta uudelleen tämän kellon omalla kenttätaululla.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3201"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3243"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation>Synkronoitiin %1/%2 kellon harjoitusta. Epäonnistui: %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3235"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3277"/>
         <source>%1: decode failed (%2)</source>
         <translation>%1: purku epäonnistui (%2)</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3280"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3322"/>
         <source>%1: failed to save (%2)</source>
         <translation>%1: tallennus epäonnistui (%2)</translation>
     </message>
@@ -1645,212 +1645,217 @@ löytyy - %2 tavua
 <context>
     <name>WorkoutDetailPage</name>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="189"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="203"/>
         <source>%1h %2min %3s</source>
         <translation>%1 h %2 min %3 s</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="204"/>
         <source>%1min %2s</source>
         <translation>%1 min %2 s</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
         <source>Distance</source>
         <translation>Matka</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="450"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="488"/>
         <source>%1 km</source>
         <translation>%1 km</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="210"/>
         <source>Duration</source>
         <translation>Kesto</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="219"/>
         <source>Ascent</source>
         <translation>Nousu</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="219"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>%1 m</source>
         <translation>%1 m</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>Descent</source>
         <translation>Lasku</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="223"/>
         <source>Avg heart rate</source>
         <translation>Keskisyke</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="223"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="225"/>
         <source>%1 bpm</source>
         <translation>%1 bpm</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="225"/>
         <source>Max heart rate</source>
         <translation>Maksimisyke</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>Max speed</source>
         <translation>Huippunopeus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>%1 km/h</source>
         <translation>%1 km/h</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="229"/>
         <source>Energy</source>
         <translation>Energia</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="229"/>
         <source>%1 kcal</source>
         <translation>%1 kcal</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="231"/>
         <source>Steps</source>
         <translation>Askeleet</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="219"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="233"/>
         <source>Peak training effect</source>
         <translation>Harjoitusvaikutus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="235"/>
         <source>EPOC</source>
         <translation>EPOC</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="235"/>
         <source>%1 ml/kg</source>
         <translation>%1 ml/kg</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="223"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="237"/>
         <source>Training load</source>
         <translation>Harjoituskuorma</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="225"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="239"/>
         <source>TSS</source>
         <translation>TSS</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="241"/>
         <source>Estimated VO2max</source>
         <translation>Arvioitu VO2max</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="241"/>
         <source>%1 ml/kg/min</source>
         <translation>%1 ml/kg/min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="229"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="243"/>
         <source>Recovery time</source>
         <translation>Palautumisaika</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="246"/>
         <source>Fitness age</source>
         <extracomment>As in &quot;your fitness is that of a 39-year-old&quot; - a number of years</extracomment>
         <translation>Kuntoikä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="246"/>
         <source>%1 years</source>
         <translation>%1 vuotta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="256"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="270"/>
         <source>Upload to Suunto</source>
         <translation>Lähetä Suuntoon</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="261"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="275"/>
         <source>Download sample data</source>
         <translation>Lataa näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="271"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="285"/>
         <source>Save the raw sample data</source>
         <translation>Tallenna raaka näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="288"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="302"/>
         <source>Delete this workout</source>
         <translation>Poista tämä harjoitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="291"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="305"/>
         <source>Deleting the phone&apos;s copy</source>
         <translation>Poistetaan puhelimen kopio</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="305"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="319"/>
         <source>%1 · from watch</source>
         <translation>%1 · kellosta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="307"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="321"/>
         <source>%1 · from Suunto cloud</source>
         <translation>%1 · Suunto-pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="425"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="418"/>
+        <source>Tap the track to open the area in a map app</source>
+        <translation>Napauta jälkeä avataksesi alueen karttasovelluksessa</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="463"/>
         <source>Laps</source>
         <translation>Kierrokset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="571"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="609"/>
         <source>Recorded with</source>
         <translation>Tallennettu laitteella</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="591"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="629"/>
         <source>firmware %1</source>
         <translation>ohjelmisto %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="611"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="649"/>
         <source>Heart rate zones (bpm)</source>
         <translation>Sykealueet (bpm)</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="612"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="650"/>
         <source>Power zones (W)</source>
         <translation>Tehoalueet (W)</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="641"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="679"/>
         <source>Zone %1</source>
         <extracomment>%1 is a zone number, 1 to 5</extracomment>
         <translation>Alue %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="688"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="726"/>
         <source>Hide all recorded fields</source>
         <translation>Piilota kaikki kentät</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="689"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="727"/>
         <source>All recorded fields (%1)</source>
         <translation>Kaikki tallennetut kentät (%1)</translation>
     </message>

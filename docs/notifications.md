@@ -1309,3 +1309,40 @@ notification this sends. Dismissing a ring on the watch would mean rejecting
 the call on the phone, and whether the watch reports a button press back has
 never been established. A button that looks like it rejects a call and does
 nothing is worse than no button.
+
+### The watch refused it, and the reason was a missing label (2026-10-06)
+
+The first version of the incoming-call notification carried no label, on the
+reasoning that a Dismiss button on a ringing call would imply rejecting the
+call and nobody has established whether the watch reports a press back.
+
+The watch refused it. Three `Add` attempts timed out, and the log shows why
+that is not a link problem:
+
+```
+15:09:04  incoming call on /calls/febda... from +358408264580
+15:09:04  incoming call -> ancs 1: +358408264580 / Incoming call
+15:09:04  whiteboard session ready
+15:09:12  call ... is now null (0) - clearing the watch
+15:09:15  sending failed: the watch did not answer the notification
+...
+15:10:03  whiteboard session ready
+15:10:03  removal failed: the watch has no notification with that id   <- answered
+15:10:04  the watch took notification 1577272528                       <- accepted
+```
+
+Within one session the watch **answered a removal and accepted an ordinary
+notification**, and refused this one three times. The difference is the
+payload, and the structural difference is the label array: with no labels its
+offset points at the end of the pool - past the structure itself - with a
+count of zero. The watch drops that in silence, which is how it drops every
+malformed frame in this project's history.
+
+So an incoming call carries one Dismiss label like everything else. The
+original reasoning was also inconsistent: the uncertainty about whether a
+press is reported back applies to every notification this sends, and all of
+them carry the label.
+
+Worth keeping from the same log: when the watch is already connected the
+Whiteboard session opens inside the same second the call arrives, so the
+ring is not going to be late for want of a link.

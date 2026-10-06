@@ -152,8 +152,11 @@ int main()
     check(ring.message == "Incoming call", "and the message says what it is");
     check(ring.date == 1791287147u, "the date is the one passed in");
     check(ring.appId == "voicecall-ui", "attributed to the application that is actually ringing");
-    check(ring.labels.empty(),
-          "no Dismiss label: rejecting a call is not something this can honestly offer");
+    // Measured on the watch, not chosen: with no labels the structure's
+    // label-array offset points past its own end and the watch refuses the
+    // frame in silence. Every captured request has one.
+    check(ring.labels.size() == 1 && ring.labels.front().text == "Dismiss",
+          "one label, like every other notification and every capture");
     check(!ring.modifyExisting, "it is an add");
 
     // The id has to be stable for one call and different for the next, or a

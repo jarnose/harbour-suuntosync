@@ -155,10 +155,22 @@ Ancs::Notification incomingCall(const std::string &lineId, uint32_t callId, uint
     out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,
                                                   out.appId);
 
-    // No Dismiss label here, unlike a notification: dismissing a ringing
-    // call on the watch would mean rejecting it on the phone, and whether
-    // the watch reports a press back has never been established. A label
-    // that looks like it does something and does not is worse than none.
+    // One label, like every other notification and like all four captured
+    // requests. This was built without one at first, on the reasoning that a
+    // Dismiss button on a ringing call would imply rejecting the call and
+    // nobody has established whether the watch reports a press back. The
+    // watch settled it: the notification timed out three times while, in the
+    // same Whiteboard session, a removal was answered and an ordinary
+    // notification was taken. With no labels the structure's label-array
+    // offset points at the end of the pool - past the structure - with a
+    // count of zero, and the watch appears to refuse that silently, which is
+    // how it refuses every malformed frame.
+    //
+    // The reasoning was also inconsistent: that uncertainty applies to every
+    // notification this sends, and they all carry the label.
+    Ancs::Label dismiss;
+    dismiss.text = "Dismiss";
+    out.labels.push_back(dismiss);
 
     Ancs::truncateToFit(out);
     return out;

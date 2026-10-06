@@ -68,6 +68,14 @@ QString dataDirectory()
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 }
 
+// The shape of a stored cloud-details field map, written into it as
+// "_schema" so a row from an older build can be recognised and re-fetched.
+// 1 = numbers and booleans only. 2 = strings too, which is what made the
+// recording watch's own model, serial and firmware version visible: without
+// this marker, every workout whose page had already been opened once would
+// have kept a row that silently lacked them for ever.
+const int kCloudDetailsSchema = 2;
+
 // The cloud_cache kind for the personal records. One name, in one place,
 // because a typo would silently cache into a second row that nothing reads.
 const QLatin1String kRecordsCacheKind("records");
@@ -2556,9 +2564,23 @@ void AppController::loadCloudDetails(const QString &key)
     // Only worth a request for a cloud workout we haven't already fetched -
     // a BLE one's details come from the watch, and re-fetching on every
     // page open would be a request per tap.
-    if (!m_cloudAccount.isSignedIn() || key.startsWith(QStringLiteral("ble_"))
-            || !m_workoutStore->loadDetails(key).isEmpty()) {
+    if (!m_cloudAccount.isSignedIn() || key.startsWith(QStringLiteral("ble_")))
         return;
+
+    // Already fetched, and fetched by a build that stored the same things.
+    // An older row is re-fetched rather than patched: it is one request,
+    // and merging a new shape into an old one is how a field map ends up
+    // half of each.
+    const QByteArray stored = m_workoutStore->loadDetails(key);
+    if (!stored.isEmpty()) {
+        const int schema = QJsonDocument::fromJson(stored)
+                                   .object()
+                                   .value(QStringLiteral("_schema"))
+                                   .toObject()
+                                   .value(QStringLiteral("value"))
+                                   .toInt();
+        if (schema >= kCloudDetailsSchema)
+            return;
     }
 
     m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
@@ -2596,6 +2618,10 @@ void AppController::loadCloudDetails(const QString &key)
                 }
                 if (merged.isEmpty())
                     return;
+
+                QJsonObject schema;
+                schema.insert(QStringLiteral("value"), kCloudDetailsSchema);
+                merged.insert(QStringLiteral("_schema"), schema);
 
                 const QByteArray json = QJsonDocument(merged).toJson(QJsonDocument::Compact);
                 m_workoutStore->saveDetails(key, json, nullptr);
@@ -2739,6 +2765,9 @@ QVariantList AppController::workoutDetails(const QString &key) const
 
     QVariantList out;
     for (auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
+        // Bookkeeping, not a recorded field - "_schema" above.
+        if (it.key().startsWith(QLatin1Char('_')))
+            continue;
         const QJsonObject entry = it.value().toObject();
         const QString text = entry.value(QStringLiteral("text")).toString();
         const double value = entry.value(QStringLiteral("value")).toDouble();

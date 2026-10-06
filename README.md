@@ -169,15 +169,15 @@ Confirmed on real hardware, not just in tests:
 - **Weather to the watch** is not a missing feature: a Race fetches its
   own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
   pushed over BLE on either.
-
-### Which watches
-
-A Race and a 9 Baro are both supported over BLE, and they need different
-field tables (see above). A **Suunto 7** is not: it is a Wear OS watch on
-Google's companion channel, not the Movesense/Whiteboard family — the
-official app does not even find it over that link. Its workouts reach the
-Suunto cloud on their own, so the cloud sync here should cover it, which
-is not the same as having been tried.
+- **Raster map tiles.** The base map draws vector tiles; an address that
+  serves images is detected and says so rather than drawing a blank. It is
+  the easier of the two renderers, and what it would buy is a source like
+  Finland's national survey maps, which are raster and need a free key.
+- **Map labels.** No place names are drawn under the track. The data is
+  there — the `place` layer carries names as attributes, so no glyph
+  fonts would be needed — but a name every few hundred metres may be
+  clutter rather than information, and that is a judgement to make while
+  looking at one.
 
 ## How it was built
 
@@ -223,8 +223,8 @@ is identical and five constants differ. The commit messages record which
 guesses were wrong, deliberately.
 
 **What is confirmed on hardware is said so, and what is not is not.** Two
-watches exist here and a third does not, so "identical on both" is written
-down as a measurement rather than promoted to a property of the format.
+watches exist here, so "identical on both" is written down as a measurement
+of those two rather than promoted to a property of the format.
 
 ## Building
 
@@ -237,8 +237,13 @@ SPEC file is in `daemon/` rather than `rpm/` because sfdk refuses to
 build when it finds two of them there:
 
 ```
-sfdk -c specfile=daemon/suuntosync-notifyd.spec build
+sfdk -c target=SailfishOS-5.1.0.11-aarch64 build
+sfdk -c target=SailfishOS-5.1.0.11-aarch64 -c specfile=daemon/suuntosync-notifyd.spec build
 ```
+
+`sfdk` lives in `~/SailfishOS/bin/` and is not on `PATH`, and it refuses to
+build without being told the target — the first line is the application,
+the second the daemon.
 
 GitHub Actions builds unsigned RPMs of **both packages** for 5.1.0.11 on
 every push, aarch64 and armv7hl, and attaches all four to a release on a
@@ -256,11 +261,13 @@ a preference: journald on this device runs with `Storage=volatile` and
 enough log traffic that its window is seconds wide, so there is nowhere else
 for a background process to leave a trail.
 
-The golden-vector tests need fixtures that are **not** in this repository —
+Most golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See
-`tests/README.md`. CI therefore runs only the suites that need no fixture,
-which is a minority of them; the rest run on the machine the captures live
-on.
+`tests/README.md`. CI runs the ten suites that need none; the rest run on the
+machine the captures live on. The newer ones are written to be in the first
+group where they can be: the vector-tile suite builds a tile byte by byte and
+inlines it as hex, so its exact checks run everywhere and only its feature
+counts need the real tile.
 
 ## Licence
 

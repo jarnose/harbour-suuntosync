@@ -35,11 +35,18 @@ Page {
     property string gearName: ""
     property string gearFirmware: ""
     property string gearSerial: ""
-    // Five {lowerLimit, seconds} entries from the cloud's
+    // Five {lowerLimit, seconds} entries each from the cloud's
     // IntensityExtension, when it has them. The boundaries come from the
     // server rather than being derived from a configured maximum, which
-    // matters because they are not evenly spaced.
+    // matters twice over: they are not evenly spaced, and they are per
+    // workout rather than per account - one workout here reads
+    // 0/126/135/144/152 where another reads 0/131/146/161/176.
     property var heartRateZones: []
+    // Power zones arrive in the same extension and are shown the same way,
+    // but only when something spent time in them: without a power meter
+    // the cloud still sends five zones with zero seconds each, and five
+    // empty rows would read as a measurement rather than an absence.
+    property var powerZones: []
     property double trainingLoad: 0
     property double trainingStressScore: 0
     // WorkoutStore key, so the route can be looked up. Empty for a workout
@@ -79,7 +86,9 @@ Page {
         // next open. Only when empty, so a watch workout's own figures are
         // never overwritten.
         var zones = [{}, {}, {}, {}, {}]
+        var power = [{}, {}, {}, {}, {}]
         var sawZone = false
+        var powerSeconds = 0
         for (var i = 0; i < details.length; ++i) {
             var f = details[i]
             if (epoc === 0 && f.name === "SummaryExtension.peakEpoc")
@@ -105,20 +114,26 @@ Page {
             else if (f.name === "SummaryExtension.gear.serialNumber")
                 gearSerial = f.text
             else {
-                // IntensityExtension.zones.heartRate.zoneN.{totalTime,lowerLimit}
+                // IntensityExtension.zones.<kind>.zoneN.{totalTime,lowerLimit}
                 var m = f.name.match(
-                    /^IntensityExtension\.zones\.heartRate\.zone([1-5])\.(totalTime|lowerLimit)$/)
+                    /^IntensityExtension\.zones\.(heartRate|power)\.zone([1-5])\.(totalTime|lowerLimit)$/)
                 if (m) {
-                    var z = zones[parseInt(m[1], 10) - 1]
-                    if (m[2] === "totalTime")
+                    var isPower = m[1] === "power"
+                    var z = (isPower ? power : zones)[parseInt(m[2], 10) - 1]
+                    if (m[3] === "totalTime") {
                         z.seconds = f.value
-                    else
+                        if (isPower)
+                            powerSeconds += f.value
+                    } else {
                         z.lowerLimit = f.value
-                    sawZone = true
+                    }
+                    if (!isPower)
+                        sawZone = true
                 }
             }
         }
         heartRateZones = sawZone ? zones : []
+        powerZones = powerSeconds > 0 ? power : []
     }
 
     Component.onCompleted: {
@@ -585,66 +600,79 @@ Page {
                 }
             }
 
-            // ---- heart-rate zones ----
-            // Only for a cloud workout: the boundaries are the account's,
-            // and the watch does not hand them over with a logbook entry.
-            Column {
-                width: parent.width
-                visible: page.heartRateZones.length > 0
+            // ---- intensity zones ----
+            // Only for a cloud workout: the watch does not hand its zones
+            // over with a logbook entry. Heart rate and power are the same
+            // structure and get the same block; the unit lives in the
+            // heading rather than being repeated on every row, which is
+            // what makes one block do for both.
+            Repeater {
+                model: [
+                    { title: qsTr("Heart rate zones (bpm)"), zones: page.heartRateZones },
+                    { title: qsTr("Power zones (W)"), zones: page.powerZones }
+                ]
 
-                Item { width: 1; height: Theme.paddingLarge }
+                Column {
+                    property var group: modelData
 
-                Label {
-                    x: Theme.horizontalPageMargin
-                    text: qsTr("Heart rate zones")
-                    color: Theme.secondaryColor
-                    font.pixelSize: Theme.fontSizeSmall
-                }
+                    width: parent.width
+                    visible: group.zones.length > 0
 
-                Repeater {
-                    model: page.heartRateZones
+                    Item { width: 1; height: Theme.paddingLarge }
 
-                    Row {
+                    Label {
                         x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * x
-                        spacing: Theme.paddingMedium
+                        text: group.title
+                        color: Theme.secondaryColor
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
 
-                        Label {
-                            width: parent.width * 0.45
-                            //: %1 is a zone number, 1 to 5
-                            text: qsTr("Zone %1").arg(index + 1)
-                            color: Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                        }
-                        Label {
-                            width: parent.width * 0.3
-                            // The next zone's lower limit is this one's
-                            // upper, and the top zone has none - so it is
-                            // shown open-ended rather than invented.
-                            text: {
-                                var lower = Math.round(modelData.lowerLimit || 0)
-                                var next = index + 1 < page.heartRateZones.length
-                                        ? page.heartRateZones[index + 1].lowerLimit
-                                        : undefined
-                                return next > 0
-                                        ? lower + "\u2013" + Math.round(next)
-                                        : lower + "\u2013"
+                    Repeater {
+                        model: group.zones
+
+                        Row {
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - 2 * x
+                            spacing: Theme.paddingMedium
+
+                            Label {
+                                width: parent.width * 0.45
+                                //: %1 is a zone number, 1 to 5
+                                text: qsTr("Zone %1").arg(index + 1)
+                                color: Theme.secondaryColor
+                                font.pixelSize: Theme.fontSizeExtraSmall
                             }
-                            color: Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                        }
-                        Label {
-                            width: parent.width * 0.25 - 2 * Theme.paddingMedium
-                            horizontalAlignment: Text.AlignRight
-                            // A zone with no time in it is shown as a dash
-                            // rather than "0min 0s", which reads like a
-                            // measurement rather than an absence.
-                            text: modelData.seconds > 0
-                                  ? page.formatDuration(modelData.seconds)
-                                  : "\u2013"
-                            color: modelData.seconds > 0
-                                   ? Theme.highlightColor : Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeExtraSmall
+                            Label {
+                                width: parent.width * 0.3
+                                // The next zone's lower limit is this one's
+                                // upper, and the top zone has none - so it
+                                // is shown open-ended rather than invented.
+                                text: {
+                                    var zones = group.zones
+                                    var lower = Math.round(modelData.lowerLimit || 0)
+                                    var next = index + 1 < zones.length
+                                            ? zones[index + 1].lowerLimit
+                                            : undefined
+                                    return next > 0
+                                            ? lower + "\u2013" + Math.round(next)
+                                            : lower + "\u2013"
+                                }
+                                color: Theme.secondaryColor
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                            }
+                            Label {
+                                width: parent.width * 0.25 - 2 * Theme.paddingMedium
+                                horizontalAlignment: Text.AlignRight
+                                // A zone with no time in it is shown as a
+                                // dash rather than "0min 0s", which reads
+                                // like a measurement rather than an absence.
+                                text: modelData.seconds > 0
+                                      ? page.formatDuration(modelData.seconds)
+                                      : "\u2013"
+                                color: modelData.seconds > 0
+                                       ? Theme.highlightColor : Theme.secondaryColor
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                            }
                         }
                     }
                 }

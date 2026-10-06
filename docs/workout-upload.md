@@ -667,22 +667,42 @@ the marathon before the 5 km.
 - **`LongestDistance`** is **metres** (10130.0 for a run), matching the
   workout list's own `totalDistance`.
 - **`MaxAscent`** is metres by the same reading.
-- **`FastestPace`, `MaxSpeed`, `MaxAvgSpeed`, `MaxAvgPower`: not
-  established, and shown without a unit.** The workout *list* was measured
-  from this same capture - `avgSpeed` is exactly distance/time, so metres
-  per second, and `avgPace` is exactly (time/distance)/60, so decimal
-  minutes per kilometre, checked on seven workouts. But the record does not
-  follow: running's `FastestPace` is 3.22 all-time against 2.64 this year,
-  and in minutes per kilometre that makes this year faster than the
-  all-time best, which cannot be. Either the field is a speed despite its
-  name, or `records` excludes the current year. Cycling's `MaxSpeed` of
-  exactly 100.0 does not help - a suspiciously round number that reads
-  like a server-side cap. So the page prints the figure the server sent.
+- **`FastestPace`, `MaxSpeed` and `MaxAvgSpeed` are all metres per
+  second** - measured 2026-10-06, and `FastestPace` is a *speed* despite
+  its name. Each record also carries the `date` of the workout it was set
+  in, and that date joins straight onto a local workout's `start_time`, so
+  no identifier was needed: seven records were compared against their own
+  workout's distance over its time, and all seven matched to three decimal
+  places.
 
-Settling it needs one comparison this project can actually make: every
-record carries the `workoutKey` it was set in, and with the full history
-synced those workouts are in the local database with their own measured
-`avgPace` and `maxSpeed`. One query, not another capture.
+  ```
+  FastestPace act1 this year   2.64        d/t = 2.643 m/s
+  FastestPace act1 all time    3.22        d/t = 3.218 m/s
+  MaxAvgSpeed act2 this year   6.44        d/t = 6.440 m/s
+  MaxAvgSpeed act2 all time    7.42        d/t = 7.416 m/s
+  MaxSpeed    act2 this year  65.04847     max_speed 65.04848
+  MaxSpeed    act2 all time  100.0         max_speed 100.0
+  MaxSpeed    act10 all time   8.38        max_speed 8.38
+  ```
+
+  This also settles the contradiction that made the question look hard:
+  3.22 all-time against 2.64 this year is correctly ordered once bigger
+  means faster. The three `MaxSpeed` values are the workout list's own
+  `maxSpeed` field exactly, which this client already treats as m/s.
+
+  So `FastestPace` is shown as minutes per kilometre and the other two as
+  km/h - both exact conversions of the same measured figure, read the way
+  the activity usually is.
+
+  **The absurd ones are bad data, not a bad unit.** 100.0 m/s is 360 km/h
+  and 65.05 m/s is 234 km/h; both are single-sample GPS glitches that the
+  cloud has faithfully recorded as records, and the official app shows the
+  same. Nothing here clamps them: a record the cloud holds is what this
+  page is for.
+
+- **`MaxAvgPower` is still shown bare.** There is no power meter on this
+  account, so every value of it is null and there was nothing to check
+  against. Watts is the obvious guess, which is why it is not made.
 
 ### A new endpoint: `POST /v1/workout/extensions/<workoutKey>`
 
@@ -807,13 +827,13 @@ the capture alone would suggest the ObjectId is required.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
-5. **The nine 403s on `/v1/workout/extensions/<key>`** - still open, and
-   not answerable from this app's own data until it stores `workoutKey`
-   alongside `key`. See the two failed attempts above.
-6. **`IntensityExtension` also carries power zones**, `zones.power.zone1..5`
-   with the same `{totalTime, lowerLimit}` shape (0/100/150/200/250 W on
-   this account, all with zero time - no power meter here). Read and
-   stored, not shown.
+5. **The nine 403s on `/v1/workout/extensions/<key>`** - what the server
+   objects to about those workouts. `Workout::workoutKey` now stores the
+   ObjectId, so once a full re-fetch has filled it in the nine can be
+   looked up directly; before that column existed there was nothing local
+   to match them against.
+6. **`MaxAvgPower`'s unit.** Needs one workout recorded with a power
+   meter; there is none here.
 7. **`FitnessExtension` does not always carry VO2max and the fitness age** -
    and this one is answered rather than open. The captured workout has
    `vo2Max`, `estimatedVo2Max` and `fitnessAge`; nine real ones on the phone

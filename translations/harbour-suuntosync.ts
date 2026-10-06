@@ -1297,100 +1297,110 @@ exists - %2 bytes
 <context>
     <name>RecordsPage</name>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="47"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="48"/>
         <source>Longest distance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="48"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="49"/>
         <source>Longest duration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="49"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="50"/>
         <source>Most ascent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="50"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="51"/>
         <source>Fastest pace</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="51"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="52"/>
         <source>Top speed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="52"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="53"/>
         <source>Best average speed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="53"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="54"/>
         <source>Best average power</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="54"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="55"/>
         <source>Half marathon</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="55"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="56"/>
         <source>Marathon</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="62"/>
-        <location filename="../qml/pages/RecordsPage.qml" line="92"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="63"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="101"/>
         <source>%1 km</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="93"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="102"/>
         <source>%1 m</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="112"/>
-        <location filename="../qml/pages/RecordsPage.qml" line="141"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="104"/>
+        <source>%1 km/h</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/RecordsPage.qml" line="111"/>
+        <source>%1:%2 /km</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/RecordsPage.qml" line="131"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="160"/>
         <source>Fetching…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="112"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="131"/>
         <source>Fetch records</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="122"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="141"/>
         <source>Records</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="129"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="148"/>
         <source>Fetched %1</source>
         <extracomment>%1 is a date, e.g. 5.10.2026</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="143"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="162"/>
         <source>No records yet. Pull down to fetch them.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="144"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="163"/>
         <source>Sign in to the Suunto cloud to see records.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="188"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="207"/>
         <source>All time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="192"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="211"/>
         <source>This year</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1627,207 +1637,212 @@ exists - %2 bytes
 <context>
     <name>WorkoutDetailPage</name>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="174"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="189"/>
         <source>%1h %2min %3s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="175"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
         <source>%1min %2s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="180"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
         <source>Distance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="180"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="435"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="450"/>
         <source>%1 km</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="181"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
         <source>Duration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
         <source>Ascent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="192"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
         <source>%1 m</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="192"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
         <source>Descent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="194"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
         <source>Avg heart rate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="194"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
         <source>%1 bpm</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
         <source>Max heart rate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="198"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
         <source>Max speed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="198"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
         <source>%1 km/h</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="200"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
         <source>Energy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="200"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
         <source>%1 kcal</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="202"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
         <source>Steps</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="204"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="219"/>
         <source>Peak training effect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="206"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>EPOC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="206"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>%1 ml/kg</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="208"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="223"/>
         <source>Training load</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="210"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="225"/>
         <source>TSS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="212"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>Estimated VO2max</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="212"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>%1 ml/kg/min</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="214"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="229"/>
         <source>Recovery time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
         <source>Fitness age</source>
         <extracomment>As in &quot;your fitness is that of a 39-year-old&quot; - a number of years</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
         <source>%1 years</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="241"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="256"/>
         <source>Upload to Suunto</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="246"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="261"/>
         <source>Download sample data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="256"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="271"/>
         <source>Save the raw sample data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="273"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="288"/>
         <source>Delete this workout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="276"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="291"/>
         <source>Deleting the phone&apos;s copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="290"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="305"/>
         <source>%1 · from watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="292"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="307"/>
         <source>%1 · from Suunto cloud</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="410"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="425"/>
         <source>Laps</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="556"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="571"/>
         <source>Recorded with</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="576"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="591"/>
         <source>firmware %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="599"/>
-        <source>Heart rate zones</source>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="611"/>
+        <source>Heart rate zones (bpm)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="615"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="612"/>
+        <source>Power zones (W)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="641"/>
         <source>Zone %1</source>
         <extracomment>%1 is a zone number, 1 to 5</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="660"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="688"/>
         <source>Hide all recorded fields</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="661"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="689"/>
         <source>All recorded fields (%1)</source>
         <translation type="unfinished"></translation>
     </message>

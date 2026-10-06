@@ -1305,100 +1305,110 @@ löytyy - %2 tavua
 <context>
     <name>RecordsPage</name>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="47"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="48"/>
         <source>Longest distance</source>
         <translation>Pisin matka</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="48"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="49"/>
         <source>Longest duration</source>
         <translation>Pisin kesto</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="49"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="50"/>
         <source>Most ascent</source>
         <translation>Suurin nousu</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="50"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="51"/>
         <source>Fastest pace</source>
         <translation>Nopein vauhti</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="51"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="52"/>
         <source>Top speed</source>
         <translation>Huippunopeus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="52"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="53"/>
         <source>Best average speed</source>
         <translation>Paras keskinopeus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="53"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="54"/>
         <source>Best average power</source>
         <translation>Paras keskiteho</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="54"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="55"/>
         <source>Half marathon</source>
         <translation>Puolimaraton</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="55"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="56"/>
         <source>Marathon</source>
         <translation>Maraton</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="62"/>
-        <location filename="../qml/pages/RecordsPage.qml" line="92"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="63"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="101"/>
         <source>%1 km</source>
         <translation>%1 km</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="93"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="102"/>
         <source>%1 m</source>
         <translation>%1 m</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="112"/>
-        <location filename="../qml/pages/RecordsPage.qml" line="141"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="104"/>
+        <source>%1 km/h</source>
+        <translation>%1 km/h</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/RecordsPage.qml" line="111"/>
+        <source>%1:%2 /km</source>
+        <translation>%1.%2 /km</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/RecordsPage.qml" line="131"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="160"/>
         <source>Fetching…</source>
         <translation>Haetaan…</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="112"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="131"/>
         <source>Fetch records</source>
         <translation>Hae ennätykset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="122"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="141"/>
         <source>Records</source>
         <translation>Ennätykset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="129"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="148"/>
         <source>Fetched %1</source>
         <extracomment>%1 is a date, e.g. 5.10.2026</extracomment>
         <translation>Haettu %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="143"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="162"/>
         <source>No records yet. Pull down to fetch them.</source>
         <translation>Ei vielä ennätyksiä. Vedä alas hakeaksesi.</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="144"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="163"/>
         <source>Sign in to the Suunto cloud to see records.</source>
         <translation>Kirjaudu Suunto-pilveen nähdäksesi ennätykset.</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="188"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="207"/>
         <source>All time</source>
         <translation>Kaikkien aikojen</translation>
     </message>
     <message>
-        <location filename="../qml/pages/RecordsPage.qml" line="192"/>
+        <location filename="../qml/pages/RecordsPage.qml" line="211"/>
         <source>This year</source>
         <translation>Tänä vuonna</translation>
     </message>
@@ -1635,207 +1645,212 @@ löytyy - %2 tavua
 <context>
     <name>WorkoutDetailPage</name>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="174"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="189"/>
         <source>%1h %2min %3s</source>
         <translation>%1 h %2 min %3 s</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="175"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
         <source>%1min %2s</source>
         <translation>%1 min %2 s</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="180"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
         <source>Distance</source>
         <translation>Matka</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="180"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="435"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="195"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="450"/>
         <source>%1 km</source>
         <translation>%1 km</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="181"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
         <source>Duration</source>
         <translation>Kesto</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
         <source>Ascent</source>
         <translation>Nousu</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="190"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="192"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="205"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
         <source>%1 m</source>
         <translation>%1 m</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="192"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="207"/>
         <source>Descent</source>
         <translation>Lasku</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="194"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
         <source>Avg heart rate</source>
         <translation>Keskisyke</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="194"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="209"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
         <source>%1 bpm</source>
         <translation>%1 bpm</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="196"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="211"/>
         <source>Max heart rate</source>
         <translation>Maksimisyke</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="198"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
         <source>Max speed</source>
         <translation>Huippunopeus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="198"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="213"/>
         <source>%1 km/h</source>
         <translation>%1 km/h</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="200"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
         <source>Energy</source>
         <translation>Energia</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="200"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="215"/>
         <source>%1 kcal</source>
         <translation>%1 kcal</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="202"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
         <source>Steps</source>
         <translation>Askeleet</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="204"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="219"/>
         <source>Peak training effect</source>
         <translation>Harjoitusvaikutus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="206"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>EPOC</source>
         <translation>EPOC</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="206"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="221"/>
         <source>%1 ml/kg</source>
         <translation>%1 ml/kg</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="208"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="223"/>
         <source>Training load</source>
         <translation>Harjoituskuorma</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="210"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="225"/>
         <source>TSS</source>
         <translation>TSS</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="212"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>Estimated VO2max</source>
         <translation>Arvioitu VO2max</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="212"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="227"/>
         <source>%1 ml/kg/min</source>
         <translation>%1 ml/kg/min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="214"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="229"/>
         <source>Recovery time</source>
         <translation>Palautumisaika</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
         <source>Fitness age</source>
         <extracomment>As in &quot;your fitness is that of a 39-year-old&quot; - a number of years</extracomment>
         <translation>Kuntoikä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="217"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="232"/>
         <source>%1 years</source>
         <translation>%1 vuotta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="241"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="256"/>
         <source>Upload to Suunto</source>
         <translation>Lähetä Suuntoon</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="246"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="261"/>
         <source>Download sample data</source>
         <translation>Lataa näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="256"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="271"/>
         <source>Save the raw sample data</source>
         <translation>Tallenna raaka näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="273"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="288"/>
         <source>Delete this workout</source>
         <translation>Poista tämä harjoitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="276"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="291"/>
         <source>Deleting the phone&apos;s copy</source>
         <translation>Poistetaan puhelimen kopio</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="290"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="305"/>
         <source>%1 · from watch</source>
         <translation>%1 · kellosta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="292"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="307"/>
         <source>%1 · from Suunto cloud</source>
         <translation>%1 · Suunto-pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="410"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="425"/>
         <source>Laps</source>
         <translation>Kierrokset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="556"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="571"/>
         <source>Recorded with</source>
         <translation>Tallennettu laitteella</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="576"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="591"/>
         <source>firmware %1</source>
         <translation>ohjelmisto %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="599"/>
-        <source>Heart rate zones</source>
-        <translation>Sykealueet</translation>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="611"/>
+        <source>Heart rate zones (bpm)</source>
+        <translation>Sykealueet (bpm)</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="615"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="612"/>
+        <source>Power zones (W)</source>
+        <translation>Tehoalueet (W)</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="641"/>
         <source>Zone %1</source>
         <extracomment>%1 is a zone number, 1 to 5</extracomment>
         <translation>Alue %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="660"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="688"/>
         <source>Hide all recorded fields</source>
         <translation>Piilota kaikki kentät</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="661"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="689"/>
         <source>All recorded fields (%1)</source>
         <translation>Kaikki tallennetut kentät (%1)</translation>
     </message>

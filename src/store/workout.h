@@ -14,7 +14,21 @@
 // still out of scope.
 struct Workout
 {
-    QString key;         // Suunto's own id, e.g. "wk_abc123" - primary key here too
+    QString key;         // the cloud's own `key` - primary key here too
+
+    // The cloud's *other* identifier for the same workout, its `workoutKey`
+    // - and the two are not the way round the names suggest: `key` is the
+    // short one ("29sc0l5ro6vvnfpo") and `workoutKey` is a 24-digit
+    // ObjectId ("6ac39c973e7e17771cad991b") whose first four bytes are the
+    // unix second it was created. Empty for a BLE workout, which has no
+    // cloud identity at all, and empty for a cloud workout stored before
+    // this column existed until a full re-fetch fills it in.
+    //
+    // Kept because it is the identifier the rest of the cloud refers to a
+    // workout by: the personal-records response cites a record's workout by
+    // `workoutKey`, and the official app's extensions requests use it. Not
+    // storing it meant neither could be matched to a workout here.
+    QString workoutKey;
     QString source;      // "cloud" or "ble"
     int activityId = 0;  // Suunto's numeric sport type; see ActivityName() equivalent, not ported yet
     qint64 startTime = 0; // unix ms

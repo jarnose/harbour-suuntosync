@@ -5,16 +5,17 @@ import "ActivityTypes.js" as ActivityTypes
 // The account's personal bests, as the cloud keeps them: all-time and, in a
 // separate set the response sends alongside, this year.
 //
-// A deliberate restraint runs through this page. The cloud sends each record
-// as a bare number with a type name, and only some of those types have a
-// unit this project has actually established: the distances and the
-// durations do, from arithmetic that only works out one way (5 km in 1552.9
-// of something is 5:11 per km in seconds and nonsense in anything else). The
-// speeds and the pace do not - the running pace record reads 3.22 all-time
-// against 2.64 this year, and in minutes per kilometre that would make this
-// year faster than the all-time best, which cannot be. So those are shown as
-// the figure the server sent, with no unit invented for them. See
-// docs/workout-upload.md.
+// Every unit on this page is measured rather than assumed. The cloud sends
+// each record as a bare number with a type name, and the types were settled
+// one at a time: the durations and distances by arithmetic that only works
+// out one way, and the speeds by joining each record's own `date` to the
+// workout it was set in and comparing against that workout's distance over
+// its time. All three speed types came out as metres per second, exactly -
+// `FastestPace` included, which is a speed despite its name, and which is
+// why its all-time 3.22 is faster than this year's 2.64 rather than slower.
+// `MaxAvgPower` is the one type still shown bare: there is no power meter
+// here, so every value of it is null and there was nothing to check
+// against. See docs/workout-upload.md.
 Page {
     id: page
 
@@ -66,7 +67,8 @@ Page {
         }
     }
 
-    // Which of the three units this project is willing to state, or none.
+    // Which measured unit a record type carries, or "raw" for one that has
+    // not been checked against a real workout.
     function recordKind(type) {
         switch (type) {
         case "LongestDistance": return "distance"
@@ -74,6 +76,13 @@ Page {
         case "LongestDuration":
         case "HalfMarathon":
         case "FullMarathon":    return "duration"
+        // Metres per second, all three, confirmed against the workouts the
+        // records were set in. Shown as a pace or a speed by which one the
+        // activity is usually read in - both are exact conversions of the
+        // same measured figure, so neither is a guess.
+        case "FastestPace":     return "pace"
+        case "MaxSpeed":
+        case "MaxAvgSpeed":     return "speed"
         default:
             return /^KM[0-9]+$/.test(type) ? "duration" : "raw"
         }
@@ -92,8 +101,18 @@ Page {
         case "distance": return qsTr("%1 km").arg((value / 1000).toFixed(2))
         case "ascent":   return qsTr("%1 m").arg(value.toFixed(0))
         case "duration": return formatDuration(value)
+        case "speed":    return qsTr("%1 km/h").arg((value * 3.6).toFixed(1))
+        case "pace":
+            // Seconds per kilometre from metres per second, as m:ss. A zero
+            // would divide by nothing; it cannot be a real record anyway.
+            if (!(value > 0))
+                return "\u2013"
+            var perKm = Math.round(1000 / value)
+            return qsTr("%1:%2 /km").arg(Math.floor(perKm / 60))
+                                    .arg(("0" + (perKm % 60)).slice(-2))
         default:
-            // No unit, on purpose - see the note at the top of this file.
+            // Not checked against a real workout - see the note at the top
+            // of this file - so no unit is invented for it.
             return (Math.abs(value - Math.round(value)) < 0.005)
                     ? Math.round(value).toString()
                     : value.toFixed(2)

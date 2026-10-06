@@ -177,11 +177,11 @@ void SuuntoCloudClient::login(const QString &email, const QString &password,
     });
 }
 
-void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
+void SuuntoCloudClient::fetchWorkoutSml(const QString &sessionKey, const QString &key,
                                           RawBodyCallback callback)
 {
     const QNetworkRequest request = authorizedRequest(
-            kBaseUrl + QStringLiteral("workouts/") + workoutKey + QStringLiteral("/sml"),
+            kBaseUrl + QStringLiteral("workouts/") + key + QStringLiteral("/sml"),
             sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
@@ -369,11 +369,11 @@ void SuuntoCloudClient::fetchHealthEntries(const QString &sessionKey, const QStr
 }
 
 void SuuntoCloudClient::fetchWorkoutDetail(const QString &sessionKey,
-                                            const QString &workoutKey,
+                                            const QString &key,
                                             WorkoutDetailCallback callback)
 {
     const QNetworkRequest request = authorizedRequest(
-            kBaseUrl + QStringLiteral("workouts/") + workoutKey, sessionKey);
+            kBaseUrl + QStringLiteral("workouts/") + key, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
@@ -419,11 +419,11 @@ static const char *const kExtensionTypes[] = {
 };
 
 void SuuntoCloudClient::fetchWorkoutExtensions(const QString &sessionKey,
-                                                const QString &workoutKey,
+                                                const QString &key,
                                                 WorkoutDetailCallback callback)
 {
     QNetworkRequest request = authorizedRequest(
-            kBaseUrl + QStringLiteral("workout/extensions/") + workoutKey, sessionKey);
+            kBaseUrl + QStringLiteral("workout/extensions/") + key, sessionKey);
     request.setHeader(QNetworkRequest::ContentTypeHeader,
                        QStringLiteral("application/json"));
 
@@ -551,6 +551,11 @@ void SuuntoCloudClient::listWorkouts(const QString &sessionKey, qint64 sinceMs, 
             const QJsonObject o = v.toObject();
             Workout w;
             w.key = o.value(QStringLiteral("key")).toString();
+            // The cloud's other identifier for the same workout - see
+            // Workout::workoutKey for why both are kept, and for the fact
+            // that it is `workoutKey` that holds the ObjectId and `key`
+            // that holds the short one, not the other way round.
+            w.workoutKey = o.value(QStringLiteral("workoutKey")).toString();
             w.source = QStringLiteral("cloud");
             w.activityId = o.value(QStringLiteral("activityId")).toInt();
             // startTime/stopTime (unix ms) arrive as JSON numbers. QJsonValue

@@ -158,6 +158,12 @@ bool WorkoutStore::open(QString *error)
         return false;
     }
 
+    // Added after the table was in use, so it needs its own ALTER - and it
+    // starts empty for every row already there. A full re-fetch fills it
+    // in; nothing breaks before that, the identifier is simply unknown.
+    QSqlQuery addWorkoutKey(db);
+    addWorkoutKey.exec(QStringLiteral("ALTER TABLE workouts ADD COLUMN workout_key TEXT"));
+
     // Whole cloud responses that belong to the account rather than to any
     // one workout - the personal records so far. Kept so the page they
     // feed works without a network, which for a list of all-time bests is
@@ -355,7 +361,7 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
             "w.total_distance, w.total_ascent, w.total_descent, w.max_speed, w.energy_consumption, "
             "w.step_count, w.avg_heart_rate, w.max_heart_rate, w.epoc, w.peak_training_effect, "
             "w.recovery_time, w.max_vo2, w.training_load, w.training_stress_score, "
-            "s.uploaded_key FROM workouts w "
+            "s.uploaded_key, w.workout_key FROM workouts w "
             "LEFT JOIN workout_sml s ON s.key = w.key "
             "ORDER BY w.start_time DESC"))) {
         if (error)
@@ -386,6 +392,7 @@ QVector<Workout> WorkoutStore::loadAll(QString *error) const
         w.trainingLoad = q.value(18).toDouble();
         w.trainingStressScore = q.value(19).toDouble();
         w.uploadedToCloud = !q.value(20).isNull();
+        w.workoutKey = q.value(21).toString();
         result.append(w);
     }
     return result;
@@ -396,13 +403,14 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-            "INSERT INTO workouts (key, source, activity_id, start_time, stop_time, "
+            "INSERT INTO workouts (key, workout_key, source, activity_id, start_time, stop_time, "
             "total_time, total_distance, total_ascent, total_descent, max_speed, "
             "energy_consumption, step_count, avg_heart_rate, max_heart_rate, epoc, "
             "peak_training_effect, recovery_time, max_vo2, training_load, "
             "training_stress_score) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET source = excluded.source, "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET workout_key = excluded.workout_key, "
+            "source = excluded.source, "
             "activity_id = excluded.activity_id, start_time = excluded.start_time, "
             "stop_time = excluded.stop_time, total_time = excluded.total_time, "
             "total_distance = excluded.total_distance, total_ascent = excluded.total_ascent, "
@@ -415,6 +423,7 @@ bool WorkoutStore::upsert(const Workout &workout, QString *error)
             "training_load = excluded.training_load, "
             "training_stress_score = excluded.training_stress_score"));
     q.addBindValue(workout.key);
+    q.addBindValue(workout.workoutKey);
     q.addBindValue(workout.source);
     q.addBindValue(workout.activityId);
     q.addBindValue(workout.startTime);

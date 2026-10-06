@@ -114,7 +114,7 @@ public:
     // that answer 403 to it, is written up in docs/workout-upload.md. Not
     // implemented here - it is the obvious way to give a cloud workout the
     // analysis panel a watch-fetched one already gets from /Summary.
-    void fetchWorkoutDetail(const QString &sessionKey, const QString &workoutKey,
+    void fetchWorkoutDetail(const QString &sessionKey, const QString &key,
                              WorkoutDetailCallback callback);
 
     // POST /v1/workout/extensions/{key}, body a JSON array of the extension
@@ -133,7 +133,7 @@ public:
     // docs/workout-upload.md. That is reported as an ordinary failure,
     // which for a caller enriching a page it has already drawn means
     // showing what it has.
-    void fetchWorkoutExtensions(const QString &sessionKey, const QString &workoutKey,
+    void fetchWorkoutExtensions(const QString &sessionKey, const QString &key,
                                  WorkoutDetailCallback callback);
 
     // GET /v2/personal/best/records?statsVersion=V2&tz=<IANA zone> - the
@@ -158,7 +158,7 @@ public:
     // hasn't been captured yet, so the caller does the interpreting.
     using RawBodyCallback = std::function<void(bool ok, const QByteArray &body,
                                                  const QString &error)>;
-    void fetchWorkoutSml(const QString &sessionKey, const QString &workoutKey,
+    void fetchWorkoutSml(const QString &sessionKey, const QString &key,
                           RawBodyCallback callback);
 
     // GET 247.sports-tracker.com/v1/<kind>/export?since=<ms> - the watch's
@@ -183,9 +183,12 @@ public:
     // alternatives, and a watch upload carrying only SML was accepted with
     // 200. Authentication is the plain session key, no signature.
     //
-    // On success the payload is the created workout, whose "key" is the
-    // cloud's own id for it.
-    using UploadCallback = std::function<void(bool ok, const QString &workoutKey,
+    // On success the payload is the created workout, and this hands back its
+    // "key" - the short identifier, not the ObjectId the payload's
+    // "workoutKey" holds. Worth being exact about: an uploaded workout has
+    // both, and a stored short key cannot be compared with an ObjectId seen
+    // elsewhere, which is a conclusion this project got wrong once.
+    using UploadCallback = std::function<void(bool ok, const QString &key,
                                                 const QString &error)>;
     void uploadWorkout(const QString &sessionKey, const QByteArray &smlZip,
                         UploadCallback callback);

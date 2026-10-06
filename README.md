@@ -30,6 +30,15 @@ Confirmed on real hardware, not just in tests:
   monthly total that reads double is worse than none — so starts within
   ninety seconds of each other count as one workout, and the rule has its
   own Qt-free test.
+- **Personal records**, per activity, all-time and this year, from an
+  endpoint the official app uses and a capture found. Every unit on that
+  page is measured rather than assumed: the durations and distances by
+  arithmetic that works out only one way, and the three speed records by
+  joining each one to the workout it was set in and comparing against that
+  workout's own distance over its time — which is how `FastestPace`
+  turned out to be a speed in metres per second despite its name. The one
+  type left showing a bare number is average power, because there is no
+  power meter here to check it against.
 - **A cover that shows one thing, chosen.** The latest workout, lifetime
   totals, fitness/fatigue/form, last night's sleep, or nothing — because
   there is no one right answer: somebody training for a distance wants the
@@ -52,8 +61,8 @@ Confirmed on real hardware, not just in tests:
   data and laps — automatic and manual ones, which the cloud keeps as two
   parallel partitions of the same workout rather than one sequence.
   A cloud workout also gets the analysis the official app shows for it:
-  VO2max, fitness age, EPOC, peak training effect, recovery time and the
-  five heart-rate zones with time spent in each. The zone boundaries come
+  VO2max, fitness age, EPOC, peak training effect, recovery time, and the
+  heart-rate and power zones with time spent in each. The zone boundaries come
   from the server rather than being derived from a configured maximum —
   0/131/146/161/176 against a maximum of 192 is not an even division of
   anything, so computing them would have been wrong. It is a second

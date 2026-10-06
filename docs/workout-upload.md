@@ -760,7 +760,7 @@ One thing the flattening still drops: `gear`, whose fields are strings, and
 serial and firmware version are therefore captured and documented but not
 displayed.
 
-### Nine workouts answer 403, and they look like ours
+### Nine workouts answer 403: deleted test uploads (answered)
 
 Of 50 unique workout keys, 41 answered 200 and **nine answered
 `403 Forbidden`**, retried and refused again. Their ObjectId timestamps -
@@ -769,10 +769,14 @@ evening pairs: 22.9 21:29-21:39, 23.9 21:10 and 21:35, 25.9 21:17. Those
 are the evenings this project's upload path was being tested, and the
 200-answering keys are bulk bursts from the official app instead.
 
-If it is right, a workout uploaded by this app is stored and listed and
-summarised correctly - the official app shows it - but its extensions
-subresource is not readable, which shows up as a missing analysis panel
-rather than a missing workout.
+**Confirmed 2026-10-06**: they are workouts this app uploaded during that
+testing, which Jarno then deleted from the account. The official Android app
+kept local stubs of them, still asks for their extensions on every start,
+and gets 403 - not 404 - for a workout that is gone.
+
+So the 403s say nothing about whether this app's uploads are well formed,
+which is what the question was really about. They are the official app
+asking after the dead.
 
 **Two attempts to settle this, both recorded because both were wrong about
 something.**
@@ -801,11 +805,13 @@ quietly fixed because the two look nothing alike and the error was in the
 labelling, not the data.
 
 This client stores `key`, the short one, and the upload returns one of
-those too. So `uploaded_key` cannot be compared with the nine ObjectIds at
-all, and the hypothesis is back to unsupported rather than disproved: an
-uploaded workout has both identifiers, and this app keeps only one of them.
-Storing `workoutKey` as well - it is free in the list response - is the
-one-line change that would make the question answerable.
+those too. So `uploaded_key` could not be compared with the nine ObjectIds
+at all. `Workout::workoutKey` was added for exactly this, and with it
+filled in the nine were still absent from all 1171 workouts - which looked
+like the hypothesis collapsing, and was in fact only the consequence of
+their having been deleted. Three steps to an answer, two of them wrong
+about why: the first about what was stored, the second about what absence
+from the list meant.
 
 **Measured while looking**: `POST /v1/workout/extensions/<key>` accepts the
 **short** key, not only the ObjectId the official app sends. Nine of the
@@ -827,25 +833,9 @@ the capture alone would suggest the ObjectId is required.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
-5. **The nine 403s on `/v1/workout/extensions/<key>`** - narrowed, and the
-   original guess is now disproved. With `Workout::workoutKey` stored and a
-   full re-fetch done, all 1171 cloud workouts on the phone carry their
-   ObjectId, and **not one of the nine is among them**. They are not in this
-   account's workout list at all - so they cannot simply be workouts this
-   app uploaded, because an uploaded one does appear in the list.
-
-   What is left fits one story: they are in the *Android* app's own local
-   database and nowhere in any response this capture contains (grepped),
-   their ObjectIds were created on the evenings of 22, 23 and 25 September,
-   and the server answers 403 rather than 404 - which is what a workout
-   deleted from the account, still stubbed locally in the official app,
-   would look like. Those evenings are also when this project's upload path
-   was being tested, so the test workouts having been uploaded and then
-   deleted again would explain every observation at once. Not written down
-   as the answer, because nobody has confirmed the deletion.
-6. **`MaxAvgPower`'s unit.** Needs one workout recorded with a power
+5. **`MaxAvgPower`'s unit.** Needs one workout recorded with a power
    meter; there is none here.
-7. **`FitnessExtension` does not always carry VO2max and the fitness age** -
+6. **`FitnessExtension` does not always carry VO2max and the fitness age** -
    and this one is answered rather than open. The captured workout has
    `vo2Max`, `estimatedVo2Max` and `fitnessAge`; nine real ones on the phone
    carry only `maxHeartRate`. Jarno's explanation, which the data cannot

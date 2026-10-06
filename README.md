@@ -181,6 +181,7 @@ dex. `docs/` carries the results:
 | `notifications.md` | the ANCS-over-Whiteboard payload, the encoder, and the daemon that feeds it |
 | `sml-schema-descriptors.md` | the field schema the watch hands out about itself |
 | `activity-types.md` | both activity-id vocabularies, the watch's and the cloud's |
+| `base-map.md` | why a base map needs a vector-tile decoder on Sailfish, and the one tile source that can be a default |
 
 Three habits run through the whole thing and are worth stating, because
 they caught real bugs:

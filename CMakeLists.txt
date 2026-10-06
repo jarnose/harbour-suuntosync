@@ -125,6 +125,7 @@ add_executable(harbour-suuntosync
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/store/workoutsummary.cpp
+    src/map/vectortile.cpp
     src/model/workoutlistmodel.cpp
     src/health/healthstore.cpp
 )

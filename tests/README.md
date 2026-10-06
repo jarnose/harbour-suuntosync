@@ -21,6 +21,14 @@ off a real watch and a real account, and they are personal data:
   metres. Two different workouts on different days start from the same
   spot, which is exactly what makes it identifying.
 - **Twelve nights of sleep**, with heart rate, HRV, SpO2 and sleep quality.
+- **An OpenFreeMap vector tile** (`openfreemap_monaco_z14.pbf`), which is the
+  one fixture here that is *not* personal data at all - it is a public map
+  tile, and Monaco deliberately, because OpenFreeMap uses Monaco as its own
+  sample area and a tile of where somebody lives would say where they live.
+  It is kept out of the repository only because `tests/fixtures/` is ignored
+  wholesale, and `test_vectortile.cpp` works without it: its byte-exact
+  checks run against a synthetic tile inlined as hex, and the real tile only
+  adds the feature counts.
 - **The watch serial**, which appears in several of them - including,
   unavoidably, in a descriptor table, whose `Sample.Source` enum is
   literally `0=suunto-<serial>`.

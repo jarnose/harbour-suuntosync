@@ -171,6 +171,21 @@ class, the track with a dark casing under it so it stays readable over water,
 then the attribution. There is no panning or zooming: the view is the
 workout, which is the question this answers.
 
+## Confirmed on hardware, 2026-10-06
+
+The map draws under the track, the attribution shows, both the light and the
+dark palette were looked at, and the zoom the three-tile ceiling picks was
+judged about right for a real outing. Turning the switch off brings back the
+bare polyline, now Mercator-projected.
+
+**Handing a workout to Pure Maps works, and needed no permission.** The
+concern was that `Qt.openUrlExternally` would need
+`dbus-user.talk org.sailfishos.maps`, which only `Contacts.permission` grants
+and which would be absurd to request for a map link. What actually happens is
+that the system asks the user to confirm launching the other application, and
+Pure Maps opens on the area. It shows the place, not the track - which is what
+`geo:lat,lon` can express and all it can.
+
 ## Still open
 
 - **Raster tiles.** A URL that serves images is detected and reported rather

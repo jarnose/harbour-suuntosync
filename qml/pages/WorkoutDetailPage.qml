@@ -389,6 +389,13 @@ Page {
                     // `geo:<lat>,<lon>` and ignores the rest, so there is no
                     // way to hand over the track itself, nor a zoom. It
                     // opens the area, it does not draw the outing.
+                    //
+                    // Confirmed working on the device, and Sailjail does not
+                    // need placating for it: the system asks the user to
+                    // confirm launching the other application, which is why
+                    // no permission is requested here. The worry was that
+                    // `dbus-user.talk org.sailfishos.maps` would be needed
+                    // and only Contacts.permission grants it; it is not.
                     MouseArea {
                         anchors.fill: parent
                         enabled: page.mapCenter.latitude !== undefined

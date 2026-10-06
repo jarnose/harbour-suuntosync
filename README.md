@@ -49,7 +49,10 @@ Confirmed on real hardware, not just in tests:
   Qt-free, 46 assertions, golden-vector tested against a real tile whose
   expected contents were read out by an independent script first. Settings
   takes any TileJSON address or `{z}/{x}/{y}` template; the attribution its
-  terms require is drawn on the map. See `docs/base-map.md`.
+  terms require is drawn on the map. Tapping the track hands the area to Pure
+  Maps, which is the one map application here with a registered URI handler -
+  it takes a single coordinate, so it shows the place and not the outing. See
+  `docs/base-map.md`.
 - **A cover that shows one thing, chosen.** The latest workout, lifetime
   totals, fitness/fatigue/form, last night's sleep, or nothing — because
   there is no one right answer: somebody training for a distance wants the

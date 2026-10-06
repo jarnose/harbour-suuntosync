@@ -812,11 +812,21 @@ the capture alone would suggest the ObjectId is required.
    with the same `{totalTime, lowerLimit}` shape (0/100/150/200/250 W on
    this account, all with zero time - no power meter here). Read and
    stored, not shown.
-8. **`FitnessExtension` does not always carry VO2max and the fitness age.**
-   The captured workout has `vo2Max`, `estimatedVo2Max` and `fitnessAge`;
-   nine real ones on the phone carry only `maxHeartRate`. So those two rows
-   appear on some workouts and not others, which is the data's doing rather
-   than a bug.
+8. **`FitnessExtension` does not always carry VO2max and the fitness age** -
+   and this one is answered rather than open. The captured workout has
+   `vo2Max`, `estimatedVo2Max` and `fitnessAge`; nine real ones on the phone
+   carry only `maxHeartRate`. Jarno's explanation, which the data cannot
+   give: those nine came into the Suunto cloud from a *Garmin* account
+   through SyncMyTracks, so Suunto never computed its own fitness analysis
+   for them. Nothing was measured on a Suunto watch, so there is nothing to
+   report.
+
+   Worth knowing because it changes what an absent row means. It is not a
+   gap in this client, nor a field the cloud sometimes omits: it is a
+   workout Suunto's own analysis never ran on. The "Recorded with" line
+   added at the same time is the visible counterpart - a workout whose gear
+   is not one of the two watches here is one that came in from somewhere
+   else.
 
 ## Setting up HTTPS interception again (2026-09-25)
 

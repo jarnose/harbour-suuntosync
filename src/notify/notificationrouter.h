@@ -57,4 +57,24 @@ uint8_t categoryFor(const std::string &sailfishCategory, const std::string &appI
 // clock so that a test is a test.
 Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowSeconds);
 
+// An incoming call, which does not come through the notification server at
+// all and so cannot come through the Candidate path above.
+//
+// Measured on the device: a call arriving raises
+// `org.nemomobile.voicecall.VoiceCall.statusChanged` with `5 "incoming"` and
+// then `playRingtone`, and the first `Notify` of the whole exchange lands ten
+// seconds later, when the call has already been missed. There is no
+// `x-nemo.call.incoming` category in
+// /usr/share/lipstick/notificationcategories either - only `missed` - so
+// there is nothing for categoryFor() to map. This builds the notification
+// directly instead, which keeps the invented part visible rather than
+// dressing a call up as a category Sailfish does not have.
+//
+// `lineId` is the caller's number, blank when withheld. `callId` is a stable
+// number for this particular call - the daemon derives it from the call's
+// own D-Bus object path - so the notification can be taken off the watch
+// again when the ringing stops.
+Ancs::Notification incomingCall(const std::string &lineId, uint32_t callId,
+                                  uint32_t nowSeconds);
+
 } // namespace NotificationRouter

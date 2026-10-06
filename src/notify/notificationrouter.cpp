@@ -140,4 +140,28 @@ Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowS
     return out;
 }
 
+Ancs::Notification incomingCall(const std::string &lineId, uint32_t callId, uint32_t nowSeconds)
+{
+    Ancs::Notification out;
+    // The sending application, as the watch sees it. voicecall-ui's own name,
+    // so a watch that groups by application groups calls with calls.
+    out.appId = "voicecall-ui";
+    // A withheld number would otherwise be an empty title, which renders as
+    // an empty box - and which dropReason() refuses for exactly that reason.
+    out.title = blank(lineId) ? "Unknown caller" : lineId;
+    out.message = "Incoming call";
+    out.categoryId = Ancs::CategoryIncomingCall;
+    out.date = nowSeconds;
+    out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,
+                                                  out.appId);
+
+    // No Dismiss label here, unlike a notification: dismissing a ringing
+    // call on the watch would mean rejecting it on the phone, and whether
+    // the watch reports a press back has never been established. A label
+    // that looks like it does something and does not is worse than none.
+
+    Ancs::truncateToFit(out);
+    return out;
+}
+
 } // namespace NotificationRouter

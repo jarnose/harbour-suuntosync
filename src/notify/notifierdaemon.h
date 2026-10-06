@@ -1,5 +1,6 @@
 #pragma once
 
+#include "callmonitor.h"
 #include "notificationmonitor.h"
 #include "notificationrouter.h"
 #include "watchlink.h"
@@ -60,6 +61,8 @@ signals:
 private slots:
     void onPosted(const PhoneNotification &notification);
     void onClosed(quint32 id);
+    void onIncomingCall(const QString &callPath, const QString &lineId);
+    void onCallEnded(const QString &callPath);
     void onDeviceUpdated(const BluezAdapter::Device &device);
     void onConnectFinished(const QString &objectPath, bool ok, const QString &error,
                             const QString &errorName);
@@ -106,6 +109,7 @@ private:
     BluezAdapter *m_adapter;
     MdsWhiteboardClient *m_client;
     NotificationMonitor *m_monitor;
+    CallMonitor *m_calls;
     QTimer *m_retry;
     // An attach that never completes used to hold the lock for ever:
     // MdsWhiteboardClient waits for ServicesResolved with no deadline of its
@@ -141,6 +145,11 @@ private:
     // Phone notification id -> the id we sent it to the watch as, so a
     // close on the phone can take the right one off the watch.
     QHash<quint32, quint32> m_sent;
+    // The watch-side id of each ringing call, by its D-Bus object path, so
+    // the ring can be taken off again. Separate from m_sent because a call
+    // has no notification-server id to key on - it never went through the
+    // notification server at all.
+    QHash<QString, quint32> m_ringing;
 
     // The last notification's package, title and message, and when it was
     // seen. Sailfish's mail server posts the same notification twice - ids

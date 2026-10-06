@@ -36,6 +36,7 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     , m_adapter(new BluezAdapter(this))
     , m_client(new MdsWhiteboardClient(this))
     , m_monitor(new NotificationMonitor(this))
+    , m_calls(new CallMonitor(this))
     , m_retry(new QTimer(this))
     , m_attachTimeout(new QTimer(this))
     , m_link(QFileInfo(databasePath).absolutePath(), WatchLink::Background)
@@ -61,6 +62,16 @@ bool NotifierDaemon::start(QString *error, bool withMonitor)
             return false;
         qInfo() << "watching the session bus via"
                 << (m_monitor->isMonitor() ? "BecomeMonitor" : "legacy eavesdropping");
+
+        // A second subscription, for the one thing the notification server
+        // never hears about: a call that is still ringing. Not fatal if it
+        // fails - everything else still works, and saying so beats a daemon
+        // that is quietly half deaf.
+        connect(m_calls, &CallMonitor::incomingCall, this, &NotifierDaemon::onIncomingCall);
+        connect(m_calls, &CallMonitor::callEnded, this, &NotifierDaemon::onCallEnded);
+        QString callError;
+        if (!m_calls->start(&callError))
+            qWarning().noquote() << "not watching for incoming calls:" << callError;
 
         if (m_dryRun) {
             qInfo() << "dry run: nothing will be sent to a watch";
@@ -250,6 +261,45 @@ void NotifierDaemon::onClosed(quint32 id)
     pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
     pending.kind = Pending::Remove;
     pending.removeId = m_sent.take(id);
+    if (m_queue.size() >= kMaxQueued)
+        m_queue.removeFirst();
+    m_queue.append(pending);
+    pump();
+}
+
+void NotifierDaemon::onIncomingCall(const QString &callPath, const QString &lineId)
+{
+    // The call's own object path carries a fresh identifier per call, so its
+    // hash is a stable id for this call and a different one for the next.
+    const quint32 callId = qHash(callPath);
+    const Ancs::Notification notification = NotificationRouter::incomingCall(
+            lineId.toStdString(), callId,
+            static_cast<uint32_t>(QDateTime::currentMSecsSinceEpoch() / 1000));
+
+    qInfo().noquote() << QStringLiteral("incoming call -> ancs 1: %1 / %2")
+                                 .arg(QString::fromStdString(notification.title),
+                                       QString::fromStdString(notification.message));
+    if (m_dryRun)
+        return;
+
+    Pending pending;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
+    pending.add = notification;
+    m_ringing.insert(callPath, notification.notificationId);
+    if (m_queue.size() >= kMaxQueued)
+        m_queue.removeFirst();
+    m_queue.append(pending);
+    pump();
+}
+
+void NotifierDaemon::onCallEnded(const QString &callPath)
+{
+    if (m_dryRun || !m_ringing.contains(callPath))
+        return;
+    Pending pending;
+    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
+    pending.kind = Pending::Remove;
+    pending.removeId = m_ringing.take(callPath);
     if (m_queue.size() >= kMaxQueued)
         m_queue.removeFirst();
     m_queue.append(pending);

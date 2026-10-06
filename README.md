@@ -115,6 +115,15 @@ Confirmed on real hardware, not just in tests:
   mapped and tested; a text message is the one that has been watched
   arriving, on both watch models.
 
+  **A ringing call, too, and it needed a second source.** An incoming call
+  never reaches the notification server on Sailfish — a capture of one
+  shows ten seconds of ringing with no notification in it, and the first one
+  arriving after the call was already missed. So the daemon also watches
+  `org.nemomobile.voicecall`, which is where the ringing actually happens, and
+  clears the ring when the call is answered, rejected or missed. The missed
+  call then arrives as its own notification, which is the right division: the
+  ring is transient and the miss is a record.
+
   The payload is composed, not replayed: the encoder is derived from four
   captures and from the official Android app's own code, so the category,
   the notification id and the structure's lengths are all computed — and all

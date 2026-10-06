@@ -1244,3 +1244,68 @@ This was visible the moment the 9 Baro was connected: the log still said
 `Suunto 9 ...`, and only a restart moved it.
 
 
+
+## An incoming call is not a notification (2026-10-06)
+
+Jarno noticed that the watch said nothing while the phone rang, and then
+announced the call once it had been missed. The reason turned out to be
+exactly that: **a ringing call never reaches the notification server**, so a
+daemon watching notifications cannot see one.
+
+A session-bus capture of one real incoming call, rejected without answering,
+settles it. Times are seconds from the same clock:
+
+```
+147.833  /calls/a4f3...  VoiceCall.statusChanged   int32 5   "incoming"
+147.833  /calls/active   VoiceCall.statusChanged   int32 5   "incoming"
+147.834  /              VoiceCallManager.voiceCallsChanged
+147.976  /              VoiceCallManager.playRingtone  jolla-ringtone.ogg
+157.690  /calls/a4f3...  VoiceCall.statusChanged   int32 7   "disconnected"
+157.697  /calls/a4f3...  VoiceCall.statusChanged   int32 0   "null"
+157.712  /org/freedesktop/Notifications  Notify          <- the missed call
+```
+
+Ten seconds of ringing with no `Notify` in it, and the first one arrives after
+the call is over. Corroborated from the other side: the device's
+`/usr/share/lipstick/notificationcategories` has `x-nemo.call.missed.conf` and
+`harbour-whisperfish-call.conf` and **no** `x-nemo.call.incoming` of any kind.
+So there was never a category for `categoryFor()` to map; the router's own
+comment had said as much in words since the table was written.
+
+### What the signal gives, and three details that matter
+
+`org.nemomobile.voicecall.VoiceCall.statusChanged(int32, string)`.
+
+- **The text, not the number.** The capture shows `5 "incoming"`,
+  `7 "disconnected"` and `0 "null"` - three values of an enum whose definition
+  this project has never seen. The string is self-describing and the number is
+  not, so `CallMonitor` matches on the string.
+- **Every signal arrives twice**, once on the call's own object and once on
+  the fixed `/calls/active` alias. Acting on both would ring the watch twice
+  and then try to clear one notification twice, so the alias is ignored.
+- **The caller's number is a second round trip**, `Properties.Get` for
+  `lineId` on the call's object. The property name came from the symbols in
+  the device's own `libvoicecall.so.1.0.0` - `lineId`, `isIncoming`,
+  `isForwarded`, `statusText` - rather than from guessing at the interface.
+  The read is asynchronous: a daemon that blocks on D-Bus while the phone
+  rings is a daemon that has stopped answering its own bus. A call can end
+  while that read is in flight, which is a second or two for a rejected call,
+  and announcing it then would leave a ring on the watch that nothing would
+  clear - so an abandoned lookup is dropped rather than delivered late.
+
+### What the watch now sees
+
+ANCS category **1, IncomingCall** - the one value the mapping table could
+never produce - with the caller's number as the title and "Incoming call" as
+the message, removed again the moment the status stops being `incoming`.
+Answered, rejected and missed all mean the same thing to the ring: stop.
+
+A missed call still arrives afterwards as a real notification, category 2.
+That division is right rather than redundant: the ring is transient and the
+miss is a record.
+
+Deliberately **no Dismiss label** on a ringing call, unlike every other
+notification this sends. Dismissing a ring on the watch would mean rejecting
+the call on the phone, and whether the watch reports a button press back has
+never been established. A button that looks like it rejects a call and does
+nothing is worse than no button.

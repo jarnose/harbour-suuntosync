@@ -308,10 +308,13 @@ public:
     // walk was the reason a routine sync took as long as it did.
     Q_INVOKABLE void syncCloudWorkouts();
     // The same thing from the beginning of time, for when the local copy is
-    // suspect rather than merely out of date - a workout edited in the
-    // official app, say, or a database restored from elsewhere. Separate
-    // because it is slow enough that it should be the user's choice, not a
-    // thing that happens on every pull-to-refresh.
+    // damaged rather than merely out of date - restored from elsewhere, or
+    // interrupted part way through its first run. Deliberately not for an
+    // edit made in the official app: `since` matches `lastModified`, so an
+    // ordinary sync already brings those back (measured - see
+    // SuuntoCloudClient::listWorkouts). Separate because it is slow enough
+    // that it should be the user's choice, not something that happens on
+    // every pull-to-refresh.
     Q_INVOKABLE void resyncCloudWorkouts();
 
     // The account's personal bests, per activity: all-time and, separately,

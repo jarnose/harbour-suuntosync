@@ -19,10 +19,10 @@ struct CloudAccount
     // deliberately not derived from lastSync above - that one is this
     // phone's clock, and the comparison happens on the server's. A
     // measured capture of the official app shows it doing exactly this,
-    // and shows `since` matching a workout's server-side ingest time
-    // rather than when the workout was recorded: workouts started on
-    // 25.9 came back for since = 5.10 09:00 because they reached the
-    // cloud that afternoon. 0 = no cursor, fetch the whole history.
+    // and `since` was then measured to match the payload's own
+    // `lastModified`: a workout from three months back, edited in the
+    // official app, came back on an ordinary incremental sync. So this
+    // cursor does not miss edits. 0 = no cursor, fetch the whole history.
     qint64 workoutCursor = 0;
 
     bool isSignedIn() const { return !athleteId.isEmpty(); }

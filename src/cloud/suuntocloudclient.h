@@ -92,13 +92,11 @@ public:
     // probably more.
     //
     // `sinceMs` is unix milliseconds, 0 for the whole history. It filters on
-    // the cloud's own ingest time, not on when the workout was recorded -
-    // measured, not assumed: a capture of the official app asking for
-    // since = 5.10 09:00 got back workouts started on 25.9, because those
-    // reached the cloud at 15:48 that same afternoon. Which server-side
-    // field exactly (the payload carries both `created`, at second
-    // granularity, and `lastModified`, at millisecond) that capture cannot
-    // say, since every workout in it was newer than the cursor by both.
+    // the payload's own `lastModified`, not on when the workout was
+    // recorded - measured rather than assumed, by editing a workout from
+    // three months earlier and syncing with a cursor standing after its
+    // creation: it came back. So an incremental sync picks up edits as
+    // well as new workouts.
     void listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit, int offset,
                        WorkoutListCallback callback);
 

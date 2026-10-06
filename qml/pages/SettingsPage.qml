@@ -94,9 +94,15 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
                 visible: AppController.cloudSignedIn
-                text: qsTr("A normal sync asks the cloud only for what is new. "
-                           + "Fetch everything again if a workout was edited "
-                           + "elsewhere, or if this phone's copy looks wrong.")
+                // "or changed" is load-bearing and measured: the cloud's
+                // `since` matches a workout's last-modified time, so an
+                // ordinary sync does bring back an edit made elsewhere.
+                // This text used to offer that as the reason to re-fetch
+                // everything, which was wrong.
+                text: qsTr("A normal sync asks the cloud only for what is new "
+                           + "or changed, including workouts edited elsewhere. "
+                           + "Fetch everything again only if this phone's copy "
+                           + "looks wrong.")
                 wrapMode: Text.Wrap
                 color: Theme.secondaryHighlightColor
                 font.pixelSize: Theme.fontSizeExtraSmall

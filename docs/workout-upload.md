@@ -551,12 +551,20 @@ were `created` 5.10 15:48, which is when they reached the cloud. So `since`
 is a server-side ingest time, and a workout recorded a fortnight ago but
 uploaded this afternoon still arrives.
 
-Which server-side field exactly, this capture cannot say: the payload
-carries both `created` (second granularity - it is the Mongo ObjectId's own
-timestamp, which the id's first four bytes also give) and `lastModified`
-(milliseconds, 0.4-1.2 s later), and every workout here was newer than the
-cursor by both. It does not matter for the cursor's correctness, only for
-whether an *edited* workout comes back. That stays open.
+**Which field: `lastModified`. Measured, 2026-10-06.** The payload carries
+both `created` (second granularity - it is the ObjectId's own timestamp)
+and `lastModified` (milliseconds). The capture could not separate them,
+because every workout in it was newer than the cursor by both. So the
+experiment was run instead: a workout recorded on 30 September, already in
+the phone's database as 1321 s, was edited in the official app to 1322 s,
+with the phone's cursor standing at 6 October 08:54 - months after that
+workout was created. An ordinary incremental sync brought it back, and the
+local copy now reads 1322.
+
+That is the answer worth having, because it is the good one: **an
+incremental sync picks up edits**, not only new workouts. Nothing has to
+change, and the full re-fetch is for a local copy that is damaged rather
+than merely behind.
 
 The cursor the app carries forward is `metadata.until`, which is the
 server's own clock at the moment it answered - 16:05:12.579, against a
@@ -799,20 +807,14 @@ the capture alone would suggest the ObjectId is required.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
-5. **Whether `since` matches `created` or `lastModified`.** It matches a
-   server-side ingest time either way (measured), which is what the cursor
-   needs. The difference only decides whether a workout *edited* in the
-   official app comes back on a later incremental sync. Settling it takes
-   one capture with a cursor that falls between some workout's `created`
-   and its `lastModified`, or simply editing a workout and syncing.
-6. **The nine 403s on `/v1/workout/extensions/<key>`** - still open, and
+5. **The nine 403s on `/v1/workout/extensions/<key>`** - still open, and
    not answerable from this app's own data until it stores `workoutKey`
    alongside `key`. See the two failed attempts above.
-7. **`IntensityExtension` also carries power zones**, `zones.power.zone1..5`
+6. **`IntensityExtension` also carries power zones**, `zones.power.zone1..5`
    with the same `{totalTime, lowerLimit}` shape (0/100/150/200/250 W on
    this account, all with zero time - no power meter here). Read and
    stored, not shown.
-8. **`FitnessExtension` does not always carry VO2max and the fitness age** -
+7. **`FitnessExtension` does not always carry VO2max and the fitness age** -
    and this one is answered rather than open. The captured workout has
    `vo2Max`, `estimatedVo2Max` and `fitnessAge`; nine real ones on the phone
    carry only `maxHeartRate`. Jarno's explanation, which the data cannot

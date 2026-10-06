@@ -62,10 +62,12 @@ Confirmed on real hardware, not just in tests:
   Incremental: a routine sync asks only for what has reached the cloud
   since the last one, carrying the server's own cursor rather than this
   phone's clock. What the cloud's `since` compares against was measured
-  from a capture of the official app rather than guessed — it is an
-  ingest time, so a workout recorded a fortnight ago and uploaded this
-  afternoon still arrives. Settings has a full re-fetch for when the local
-  copy is suspect rather than merely stale.
+  rather than guessed, in two steps — a capture of the official app
+  showed it is a server-side time and not the recording time, and then
+  editing a three-month-old workout and syncing showed which one: the
+  last-modified time. So an ordinary sync brings back edits as well as new
+  workouts, and the full re-fetch in Settings is for a local copy that is
+  damaged rather than merely stale.
 - **Uploading a watch-recorded workout to the cloud.** The watch's SBEM
   payload is converted to the JSON the cloud expects, zipped and posted. A
   workout recorded on the watch shows up in the official app afterwards.

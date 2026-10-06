@@ -833,8 +833,11 @@ the capture alone would suggest the ObjectId is required.
    tested the other way.
 4. **`Header.TraingingLoadPeak`** is in the descriptor table but has never
    been observed non-zero on this watch.
-5. **`MaxAvgPower`'s unit.** Needs one workout recorded with a power
-   meter; there is none here.
+5. **`MaxAvgPower`'s unit** - and this one will stay open. It needs a
+   workout recorded with a power meter, and there is no power meter here to
+   record one with. Watts is the obvious guess; the records page prints the
+   figure bare rather than making it, and that is the end state rather than
+   a placeholder.
 6. **`FitnessExtension` does not always carry VO2max and the fitness age** -
    and this one is answered rather than open. The captured workout has
    `vo2Max`, `estimatedVo2Max` and `fitnessAge`; nine real ones on the phone

@@ -1346,3 +1346,48 @@ them carry the label.
 Worth keeping from the same log: when the watch is already connected the
 Whiteboard session opens inside the same second the call arrives, so the
 ring is not going to be late for want of a link.
+
+### With the label, it works - and the label is harmless (2026-10-06)
+
+```
+15:13:22  incoming call on /calls/5c00... from +358408264580
+15:13:22  incoming call -> ancs 1: +358408264580 / Incoming call
+15:13:22  whiteboard session ready
+15:13:23  the watch took notification 1446502879
+```
+
+One second from the call arriving to the watch accepting it, with the watch
+already connected. The Race alerts while the phone is ringing.
+
+**The Dismiss button dismisses the notification, not the call.** Confirmed by
+pressing it. That settles a question this document had twice called
+unestablished - and it was the whole basis for leaving the label off in the
+first place, so that reasoning was wrong twice over: once because the watch
+refuses a label-less structure, and once because the button does not do the
+thing it was feared to do.
+
+### Still open: the ring is not cleared when the call ends
+
+The run above has no `clearing the watch` line. The call did end - the missed
+call notification arrived twenty seconds later - so
+`VoiceCall.statusChanged` should have left `incoming` and
+`CallMonitor::onStatusChanged` should have logged and emitted `callEnded`.
+
+It did fire on the two earlier attempts, before the label fix, on both a
+`null (0)` and a `disconnected (7)`:
+
+```
+15:09:12  call /calls/febda... is now null (0) - clearing the watch
+15:10:03  call /calls/5afc... is now disconnected (7) - clearing the watch
+```
+
+and nothing in that path changed between those builds. So the cause is not
+yet known, and the two candidates are worth writing down before they are
+forgotten: either the end signal did not arrive at the daemon that time, or
+`m_ringing` did not hold the path it arrived for. A full-bus capture across
+one whole call - ring to hangup - would separate them, since it shows whether
+the signal was on the bus at all.
+
+Until that is settled an incoming call may stay on the watch after the caller
+gives up, to be dismissed by hand. The missed-call notification that follows
+is unaffected.

@@ -1411,3 +1411,86 @@ One difference worth noting from the same capture: this time the `incoming`
 signal arrived **once**, on the call's own path, where the first capture had
 it on the `/calls/active` alias too. The end arrived on both. So the
 duplication is not consistent, and ignoring the alias is right either way.
+
+## The caller's name, and where two shipping apps keep the answer (2026-10-09)
+
+A ringing call showed its number. Getting the name turned out to need no new
+protocol work at all - it needed reading how `harbour-amazfish` and
+`vapaamin` do it, which Jarno suggested.
+
+**Vapaamin does not do incoming calls**, at all: `voicecall`, `ringing` and
+`QContact` have no matches anywhere in its tree. A clean negative, worth
+recording so nobody looks twice.
+
+**Amazfish does, through `piggz/libwatchfish`**, and the mechanism is in two
+unrelated places.
+
+### The code half: QtContacts, and one flag that matters
+
+```cpp
+QMap<QString, QString> parameters;
+parameters.insert("mergePresenceChanges", "false");
+contacts = new QContactManager("", parameters, this);
+
+numberFilter.setDetailType(QContactDetail::TypePhoneNumber,
+                            QContactPhoneNumber::FieldNumber);
+numberFilter.setMatchFlags(QContactFilter::MatchPhoneNumber);
+...
+person = found[0].detail(QContactDetail::TypeDisplayLabel).value(0).toString();
+```
+
+`MatchPhoneNumber` is the valuable part: the backend compares numbers the way
+an address book does, so a call from `+358401234567` finds a contact saved as
+`040 123 4567`. Normalising by hand would have been a second and worse
+implementation of that, and it would have been wrong for some format nobody
+here ever tested.
+
+Note the empty manager name - the *default* store, with no `nonprivileged`
+parameter. So it really does open the privileged address book.
+
+### The other half is in the RPM spec
+
+```
+%attr(2755,root,privileged) %{_bindir}/%{name}d
+```
+
+**Setgid `privileged`.** That is the whole answer to a question this project
+had been circling: `~/.local/share/system/privileged/Contacts` is
+`drwxrwx--- privileged privileged` and `defaultuser` is in neither, so the
+daemon could not read it - and Sailjail's `privileged-data Contacts` grant is
+a sandbox mechanism, useless to a daemon that deliberately is not sandboxed.
+A setgid binary needs neither.
+
+Amazfish also ships `/usr/bin/harbour-amazfishd,cehlmnpu` in mapplauncherd's
+`privileges.d` - the same line this document already recorded from both apps
+for notification monitoring. Not copied here: that is for invoker-launched
+processes and this daemon is a systemd user service, so there is nothing it
+would do.
+
+### What was taken, and what it costs
+
+Setgid privileged, copied, plus `Qt5Contacts`. The cost stated plainly: that
+binary can now read **every** privileged store, not only contacts. It is
+narrower than putting the user in the group - one binary rather than every
+process the user runs - but it is a real privilege.
+
+It was taken on this reasoning: the daemon already observes every
+notification on the session bus with its full content, every message and
+every mail. Read access to a list of names is not a meaningful increase in
+what it could learn, and pretending otherwise would be theatre.
+
+The alternative that needs no privilege at all, measured and then not built:
+a missed-call notification carries the name as its title **and** the number
+in its hints, QDataStream-encoded - `x-commhistoryd-data` and the "call back"
+remote action both decode to `+358…` as a 4-byte type, an isNull byte, a
+4-byte length and UTF-16BE text. A daemon could learn number-to-name pairs
+from those and from message notifications, with no permission whatsoever.
+Rejected because it only ever knows people who have texted or left a missed
+call: somebody whose calls you always answer would stay a number for ever.
+
+### What the watch shows
+
+Who above what. A known contact's name as the title with the number under it
+- which earns its line, since it says whether this is the mobile or the
+landline - and the number alone as the title when the address book has
+nothing, with "Incoming call" underneath.

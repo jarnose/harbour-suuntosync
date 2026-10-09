@@ -1,6 +1,7 @@
 #pragma once
 
 #include "callmonitor.h"
+#include "contactlookup.h"
 #include "notificationmonitor.h"
 #include "notificationrouter.h"
 #include "watchlink.h"
@@ -110,6 +111,7 @@ private:
     MdsWhiteboardClient *m_client;
     NotificationMonitor *m_monitor;
     CallMonitor *m_calls;
+    ContactLookup *m_contacts;
     QTimer *m_retry;
     // An attach that never completes used to hold the lock for ever:
     // MdsWhiteboardClient waits for ServicesResolved with no deadline of its

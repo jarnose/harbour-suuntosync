@@ -115,6 +115,15 @@ Confirmed on real hardware, not just in tests:
   mapped and tested; a text message is the one that has been watched
   arriving, on both watch models.
 
+  A ringing call shows **the caller's name** when the phone's address book
+  has one, with the number under it. That needed a privilege rather than a
+  protocol: the address book is group-`privileged` and the daemon is not, so
+  its binary is installed setgid `privileged` — which is what
+  `harbour-amazfish` does, for the same reason. The trade is stated in
+  `docs/notifications.md` rather than glossed: the daemon already reads every
+  notification on the bus with its full content, so a list of names is not a
+  meaningful increase in what it could learn.
+
   **A ringing call, too, and it needed a second source.** An incoming call
   never reaches the notification server on Sailfish — a capture of one
   shows ten seconds of ringing with no notification in it, and the first one

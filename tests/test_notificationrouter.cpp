@@ -145,11 +145,27 @@ int main()
     // before the notification server hears anything. So this path is built
     // rather than mapped; see NotificationRouter::incomingCall.
     const Ancs::Notification ring =
-            NotificationRouter::incomingCall("+358401234567", 0xabcdu, 1791287147);
+            NotificationRouter::incomingCall("", "+358401234567", 0xabcdu, 1791287147);
     check(ring.categoryId == Ancs::CategoryIncomingCall,
           "an incoming call is category 1, the one the mapping table could never reach");
-    check(ring.title == "+358401234567", "the caller's number is the title");
+    check(ring.title == "+358401234567",
+          "with no contact for the number, the number is the title");
     check(ring.message == "Incoming call", "and the message says what it is");
+
+    // A number the address book knows: who above what, with the number kept
+    // because it says whether this is the mobile or the landline.
+    const Ancs::Notification named = NotificationRouter::incomingCall(
+            "Jarno Selanpaa", "+358401234567", 0xabcdu, 1791287147);
+    check(named.title == "Jarno Selanpaa", "a known contact's name is the title");
+    check(named.message == "+358401234567", "and the number moves to the message");
+    check(named.notificationId == ring.notificationId,
+          "naming the caller does not change the call's id - the id is the call");
+
+    // Withheld number, known name: nothing to put under it.
+    const Ancs::Notification noNumber =
+            NotificationRouter::incomingCall("Jarno Selanpaa", "", 1, 1791287147);
+    check(noNumber.title == "Jarno Selanpaa" && noNumber.message == "Incoming call",
+          "a name with no number falls back to saying what it is");
     check(ring.date == 1791287147u, "the date is the one passed in");
     check(ring.appId == "voicecall-ui", "attributed to the application that is actually ringing");
     // Measured on the watch, not chosen: with no labels the structure's
@@ -162,22 +178,22 @@ int main()
     // The id has to be stable for one call and different for the next, or a
     // ring cannot be taken off the watch when the ringing stops.
     const Ancs::Notification same =
-            NotificationRouter::incomingCall("+358401234567", 0xabcdu, 1791287200);
+            NotificationRouter::incomingCall("", "+358401234567", 0xabcdu, 1791287200);
     check(same.notificationId == ring.notificationId,
           "the same call gets the same id even at a different time");
     const Ancs::Notification other =
-            NotificationRouter::incomingCall("+358401234567", 0xabceu, 1791287147);
+            NotificationRouter::incomingCall("", "+358401234567", 0xabceu, 1791287147);
     check(other.notificationId != ring.notificationId, "a different call gets a different id");
 
     // A withheld number would otherwise be an empty title, which is exactly
     // what dropReason() refuses for an ordinary notification.
-    const Ancs::Notification withheld = NotificationRouter::incomingCall("", 1, 1791287147);
+    const Ancs::Notification withheld = NotificationRouter::incomingCall("", "", 1, 1791287147);
     check(withheld.title == "Unknown caller", "a withheld number still gets a title");
-    const Ancs::Notification spaces = NotificationRouter::incomingCall("   ", 1, 1791287147);
+    const Ancs::Notification spaces = NotificationRouter::incomingCall("  ", "   ", 1, 1791287147);
     check(spaces.title == "Unknown caller", "and so does a number of only spaces");
 
-    const Ancs::Notification longCaller =
-            NotificationRouter::incomingCall(std::string(400, '7'), 1, 1791287147);
+    const Ancs::Notification longCaller = NotificationRouter::incomingCall(
+            std::string(200, 'A'), std::string(400, '7'), 1, 1791287147);
     check(Ancs::encodedSize(longCaller) <= Ancs::maximumEncodedSize(),
           "an absurd caller id is trimmed to fit like anything else");
 

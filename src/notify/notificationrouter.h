@@ -70,11 +70,16 @@ Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowS
 // directly instead, which keeps the invented part visible rather than
 // dressing a call up as a category Sailfish does not have.
 //
-// `lineId` is the caller's number, blank when withheld. `callId` is a stable
-// number for this particular call - the daemon derives it from the call's
-// own D-Bus object path - so the notification can be taken off the watch
-// again when the ringing stops.
-Ancs::Notification incomingCall(const std::string &lineId, uint32_t callId,
-                                  uint32_t nowSeconds);
+// `caller` is the address book's name for the number, empty when there is no
+// such contact or the address book could not be read; `number` is the
+// caller's own number, empty when withheld. Both, because the watch has a
+// title and a message and the useful split is who above what: a known
+// contact's name with the number under it, and the number alone otherwise.
+//
+// `callId` is a stable number for this particular call - the daemon derives
+// it from the call's own D-Bus object path - so the notification can be
+// taken off the watch again when the ringing stops.
+Ancs::Notification incomingCall(const std::string &caller, const std::string &number,
+                                  uint32_t callId, uint32_t nowSeconds);
 
 } // namespace NotificationRouter

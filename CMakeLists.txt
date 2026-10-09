@@ -24,6 +24,12 @@ set(QT_COMPONENTS Core Sql Network DBus)
 if(BUILD_APP)
     list(APPEND QT_COMPONENTS Qml Gui Quick Concurrent LinguistTools)
 endif()
+if(BUILD_DAEMON)
+    # Contacts, for the name behind a ringing call's number. Only the daemon
+    # needs it, and only because the daemon is the half that sees calls - see
+    # src/notify/contactlookup.h for the privilege that makes it readable.
+    list(APPEND QT_COMPONENTS Contacts)
+endif()
 find_package(Qt5 COMPONENTS ${QT_COMPONENTS} REQUIRED)
 
 include(FindPkgConfig)
@@ -224,6 +230,7 @@ add_executable(suuntosync-notifyd
     src/suuntosync-notifyd.cpp
     src/notify/filelogger.cpp
     src/notify/callmonitor.cpp
+    src/notify/contactlookup.cpp
     src/notify/notificationmonitor.cpp
     src/notify/notificationrouter.cpp
     src/notify/notifierdaemon.cpp
@@ -240,6 +247,7 @@ target_link_libraries(suuntosync-notifyd
     Qt5::Sql
     Qt5::Network
     Qt5::DBus
+    Qt5::Contacts
     ${DBUS1_LDFLAGS}
 )
 

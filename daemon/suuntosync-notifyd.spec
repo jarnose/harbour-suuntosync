@@ -40,6 +40,10 @@ BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Sql)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5DBus)
+# Contacts, so a ringing call can show a name instead of a number. See the
+# setgid line under -files for the privilege that makes the address book
+# readable, and src/notify/contactlookup.h for why that trade was taken.
+BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  cmake
@@ -88,5 +92,19 @@ systemctl-user daemon-reload || :
 
 %files
 %defattr(-,root,root,-)
-%{_bindir}/%{name}
+# setgid privileged, which is what lets the daemon read the phone's address
+# book and put a name on a ringing call. The store is at
+# ~/.local/share/system/privileged/Contacts, mode drwxrwx--- and group
+# privileged, and defaultuser is in neither - so without this a call shows
+# only its number.
+#
+# Copied from harbour-amazfish, which installs its own daemon exactly this
+# way for exactly this reason. It is narrower than adding the user to the
+# group, since only this binary gains the access, but it is a real
+# privilege: setgid privileged can read every privileged store and not only
+# contacts. It was taken because this daemon already observes every
+# notification on the session bus with its full content - every message,
+# every mail - so a list of names is not a meaningful increase in what it
+# could learn. See src/notify/contactlookup.h.
+%attr(2755,root,privileged) %{_bindir}/%{name}
 %{_userunitdir}/%{name}.service

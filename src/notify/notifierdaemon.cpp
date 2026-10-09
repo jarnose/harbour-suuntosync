@@ -37,6 +37,7 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     , m_client(new MdsWhiteboardClient(this))
     , m_monitor(new NotificationMonitor(this))
     , m_calls(new CallMonitor(this))
+    , m_contacts(new ContactLookup(this))
     , m_retry(new QTimer(this))
     , m_attachTimeout(new QTimer(this))
     , m_link(QFileInfo(databasePath).absolutePath(), WatchLink::Background)
@@ -72,6 +73,14 @@ bool NotifierDaemon::start(QString *error, bool withMonitor)
         QString callError;
         if (!m_calls->start(&callError))
             qWarning().noquote() << "not watching for incoming calls:" << callError;
+
+        // Opened here rather than on the first call, so the cost of opening
+        // the address book is not paid while a phone is ringing. Failing is
+        // survivable: a call then shows its number, which is what it did
+        // before this existed.
+        QString contactError;
+        if (!m_contacts->open(&contactError))
+            qWarning().noquote() << "no contact names for calls:" << contactError;
 
         if (m_dryRun) {
             qInfo() << "dry run: nothing will be sent to a watch";
@@ -272,8 +281,9 @@ void NotifierDaemon::onIncomingCall(const QString &callPath, const QString &line
     // The call's own object path carries a fresh identifier per call, so its
     // hash is a stable id for this call and a different one for the next.
     const quint32 callId = qHash(callPath);
+    const QString caller = m_contacts->nameFor(lineId);
     const Ancs::Notification notification = NotificationRouter::incomingCall(
-            lineId.toStdString(), callId,
+            caller.toStdString(), lineId.toStdString(), callId,
             static_cast<uint32_t>(QDateTime::currentMSecsSinceEpoch() / 1000));
 
     qInfo().noquote() << QStringLiteral("incoming call -> ancs 1: %1 / %2")

@@ -140,16 +140,29 @@ Ancs::Notification toWatchNotification(const Candidate &candidate, uint32_t nowS
     return out;
 }
 
-Ancs::Notification incomingCall(const std::string &lineId, uint32_t callId, uint32_t nowSeconds)
+Ancs::Notification incomingCall(const std::string &caller, const std::string &number,
+                                  uint32_t callId, uint32_t nowSeconds)
 {
     Ancs::Notification out;
     // The sending application, as the watch sees it. voicecall-ui's own name,
     // so a watch that groups by application groups calls with calls.
     out.appId = "voicecall-ui";
-    // A withheld number would otherwise be an empty title, which renders as
-    // an empty box - and which dropReason() refuses for exactly that reason.
-    out.title = blank(lineId) ? "Unknown caller" : lineId;
-    out.message = "Incoming call";
+
+    // Who above what. A name when the address book has one, with the number
+    // under it - which is worth the line, since it says whether this is the
+    // mobile or the landline. Otherwise the number is all there is to say
+    // who, and the message carries what.
+    //
+    // A withheld number with no name would leave an empty title, which
+    // renders as an empty box - and which dropReason() refuses for exactly
+    // that reason on an ordinary notification.
+    if (!blank(caller)) {
+        out.title = caller;
+        out.message = blank(number) ? "Incoming call" : number;
+    } else {
+        out.title = blank(number) ? "Unknown caller" : number;
+        out.message = "Incoming call";
+    }
     out.categoryId = Ancs::CategoryIncomingCall;
     out.date = nowSeconds;
     out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,

@@ -19,6 +19,19 @@ const int kRetryMs = 5000;
 // cover a watch that was simply asleep and short enough that nobody is
 // surprised by what turns up on their wrist.
 const qint64 kMaxAgeMs = 120000;
+
+// How many times one thing is offered to the watch before giving up on it.
+// A failure used to end the attempt, which cost a real notification every
+// time the link went quiet for ten seconds - and cost more than that for a
+// removal, since a ring nobody takes off the watch stays there until it is
+// dismissed by hand. Measured: of three real calls, the removal succeeded
+// once and timed out twice, with the same binary and a connected watch, so
+// the link going quiet is ordinary rather than exceptional.
+//
+// Four attempts at a ten-second timeout each is forty seconds, comfortably
+// inside the two minutes above - which stays the real bound, because a
+// notification nobody could deliver for two minutes is not worth showing.
+const int kMaxAttempts = 4;
 // How long to give an attach before deciding it is not going to happen.
 // A good one takes about a second.
 const int kAttachTimeoutMs = 20000;
@@ -361,6 +374,27 @@ bool NotifierDaemon::watchIsConnected()
     return reply.isValid() && reply.value().toBool();
 }
 
+// Puts a failed piece of work back at the head of the queue, so the next
+// pump offers it again. At the head rather than the tail because order is
+// load-bearing: a removal that overtook its own arrival would take nothing
+// off the watch and then leave the notification on it for ever.
+void NotifierDaemon::requeue(const Pending &pending, const QString &what)
+{
+    Pending again = pending;
+    again.attempts = pending.attempts + 1;
+    if (again.attempts >= kMaxAttempts) {
+        qWarning().noquote() << QStringLiteral("giving up on %1 after %2 attempts")
+                                        .arg(what)
+                                        .arg(again.attempts);
+        return;
+    }
+    qInfo().noquote() << QStringLiteral("retrying %1, attempt %2").arg(what).arg(again.attempts + 1);
+    // The age check in pump() is the other bound, and the one that matters:
+    // queuedAtMs is deliberately not refreshed here, so retrying cannot keep
+    // something alive past the two minutes it is worth showing for.
+    m_queue.prepend(again);
+}
+
 void NotifierDaemon::pump()
 {
     if (m_dryRun || m_busy)
@@ -473,26 +507,31 @@ void NotifierDaemon::pump()
             pump();
         });
     } else if (pending.kind == Pending::Remove) {
-        const quint32 id = pending.removeId;
-        m_client->removeNotification(id, [this, id](bool ok, const QString &failure) {
+        m_client->removeNotification(pending.removeId,
+                                      [this, pending](bool ok, const QString &failure) {
             m_busy = false;
             if (ok)
-                qInfo() << "took notification" << id << "off the watch";
+                qInfo() << "took notification" << pending.removeId << "off the watch";
             else
                 qDebug() << "removal failed:" << failure;
+            if (!ok)
+                requeue(pending, QStringLiteral("removal of %1").arg(pending.removeId));
             pump();
         });
     } else {
-        const quint32 id = pending.add.notificationId;
-        m_client->sendNotification(pending.add, [this, id](bool ok, const QString &failure) {
+        m_client->sendNotification(pending.add, [this, pending](bool ok,
+                                                                   const QString &failure) {
             m_busy = false;
             // Logged on success too. This is the line that says the whole
             // thing worked, and it used to be the only event in the daemon
             // that produced no output at all.
-            if (ok)
-                qInfo() << "the watch took notification" << id;
-            else
+            if (ok) {
+                qInfo() << "the watch took notification" << pending.add.notificationId;
+            } else {
                 qWarning() << "sending failed:" << failure;
+                requeue(pending, QStringLiteral("notification %1")
+                                         .arg(pending.add.notificationId));
+            }
             pump();
         });
     }

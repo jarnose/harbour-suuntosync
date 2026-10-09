@@ -1524,3 +1524,44 @@ Two consequences, one of them mildly embarrassing:
 The useful shape falls out of it either way. With a contact the watch reads
 "Saapuva Puhelu / Jarno Selänpää"; without one, "Saapuva Puhelu /
 +358401234567". Who, under what, in the watch's own words.
+
+### A failed send was dropped, which is why a ring could stay on the watch (2026-10-09)
+
+Jarno rejected a call from the phone and the notification stayed on the
+watch until he dismissed it there. The log says where it went:
+
+```
+22:36:38  the watch took notification 355120360          <- the ring, accepted
+22:36:47  call ... is now null (0) - clearing the watch   <- detection, correct
+22:36:48  whiteboard session ready
+22:36:58  removal failed: Del ... timed out
+22:37:08  sending failed: Add ... timed out               <- the missed call, too
+22:37:08  whiteboard session gone
+```
+
+The call half did everything right. The **Whiteboard link went quiet**, and
+both the removal and the missed-call notification behind it timed out at ten
+seconds each.
+
+And then they were gone, because `pump()` takes a piece of work off the
+queue with `takeFirst()` and **nothing puts it back on failure**. One quiet
+moment therefore lost a notification outright - and lost more than that for
+a removal, since a ring nobody takes off the watch stays there to be
+dismissed by hand. The queue's two-minute expiry was bounding the wait for a
+*connection*, not retrying a failed request; there was no retry at all.
+
+Fixed by re-queueing at the head - order is load-bearing, since a removal
+that overtook its own arrival would take nothing off and then leave the
+notification up for ever - with a four-attempt cap and the existing age
+bound left as the real limit. `queuedAtMs` is deliberately not refreshed,
+so retrying cannot keep something alive past the two minutes it is worth
+showing for.
+
+**What this does not explain.** Why the link goes quiet. Of three real calls
+the removal succeeded once and timed out twice, same binary, watch connected
+and a session reported ready in each case - and in the successful run the
+removal landed in the same second the session opened, nine seconds after the
+ring went up. So it is not the alert blocking the bus and not the
+re-attachment: it looks like ordinary BLE flakiness, which the retry now
+absorbs rather than diagnoses. If four attempts still lose it, that is the
+thread to pull.

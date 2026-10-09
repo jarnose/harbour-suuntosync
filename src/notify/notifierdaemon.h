@@ -81,6 +81,12 @@ private:
         quint32 removeId = 0;
         QString path;
         quint8 value = 0;
+        // How many times this has been handed to the watch and timed out.
+        // A failed send used to be dropped outright, which meant one
+        // timeout lost a notification - or, worse, lost a *removal*, so a
+        // ringing call stayed on the watch until it was dismissed by hand.
+        // See kMaxAttempts.
+        int attempts = 0;
         // When it was queued. A notification nobody could deliver because
         // the watch was out of range is noise by the time it comes back,
         // and without a deadline it would keep the retry timer - and a
@@ -88,6 +94,15 @@ private:
         // daemon lives.
         qint64 queuedAtMs = 0;
     };
+
+    // Offers a failed piece of work to the watch again, up to kMaxAttempts
+    // and within the queue's own age bound. `what` names it for the log.
+    //
+    // Declared after Pending on purpose: an elaborated `const struct
+    // Pending &` in a parameter list would declare a *different* Pending at
+    // namespace scope rather than referring to this one, and the definition
+    // would then match nothing.
+    void requeue(const Pending &pending, const QString &what);
 
     void reloadWatch();
 

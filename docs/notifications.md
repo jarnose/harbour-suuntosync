@@ -1494,3 +1494,33 @@ Who above what. A known contact's name as the title with the number under it
 - which earns its line, since it says whether this is the mobile or the
 landline - and the number alone as the title when the address book has
 nothing, with "Incoming call" underneath.
+
+### What the Race actually renders for category 1 (2026-10-09)
+
+```
+Saapuva Puhelu
+Jarno Selänpää
+```
+
+Neither line is a string this sends. **"Saapuva Puhelu" is the watch's own
+heading for ANCS category 1**, in the watch's own language - the category
+number is enough for it to say what kind of notification this is, and it
+says so in Finnish without being told. Underneath it puts the
+notification's *title*, which is where the name goes.
+
+Two consequences, one of them mildly embarrassing:
+
+- The `message` field - the number, when a contact was found - does not
+  appear on that screen. Whether it is on a detail view behind it has not
+  been checked. So the number is at best secondary, and the title is the
+  only field that reliably reaches the eye.
+- The English `"Incoming call"` this puts in the message when neither a name
+  nor a number is known is therefore probably never seen - and if it ever is,
+  it would be an English line in a Finnish interface. Left alone rather than
+  emptied: the watch has just finished teaching this project what it does to
+  a structure it dislikes, and an empty string in a field every capture
+  filled is not a change worth making to fix something invisible.
+
+The useful shape falls out of it either way. With a contact the watch reads
+"Saapuva Puhelu / Jarno Selänpää"; without one, "Saapuva Puhelu /
++358401234567". Who, under what, in the watch's own words.

@@ -116,7 +116,8 @@ Confirmed on real hardware, not just in tests:
   arriving, on both watch models.
 
   A ringing call shows **the caller's name** when the phone's address book
-  has one, with the number under it. That needed a privilege rather than a
+  has one, and its number when it does not — under a heading the watch
+  writes itself, in its own language, from the ANCS category alone. That needed a privilege rather than a
   protocol: the address book is group-`privileged` and the daemon is not, so
   its binary is installed setgid `privileged` — which is what
   `harbour-amazfish` does, for the same reason. The trade is stated in

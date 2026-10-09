@@ -1366,7 +1366,7 @@ first place, so that reasoning was wrong twice over: once because the watch
 refuses a label-less structure, and once because the button does not do the
 thing it was feared to do.
 
-### Still open: the ring is not cleared when the call ends
+### The ring not being cleared: recorded, then not reproduced
 
 The run above has no `clearing the watch` line. The call did end - the missed
 call notification arrived twenty seconds later - so
@@ -1388,6 +1388,26 @@ forgotten: either the end signal did not arrive at the daemon that time, or
 one whole call - ring to hangup - would separate them, since it shows whether
 the signal was on the bus at all.
 
-Until that is settled an incoming call may stay on the watch after the caller
-gives up, to be dismissed by hand. The missed-call notification that follows
-is unaffected.
+**It did not reproduce (2026-10-09).** A full-bus capture across one whole
+call, ring to hangup, with the daemon log beside it:
+
+```
+bus   22:17:29.166  /calls/455471...  statusChanged  5  "incoming"
+log   22:17:29       incoming call on /calls/455471... from +358...
+log   22:17:30       the watch took notification 447718153
+bus   22:17:39.288  /calls/455471...  statusChanged  0  "null"
+bus   22:17:39.288  /calls/active     statusChanged  0  "null"
+log   22:17:39       call /calls/455471... is now null (0) - clearing the watch
+log   22:17:39       took notification 447718153 off the watch
+log   22:17:39       the watch took notification 1577365745   <- the missed call
+```
+
+The whole sequence, both sides, working. So the earlier miss is unexplained
+rather than fixed, and this section stays as the record of it: one run out of
+three had no clearing line, with the same binary and the same code path. If
+it happens again the capture above is the shape to take.
+
+One difference worth noting from the same capture: this time the `incoming`
+signal arrived **once**, on the call's own path, where the first capture had
+it on the `/calls/active` alias too. The end arrived on both. So the
+duplication is not consistent, and ignoring the alias is right either way.

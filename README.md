@@ -215,6 +215,7 @@ dex. `docs/` carries the results:
 | `sml-schema-descriptors.md` | the field schema the watch hands out about itself |
 | `activity-types.md` | both activity-id vocabularies, the watch's and the cloud's |
 | `base-map.md` | why a base map needs a vector-tile decoder on Sailfish, and the one tile source that can be a default |
+| `secrets-vault.md` | the session key's vault, and why a lipstick crash breaks authentication device-wide until reboot |
 
 Three habits run through the whole thing and are worth stating, because
 they caught real bugs:

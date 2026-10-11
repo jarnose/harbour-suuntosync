@@ -88,6 +88,12 @@ Page {
         refreshPending()
         refreshMonth()
         refreshOtherWatch()
+        // Health is the one page that is useful without an account and
+        // without opening a workout, so it gets the swipe rather than a
+        // pull-down entry. Attaching it builds it now rather than on the
+        // swipe, which is why its onCompleted only reads the local
+        // database - see HealthPage.qml.
+        pageStack.pushAttached(Qt.resolvedUrl("HealthPage.qml"))
     }
 
     Connections {
@@ -109,13 +115,8 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
             }
             MenuItem {
-                // Sleep and recovery, from the cloud or straight off the
-                // watch - so this is useful without an account too.
-                text: qsTr("Health")
-                onClicked: pageStack.push(Qt.resolvedUrl("HealthPage.qml"))
-            }
-            MenuItem {
-                // Unlike Health, this one is the cloud's alone: the records
+                // Unlike Health, which is one swipe away, this one is the
+                // cloud's alone: the records
                 // are the account's own, computed server-side over a
                 // history that reaches back further than any watch keeps.
                 visible: AppController.cloudSignedIn

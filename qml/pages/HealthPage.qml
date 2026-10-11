@@ -5,6 +5,13 @@ import Sailfish.Silica 1.0
 // shows what the watch already uploaded, so a missing night means the watch
 // hasn't synced, not that anything here failed - see
 // AppController::syncHealthData().
+//
+// MainPage attaches this page, so it is constructed at app startup and not
+// when the user swipes to it. Keep reload() reading the local database only:
+// anything slow or networked here would be paid for on every launch, by
+// everyone, whether or not they ever swipe. Freshness afterwards comes from
+// the healthDataChanged connection below, since the instance outlives a
+// swipe away and back.
 Page {
     id: page
 

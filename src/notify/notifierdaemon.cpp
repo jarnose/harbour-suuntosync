@@ -24,14 +24,17 @@ const qint64 kMaxAgeMs = 120000;
 // A failure used to end the attempt, which cost a real notification every
 // time the link went quiet for ten seconds - and cost more than that for a
 // removal, since a ring nobody takes off the watch stays there until it is
-// dismissed by hand. Measured: of three real calls, the removal succeeded
-// once and timed out twice, with the same binary and a connected watch, so
-// the link going quiet is ordinary rather than exceptional.
+// dismissed by hand.
 //
-// Four attempts at a ten-second timeout each is forty seconds, comfortably
-// inside the two minutes above - which stays the real bound, because a
-// notification nobody could deliver for two minutes is not worth showing.
-const int kMaxAttempts = 4;
+// This is deliberately larger than the age bound above will ever allow at a
+// ten-second timeout, so **kMaxAgeMs is the real limit** and this is only
+// here to stop a request that fails *instantly* from spinning. Four was
+// tried first and was measurably too few: a Race that is displaying an
+// incoming-call alert answers no Whiteboard request at all - four removals
+// timed out in a row over forty seconds, and on an earlier call the
+// missed-call notification queued behind one timed out with it - so the
+// retry has to outlast the alert rather than the link.
+const int kMaxAttempts = 16;
 // How long to give an attach before deciding it is not going to happen.
 // A good one takes about a second.
 const int kAttachTimeoutMs = 20000;

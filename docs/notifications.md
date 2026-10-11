@@ -1565,3 +1565,46 @@ ring went up. So it is not the alert blocking the bus and not the
 re-attachment: it looks like ordinary BLE flakiness, which the retry now
 absorbs rather than diagnoses. If four attempts still lose it, that is the
 thread to pull.
+
+### The Race answers nothing while it is showing a call alert (2026-10-11)
+
+The retry from the previous section works - the log shows attempts 2, 3 and
+4 - and it was not enough:
+
+```
+13:53:43  the watch took notification 100217617     <- the ring, one second
+13:53:47  call ... is now null (0) - clearing the watch
+13:53:57  removal failed: Del ... timed out    -> retrying, attempt 2
+13:54:07  removal failed: Del ... timed out    -> retrying, attempt 3
+13:54:17  removal failed: Del ... timed out    -> retrying, attempt 4
+```
+
+Four timeouts in a row, forty seconds, with the watch connected and a
+session reported ready each time. That is not a link going quiet at random,
+which is what the previous section guessed.
+
+**The better reading: while the Race displays an incoming-call alert it
+answers no Whiteboard request at all.** Two things support it. The missed-call
+notification queued *behind* a removal timed out with it on an earlier call
+(2026-10-06 22:37:08), so it is not the `Del` resource specifically. And the
+one removal that ever succeeded landed nine seconds after the ring went up,
+in the same second its session opened - consistent with the alert having
+already gone by then, and with nothing else.
+
+So the retry has to outlast the *alert*, not the link, and forty seconds was
+simply too short a guess. `kMaxAttempts` is now sixteen - deliberately more
+than the two-minute age bound can ever reach at a ten-second timeout, so the
+age bound is the real limit and the count only exists to stop a request that
+fails *instantly* from spinning.
+
+What that buys: a ring clears itself once the watch starts answering again,
+within the two minutes the notification is worth showing for. What it does
+not buy: anything at all if the alert outlasts those two minutes. Then the
+ring stays until it is dismissed on the watch, which is where this started.
+
+**Not yet established**: whether the watch resumes answering the moment the
+alert is dismissed, or whether something else has to happen first. The
+experiment is one call left to ring, hung up from the phone, then dismissed
+on the watch inside the two-minute window - if the pending removal then
+succeeds, the mechanism is confirmed and the fix is complete. If it does
+not, the alert is not the whole story.

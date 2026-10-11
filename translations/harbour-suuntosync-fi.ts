@@ -777,108 +777,108 @@ löytyy - %2 tavua
         <translation>%1 min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="114"/>
+        <location filename="../qml/pages/MainPage.qml" line="130"/>
         <source>Settings</source>
         <translation>Asetukset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="123"/>
+        <location filename="../qml/pages/MainPage.qml" line="139"/>
         <source>Records</source>
         <translation>Ennätykset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="132"/>
+        <location filename="../qml/pages/MainPage.qml" line="148"/>
         <source>Switch to %1</source>
         <translation>Vaihda kelloon %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="141"/>
-        <location filename="../qml/pages/MainPage.qml" line="148"/>
+        <location filename="../qml/pages/MainPage.qml" line="157"/>
+        <location filename="../qml/pages/MainPage.qml" line="164"/>
         <source>Syncing…</source>
         <translation>Synkronoidaan…</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="141"/>
+        <location filename="../qml/pages/MainPage.qml" line="157"/>
         <source>Sync workouts from cloud</source>
         <translation>Synkronoi harjoitukset pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="148"/>
+        <location filename="../qml/pages/MainPage.qml" line="164"/>
         <source>Sync from watch to phone</source>
         <translation>Synkronoi kellosta puhelimeen</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="157"/>
+        <location filename="../qml/pages/MainPage.qml" line="173"/>
         <source>Send %1 workouts from phone to cloud</source>
         <translation>Lähetä %1 harjoitusta puhelimesta pilveen</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="188"/>
+        <location filename="../qml/pages/MainPage.qml" line="204"/>
         <source>%1 · Connected</source>
         <translation>%1 · Yhdistetty</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="189"/>
+        <location filename="../qml/pages/MainPage.qml" line="205"/>
         <source>%1 · Not connected</source>
         <translation>%1 · Ei yhteyttä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="199"/>
+        <location filename="../qml/pages/MainPage.qml" line="215"/>
         <source>Signed in as %1</source>
         <translation>Kirjautuneena: %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="224"/>
+        <location filename="../qml/pages/MainPage.qml" line="240"/>
         <source>this month</source>
         <translation>tässä kuussa</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="246"/>
+        <location filename="../qml/pages/MainPage.qml" line="262"/>
         <source>session</source>
         <translation>harjoitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="246"/>
+        <location filename="../qml/pages/MainPage.qml" line="262"/>
         <source>sessions</source>
         <translation>harjoitusta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="269"/>
+        <location filename="../qml/pages/MainPage.qml" line="285"/>
         <source>Fitness</source>
         <translation>Kunto</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="270"/>
+        <location filename="../qml/pages/MainPage.qml" line="286"/>
         <source>Fatigue</source>
         <translation>Rasitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="274"/>
+        <location filename="../qml/pages/MainPage.qml" line="290"/>
         <source>Form</source>
         <translation>Vire</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="330"/>
+        <location filename="../qml/pages/MainPage.qml" line="346"/>
         <source>watch</source>
         <translation>kello</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="372"/>
+        <location filename="../qml/pages/MainPage.qml" line="388"/>
         <source>%1 km · %2</source>
         <translation>%1 km · %2</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="405"/>
+        <location filename="../qml/pages/MainPage.qml" line="421"/>
         <source>No workouts yet</source>
         <translation>Ei vielä harjoituksia</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="407"/>
+        <location filename="../qml/pages/MainPage.qml" line="423"/>
         <source>Pull down and sync to fetch your workout history</source>
         <translation>Vedä alas ja synkronoi hakeaksesi harjoitushistorian</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="408"/>
+        <location filename="../qml/pages/MainPage.qml" line="424"/>
         <source>Pair a Suunto watch or sign in to your Suunto account to get started</source>
         <translation>Parita Suunto-kello tai kirjaudu Suunto-tilille aloittaaksesi</translation>
     </message>

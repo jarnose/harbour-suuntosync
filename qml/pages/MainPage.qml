@@ -88,12 +88,28 @@ Page {
         refreshPending()
         refreshMonth()
         refreshOtherWatch()
-        // Health is the one page that is useful without an account and
-        // without opening a workout, so it gets the swipe rather than a
-        // pull-down entry. Attaching it builds it now rather than on the
-        // swipe, which is why its onCompleted only reads the local
-        // database - see HealthPage.qml.
-        pageStack.pushAttached(Qt.resolvedUrl("HealthPage.qml"))
+    }
+
+    // Health is the one page that is useful without an account and without
+    // opening a workout, so it gets the swipe rather than a pull-down entry.
+    //
+    // This cannot go in Component.onCompleted. MainPage is the
+    // ApplicationWindow's initialPage, so it is constructed *inside* the page
+    // stack's own push, and PageStack.js refuses any stack modification
+    // started from there - modifyPageStack() throws "Cannot pushAttached
+    // while operation is in progress: push". The throw is swallowed as a QML
+    // error, which is why the symptom was a missing swipe indicator and
+    // nothing else: every earlier line of onCompleted had already run.
+    // Waiting for Active puts the call after that push has finished.
+    //
+    // The nextPage() guard means a swipe back to the list does not rebuild
+    // HealthPage, so its state and its database reads survive the round
+    // trip, while anything that does take the slot above this page gets
+    // re-attached on return.
+    onStatusChanged: {
+        if (status === PageStatus.Active && !pageStack.nextPage(page)) {
+            pageStack.pushAttached(Qt.resolvedUrl("HealthPage.qml"))
+        }
     }
 
     Connections {

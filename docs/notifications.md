@@ -1812,3 +1812,39 @@ Fixed by splitting the two: `sendNotification` and `removeNotification` now
 report `answered` alongside `ok`, false only when the watch said nothing at
 all. A refusal is an answer, and the daemon re-queues on silence only. The
 attempt cap stays, now as a guard rather than the thing doing the work.
+
+### Where this ends up (2026-10-11, confirmed)
+
+```
+20:33:06  attempt 2   timed out
+20:33:16  attempt 3   timed out
+20:33:29  attempt 4   timed out
+20:33:53  attempt 5   timed out
+20:33:53  "The watch has no notification with that id"   <- stops here
+20:33:54  the watch took notification 1577420522         <- the missed call
+```
+
+Four silences, one answer, done. No spin, no attempt cap reached, and the
+missed-call notification queued behind the removal delivered a second later.
+
+And the user-visible behaviour, which is the thing that started all of this:
+**the alert stays on the watch's screen for a while after the call is
+rejected, but the vibration stops - and it does exactly the same with the
+official Android app.** So the lingering alert is the watch's own, not
+something either client controls.
+
+That is the end of this thread, and it is worth being plain about what each
+piece actually bought:
+
+- Watching `VoiceCall.statusChanged` is what makes a ringing call reach the
+  watch at all. That is the feature.
+- The contact lookup puts a name on it.
+- Retrying on silence, and *only* on silence, is what stops a transient quiet
+  moment from losing a notification - which was a real bug affecting every
+  notification, not just calls.
+- Registering `/Del` once per session is correct and cheap, and was derived
+  from the official app's own traffic.
+- The ninety-second net bounds a ring whose end was never seen.
+
+None of it makes the alert go away sooner, because nothing can: the watch
+decides that, and it decides the same for Suunto's own app.

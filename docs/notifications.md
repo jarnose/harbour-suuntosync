@@ -1608,3 +1608,28 @@ experiment is one call left to ring, hung up from the phone, then dismissed
 on the watch inside the two-minute window - if the pending removal then
 succeeds, the mechanism is confirmed and the fix is complete. If it does
 not, the alert is not the whole story.
+
+### Confirmed: the retry clears the ring (2026-10-11)
+
+```
+19:47:19  removal failed: Del ... timed out
+19:47:29  retrying removal of 841340026, attempt 2
+19:47:33  took notification 841340026 off the watch
+19:47:33  the watch took notification 1577415717     <- the missed call, behind it
+```
+
+First attempt timed out, second succeeded four seconds in, and the
+missed-call notification queued behind it went through in the same second.
+That is the whole fix working: without the retry both would have been
+dropped and the ring would have stayed on the watch.
+
+It also puts a number on the window. Earlier the same day four attempts
+across forty seconds all failed; here two across fourteen seconds were
+enough. So how long the watch stays unresponsive varies, which is exactly
+why the bound is two minutes of wall clock rather than a count of tries.
+
+**Still a hypothesis**: *why* it stops answering. The alert being the cause
+fits every observation so far, but confirming it needs one more call where
+the alert is dismissed on the watch at a known moment and the log is read
+against it. What is settled is the behaviour that matters - a ring now
+clears itself.

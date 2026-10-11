@@ -1633,3 +1633,49 @@ fits every observation so far, but confirming it needs one more call where
 the alert is dismissed on the watch at a known moment and the log is read
 against it. What is settled is the behaviour that matters - a ring now
 clears itself.
+
+### One call in several loses its end, and a net under it (2026-10-11)
+
+A later call that evening left the ring on the watch again, and this time
+for a different reason than the removal timing out:
+
+```
+19:49:39  the watch took notification 808467117
+19:49:42  notification 265 from commhistoryd ... 3 vastaamatonta puhelua
+```
+
+**No `clearing the watch` line at all.** The call plainly ended - the missed
+call arrived three seconds later - but `CallMonitor` never saw it, so no
+removal was ever queued. Retrying cannot help something nobody asked for.
+
+The obvious suspect was the `/calls/active` alias, which the monitor ignored
+outright: if some ends arrive only there, they were being thrown away. A bus
+capture of the very next call says otherwise:
+
+```
+538.468  /calls/f49f2313...  statusChanged  5  "incoming"
+541.721  /calls/active       statusChanged  0  "null"
+541.721  /calls/f49f2313...  statusChanged  0  "null"
+```
+
+Both paths, 0.1 ms apart, and the daemon logged `clearing the watch` for it.
+So the alias was not the cause in any call that has been captured, and the
+19:49 miss has not been reproduced. Cause unknown.
+
+Two changes rather than one guess.
+
+The alias is now accepted **for an end** - not because it has ever been the
+only carrier, but because throwing one away would have exactly the observed
+consequence, and it costs nothing to accept. A *ring* is still taken from
+the concrete path only, so the watch cannot be rung twice.
+
+And the real guard, which does not care why a signal went missing: a ring
+whose call has shown no end for **ninety seconds is taken off anyway**. In
+normal operation it never fires, since an end arrives within a second of the
+call finishing. If a call is genuinely still talking at ninety seconds then
+removing the *incoming-call* alert is right rather than wrong - the watch
+should have stopped showing one the moment it was answered.
+
+Said plainly: the cause is still unexplained, and this is a net rather than
+a fix. What it guarantees is that a ring cannot outlive the call by more than
+a minute and a half.

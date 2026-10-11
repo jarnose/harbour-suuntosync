@@ -133,6 +133,13 @@ private:
     // own, and the handshake timeout only fires once the handshake has been
     // sent.
     QTimer *m_attachTimeout;
+    // Clears a ring the end of whose call was never seen. One call in
+    // several has been observed to produce no end signal that this daemon
+    // noticed - not reproduced under a bus capture, cause unknown - and the
+    // visible result was an incoming call sitting on the watch until it was
+    // dismissed by hand. This is the net under that, and it is deliberately
+    // a net rather than a fix: it does not care why the signal went missing.
+    QTimer *m_ringTimeout;
     WatchLink m_link;
 
     PairedWatch m_watch;

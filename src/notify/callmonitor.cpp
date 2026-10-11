@@ -14,10 +14,24 @@ namespace {
 const char *const kService = "org.nemomobile.voicecall";
 const char *const kCallInterface = "org.nemomobile.voicecall.VoiceCall";
 
-// The manager also publishes the current call under this fixed path, so every
-// statusChanged arrives twice - once on the call's own object and once on the
-// alias. Acting on both would ring the watch twice and then try to remove the
-// same notification twice.
+// The manager also publishes the current call under this fixed path, so a
+// statusChanged can arrive twice - once on the call's own object and once on
+// the alias.
+//
+// **Can, not does.** Measured across three captures of real calls: one had
+// `incoming` on both paths and two on the concrete path only, while all
+// three had the end on both. So the duplication cannot be relied on, which
+// is why the two cases are handled differently below: a ring is taken from
+// the concrete path only, so the watch cannot be rung twice, but an end is
+// accepted from either.
+//
+// To be exact about what that second half is: every capture so far has had
+// the end on the concrete path too, so the alias branch has never been the
+// thing that noticed. It is there because an end that arrived only on the
+// alias would otherwise be thrown away and leave the ring on the watch for
+// ever - and a ring was twice seen to stay, without the captures ever
+// catching the call that did it. The real guard against that is the timeout
+// in NotifierDaemon; this is the cheap half.
 const char *const kActiveAlias = "/calls/active";
 
 // The status text, not the number. Both are in the signal, and the text is
@@ -70,15 +84,35 @@ void CallMonitor::onStatusChanged(int status, const QString &statusText,
                                   const QDBusMessage &message)
 {
     const QString path = message.path();
-    if (path == QLatin1String(kActiveAlias))
-        return;
-
+    const bool alias = path == QLatin1String(kActiveAlias);
     const bool ringing = statusText.compare(QLatin1String(kIncoming), Qt::CaseInsensitive) == 0;
 
     if (!ringing) {
         // Anything that is not ringing ends the ring, including being
         // answered: the watch should stop showing an incoming call the moment
         // it stops being one.
+        //
+        // The alias ends whatever is ringing rather than a path of its own,
+        // because it does not say which call it speaks for - and in practice
+        // only one call rings at a time. Emptying the set as it goes means
+        // the concrete path arriving afterwards finds nothing left and emits
+        // nothing, so the watch is never asked to remove the same
+        // notification twice.
+        if (alias) {
+            const QSet<QString> ending = m_ringing;
+            m_ringing.clear();
+            m_pending.clear();
+            for (const QString &ringingPath : ending) {
+                qInfo().noquote()
+                        << QStringLiteral("call %1 is now %2 (%3), seen on the alias "
+                                           "- clearing the watch")
+                                   .arg(ringingPath, statusText)
+                                   .arg(status);
+                emit callEnded(ringingPath);
+            }
+            return;
+        }
+
         if (m_pending.remove(path))
             m_abandoned.insert(path);
         if (m_ringing.remove(path)) {
@@ -89,6 +123,11 @@ void CallMonitor::onStatusChanged(int status, const QString &statusText,
         }
         return;
     }
+
+    // A ring is only ever taken from the call's own object. The alias would
+    // ring the watch a second time for the same call.
+    if (alias)
+        return;
 
     if (m_ringing.contains(path) || m_pending.contains(path))
         return;

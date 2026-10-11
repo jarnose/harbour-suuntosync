@@ -38,6 +38,17 @@ const int kMaxAttempts = 16;
 // How long to give an attach before deciding it is not going to happen.
 // A good one takes about a second.
 const int kAttachTimeoutMs = 20000;
+
+// How long a ring may sit on the watch with no end in sight before it is
+// taken off anyway.
+//
+// Ninety seconds is past any ring a caller waits out, so in normal
+// operation this never fires: the call ends, the status change arrives, and
+// the ring goes within a second. It fires when the end was missed - and if a
+// call *is* answered and still talking at ninety seconds, taking the ring
+// off is right rather than wrong, since the watch should have stopped
+// showing an incoming call the moment it was answered.
+const int kRingTimeoutMs = 90000;
 // Two identical notifications this close together are one notification
 // posted twice, not two messages. Long enough to catch a double post, short
 // enough that two genuinely identical messages a few seconds apart both get
@@ -56,10 +67,28 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     , m_contacts(new ContactLookup(this))
     , m_retry(new QTimer(this))
     , m_attachTimeout(new QTimer(this))
+    , m_ringTimeout(new QTimer(this))
     , m_link(QFileInfo(databasePath).absolutePath(), WatchLink::Background)
 {
     m_retry->setInterval(kRetryMs);
     connect(m_retry, &QTimer::timeout, this, &NotifierDaemon::pump);
+
+    m_ringTimeout->setSingleShot(true);
+    m_ringTimeout->setInterval(kRingTimeoutMs);
+    connect(m_ringTimeout, &QTimer::timeout, this, [this]() {
+        if (m_ringing.isEmpty())
+            return;
+        // Every ring still on the watch, since there is no telling which
+        // one lost its end. In practice there is never more than one.
+        const QList<QString> stale = m_ringing.keys();
+        for (const QString &path : stale) {
+            qWarning().noquote()
+                    << QStringLiteral("no end seen for call %1 in %2 s - clearing it anyway")
+                               .arg(path)
+                               .arg(kRingTimeoutMs / 1000);
+            onCallEnded(path);
+        }
+    });
 
     m_attachTimeout->setSingleShot(true);
     m_attachTimeout->setInterval(kAttachTimeoutMs);
@@ -312,6 +341,9 @@ void NotifierDaemon::onIncomingCall(const QString &callPath, const QString &line
     pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
     pending.add = notification;
     m_ringing.insert(callPath, notification.notificationId);
+    // Restarted rather than started, so a second call while the first is
+    // still ringing does not shorten the net for the second one.
+    m_ringTimeout->start();
     if (m_queue.size() >= kMaxQueued)
         m_queue.removeFirst();
     m_queue.append(pending);
@@ -326,6 +358,8 @@ void NotifierDaemon::onCallEnded(const QString &callPath)
     pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
     pending.kind = Pending::Remove;
     pending.removeId = m_ringing.take(callPath);
+    if (m_ringing.isEmpty())
+        m_ringTimeout->stop();
     if (m_queue.size() >= kMaxQueued)
         m_queue.removeFirst();
     m_queue.append(pending);

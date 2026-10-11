@@ -4,6 +4,7 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
+#include <QDebug>
 #include <QTimer>
 
 #include <algorithm>
@@ -106,6 +107,8 @@ void MdsWhiteboardClient::detach()
     m_writeCharPath.clear();
     m_notifyCharPath.clear();
     m_handshakeAcked = false;
+    // Session-scoped: the handle inside it means nothing to the next session.
+    m_removalAck.clear();
     ++m_sessionGeneration;
 
     // Nothing queued or in flight will ever resolve now - fail everything
@@ -1089,8 +1092,54 @@ void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notificatio
     });
 }
 
+// The removal itself, once the path's ack body is in hand.
+void MdsWhiteboardClient::putRemoval(quint32 notificationId, bool mayRetry,
+                                      SimpleCallback callback)
+{
+    const std::vector<uint8_t> ackBody = m_removalAck;
+    getRaw([ackBody, notificationId](uint16_t requestId) {
+        return Ancs::encodeRemove(requestId, ackBody, notificationId);
+    }, [this, notificationId, mayRetry, callback](bool putOk, const Mds::Frame &reply,
+                                                   const QString &putError) {
+        if (!putOk) {
+            // The cached registration is the first suspect, since its
+            // lifetime is unknown: drop it and let one retry register the
+            // path afresh. Only one, so a watch that is simply not
+            // answering cannot turn each removal into two timeouts.
+            m_removalAck.clear();
+            if (mayRetry) {
+                qWarning() << "removal did not answer; re-registering the path and retrying";
+                removeNotification(notificationId, callback);
+                return;
+            }
+            callback(false, tr("The watch did not answer the removal: %1").arg(putError));
+            return;
+        }
+        const uint16_t status = statusOf(reply);
+        if (status == kNotificationNotFound) {
+            callback(false, tr("The watch has no notification with that id"));
+            return;
+        }
+        if (status != kNotificationOk) {
+            callback(false, tr("The watch refused the removal (status %1)").arg(status));
+            return;
+        }
+        callback(true, QString());
+    });
+}
+
 void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallback callback)
 {
+    // Already registered in this session: go straight to the removal. This is
+    // the whole point - see m_removalAck for what the watch does to a second
+    // registration of the same path.
+    if (m_removalAck.size() >= 6) {
+        // The one place a stale handle is possible, so this is the attempt
+        // allowed to fall back to registering again.
+        putRemoval(notificationId, true, callback);
+        return;
+    }
+
     const QString path = QString::fromLatin1(kNotificationDelPath);
     getRaw([path](uint16_t requestId) {
         return Mds::encodeGetRequest(requestId, path.toStdString());
@@ -1105,24 +1154,10 @@ void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallb
             return;
         }
 
-        const std::vector<uint8_t> ackBody = ack.body;
-        getRaw([ackBody, notificationId](uint16_t requestId) {
-            return Ancs::encodeRemove(requestId, ackBody, notificationId);
-        }, [callback](bool putOk, const Mds::Frame &reply, const QString &putError) {
-            if (!putOk) {
-                callback(false, tr("The watch did not answer the removal: %1").arg(putError));
-                return;
-            }
-            const uint16_t status = statusOf(reply);
-            if (status == kNotificationNotFound) {
-                callback(false, tr("The watch has no notification with that id"));
-                return;
-            }
-            if (status != kNotificationOk) {
-                callback(false, tr("The watch refused the removal (status %1)").arg(status));
-                return;
-            }
-            callback(true, QString());
-        });
+        m_removalAck = ack.body;
+        // Freshly registered, so a failure here is not a stale handle and
+        // retrying would only register again - which is the thing the watch
+        // refuses.
+        putRemoval(notificationId, false, callback);
     });
 }

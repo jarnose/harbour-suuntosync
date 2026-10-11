@@ -1755,12 +1755,19 @@ never writes a removal payload at all. **It never completes a removal.**
 Which is exactly why its notifications stay on the watch, and why this
 project's do.
 
-`MdsWhiteboardClient::removeNotification()` re-runs `GET /Del` on every
-single call, so every retry is another registration of a path the watch has
-already registered. That is the shape of the bug. The fix is to register it
-once and keep the handle, which is what the protocol's handle model is for -
-noted here rather than done, because it changes the BLE client the
-application shares.
+`MdsWhiteboardClient::removeNotification()` re-ran `GET /Del` on every single
+call, so every retry was another registration of a path the watch had
+already registered. That is the shape of the bug.
+
+**Fixed** by registering once and keeping the ack body for the life of the
+Whiteboard session, which is what the protocol's handle model is for. The
+cache is cleared by `detach()`, since the handle inside it is session-scoped,
+and cleared again on a failed removal - and that one failure is allowed
+exactly one fallback: register the path afresh and try once more. Only the
+cached path gets that fallback, because a registration made a moment ago
+cannot be stale, and registering a second time is precisely the thing the
+watch refuses. So a watch that is simply silent still costs one timeout per
+removal rather than two.
 
 **Not established**: the exact rule. "Answered once per session" fits this
 capture but not this project's own logs, where a retry ten seconds later

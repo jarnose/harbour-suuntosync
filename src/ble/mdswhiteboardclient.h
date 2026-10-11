@@ -346,7 +346,33 @@ private:
     // back - which read like an error in the log and was not one. The timer
     // captures the generation it belongs to and does nothing if it has
     // moved on.
+    // Writes one removal using the registration already in m_removalAck.
+    // `mayRetry` allows exactly one fallback: drop the cached registration,
+    // register the path again and try once more. Only the cached path sets
+    // it, since a registration made a moment ago cannot be stale and
+    // registering a second time is the thing the watch refuses.
+    void putRemoval(quint32 notificationId, bool mayRetry, SimpleCallback callback);
+
     quint32 m_sessionGeneration = 0;
+
+    // The ack body from a successful GET of the notification-removal path,
+    // kept for the life of one Whiteboard session.
+    //
+    // It is kept because the watch will not hand it out twice. A capture of
+    // the official Android app shows it registering
+    // /Device/Connectivity/Ble/Ancs/Notification/Del nine times in a row:
+    // the watch answers the first with 200 and **ignores the other eight**,
+    // while answering the PUTs that follow them normally - so it is not
+    // wedged, it is refusing to register a path it has already registered.
+    // Re-running the GET on every removal therefore timed out on every
+    // removal but the first, which is why a ring could sit on the watch
+    // until it was dismissed by hand. See docs/notifications.md.
+    //
+    // Cleared by detach(), because the handle inside it is session-scoped,
+    // and cleared on a failed PUT so the next attempt registers afresh - the
+    // exact lifetime the watch gives a registration is not established, and
+    // a cached handle with that fallback holds under any of the candidates.
+    std::vector<uint8_t> m_removalAck;
 
     struct QueuedRequest
     {

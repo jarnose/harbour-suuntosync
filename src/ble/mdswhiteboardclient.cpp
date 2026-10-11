@@ -117,10 +117,14 @@ void MdsWhiteboardClient::detach()
         const ResponseCallback callback = m_inFlightCallback;
         m_inFlightRequestId = 0;
         m_inFlightCallback = nullptr;
-        callback(false, Mds::Frame(), tr("Disconnected"));
+        if (callback)
+            callback(false, Mds::Frame(), tr("Disconnected"));
     }
-    while (!m_queue.isEmpty())
-        m_queue.dequeue().callback(false, Mds::Frame(), tr("Disconnected"));
+    while (!m_queue.isEmpty()) {
+        const ResponseCallback callback = m_queue.dequeue().callback;
+        if (callback)
+            callback(false, Mds::Frame(), tr("Disconnected"));
+    }
     if (m_bulkFetchActive)
         finishBulkFetch(false, tr("Disconnected"));
 
@@ -248,26 +252,44 @@ void MdsWhiteboardClient::onNotifyPropertiesChanged(const QString &interface,
                                         static_cast<size_t>(value.size()));
     for (const Mds::Frame &frame : frames) {
         // TYPE=0x13, reqId=0 is specifically the session handshake's reply
-        // (see Mds::literalSessionHandshakeRequest()) - reqId 0 is otherwise
-        // unused since get() starts its own counter at 1, so this can't
-        // collide with a real pending GET response.
-        if (frame.type == 0x13 && frame.requestId == 0 && !m_handshakeAcked) {
-            m_handshakeAcked = true;
-            emit readyChanged(true);
+        // (see Mds::literalSessionHandshakeRequest()).
+        if (frame.type == 0x13 && frame.requestId == 0) {
+            if (!m_handshakeAcked) {
+                m_handshakeAcked = true;
+                emit readyChanged(true);
+            }
+            // A second one is not an error worth shouting about - and it
+            // must not fall through, which is what used to crash the whole
+            // phone. See the reqId-0 note below.
             continue;
         }
 
         // Bulk-transfer chunks (fetchLogbookData()) - unsolicited, like the
         // handshake reply, so matched the same way (type+reqId) rather than
         // through the request queue's m_inFlightRequestId.
-        if (frame.type == 0x01 && frame.requestId == 0 && m_bulkFetchActive) {
-            appendBulkChunk(frame.body);
-            armBulkSilenceTimer();
+        if (frame.type == 0x01 && frame.requestId == 0) {
+            if (m_bulkFetchActive) {
+                appendBulkChunk(frame.body);
+                armBulkSilenceTimer();
+            }
             continue;
         }
 
-        if (frame.requestId != m_inFlightRequestId)
-            continue; // response to a request we've already timed out, or a spontaneous event
+        // **Nothing in flight resolves nothing.** This used to read only
+        // `frame.requestId != m_inFlightRequestId`, which is correct for
+        // every request this client makes - get() numbers them from 1 - and
+        // wrong for reqId 0, because an idle client's m_inFlightRequestId
+        // *is* 0. Any unsolicited reqId-0 frame therefore passed the test,
+        // reached resolveInFlight() with no callback set, and threw
+        // std::bad_function_call - which aborts the process, and on this
+        // device an aborting GL client takes the compositor down with it, so
+        // the whole UI restarted. Caught with gdb; see docs/notifications.md.
+        //
+        // The watch sends plenty of reqId-0 traffic: the handshake reply
+        // above, bulk chunks, and its own questions at the start of every
+        // connection.
+        if (m_inFlightRequestId == 0 || frame.requestId != m_inFlightRequestId)
+            continue; // a response we already timed out on, or the watch talking unprompted
         resolveInFlight(frame.requestId, true, frame, QString());
     }
 }
@@ -275,12 +297,24 @@ void MdsWhiteboardClient::onNotifyPropertiesChanged(const QString &interface,
 void MdsWhiteboardClient::resolveInFlight(uint16_t requestId, bool ok, const Mds::Frame &frame,
                                            const QString &error)
 {
-    if (requestId != m_inFlightRequestId)
-        return; // already resolved (e.g. a timeout firing after the real response arrived)
+    // Both halves matter. The id check catches a timeout firing after the
+    // real response arrived; the zero check catches there being nothing in
+    // flight at all, which is the state an idle client is in and which an
+    // unsolicited reqId-0 frame used to walk straight into.
+    if (m_inFlightRequestId == 0 || requestId != m_inFlightRequestId)
+        return;
 
     const ResponseCallback callback = m_inFlightCallback;
     m_inFlightRequestId = 0;
     m_inFlightCallback = nullptr;
+    // Belt as well as braces: an in-flight id without a callback is a bug
+    // somewhere above, and calling an empty std::function aborts the
+    // process. Returning quietly is wrong but survivable; aborting is not.
+    if (!callback) {
+        qWarning() << "a request was in flight with no callback - ignoring its response";
+        dispatchNext();
+        return;
+    }
     callback(ok, frame, error);
     dispatchNext();
 }
@@ -1030,7 +1064,11 @@ void MdsWhiteboardClient::finishBulkFetch(bool ok, const QString &error)
     const std::vector<uint8_t> data = std::move(m_bulkBuffer);
     m_bulkCallback = nullptr;
     m_bulkBuffer.clear();
-    callback(ok, data, error);
+    // Guarded for the same reason resolveInFlight() is: a member callback
+    // that is empty when it should not be is a bug, and calling it aborts
+    // the process rather than reporting one.
+    if (callback)
+        callback(ok, data, error);
 }
 
 namespace {

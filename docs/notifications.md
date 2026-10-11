@@ -1848,3 +1848,73 @@ piece actually bought:
 
 None of it makes the alert go away sooner, because nothing can: the watch
 decides that, and it decides the same for Suunto's own app.
+
+## An unsolicited reqId-0 frame crashed the phone's UI (2026-10-11)
+
+Launching the application restarted the whole Sailfish UI. The journal's own
+window on this device is under a minute, so it was captured by following the
+journal into a file across the crash, and the first line of the cascade is
+the answer:
+
+```
+invoker[31817]: terminate called after throwing an instance of 'std::bad_function_call'
+booster-generic[3542]: Boosted process (pid=27817) exit(134)
+...
+systemd[3520]: lipstick.service: Main process exited, code=killed, status=11/SEGV
+```
+
+The application aborts first (134 is SIGABRT); the compositor's SEGV and the
+"did the Wayland compositor die?" chorus from every other process are the
+consequence. On this hardware an aborting GL client takes lipstick with it.
+
+`gdb --batch -ex "catch throw" -ex run -ex bt` on the device - it is
+installed, and catching the throw stops before the abort, so this diagnosis
+cost no further UI restarts - gave the site exactly:
+
+```
+#1  std::__throw_bad_function_call()
+#2  MdsWhiteboardClient::resolveInFlight(...)
+#3  MdsWhiteboardClient::onNotifyPropertiesChanged(...)
+```
+
+### The hole, which a comment in the code had described as impossible
+
+Incoming frames were matched to a pending request with
+
+```cpp
+if (frame.requestId != m_inFlightRequestId)
+    continue;
+```
+
+and the comment beside it said reqId 0 could not collide, "since get() starts
+its own counter at 1". That is true of every request this client makes, and
+it misses the other side: **an idle client's `m_inFlightRequestId` is itself
+0.** So any unsolicited reqId-0 frame passed the test, reached
+`resolveInFlight()` with no callback set, and threw.
+
+And the watch sends plenty of reqId-0 traffic. The handshake reply is one,
+bulk-transfer chunks are more, and the watch asks its own questions at the
+start of every connection - the `/Media/Player/State` family this project has
+always known about and never answered. Worse, the two branches that handle
+reqId 0 were *conditional*: a second handshake reply (`!m_handshakeAcked`
+already false) or a bulk chunk with no fetch active fell straight through to
+the bottom.
+
+Why it surfaced now rather than months ago: the daemon connects, hands over
+and disconnects far more than anything did before, so the application far
+more often has the watch talking to it while nothing is pending.
+
+### Fixed
+
+- Nothing in flight resolves nothing: both the frame loop and
+  `resolveInFlight()` now require `m_inFlightRequestId != 0`.
+- The two reqId-0 branches `continue` unconditionally, so a repeat handshake
+  or a stray chunk can never fall through.
+- Every member callback is checked before it is called -
+  `resolveInFlight()`, `detach()`'s in-flight and queue drain, and
+  `finishBulkFetch()`. An empty one is a bug, but returning quietly is
+  survivable and aborting is not.
+
+This was in the client from the day it was written, and it is in the half the
+application shares - so it could have taken the UI down at any time the watch
+said something unprompted.

@@ -1774,3 +1774,41 @@ capture but not this project's own logs, where a retry ten seconds later
 sometimes succeeds. Some expiry is involved. A cached handle with a
 re-register fallback would work under any of the candidate rules, which is
 the argument for doing it that way.
+
+### The alert hypothesis, now with evidence - and a retry bug of my own (2026-10-11)
+
+With the cached registration in place, a real call gave the clearest run yet:
+
+```
+attempt 1..7   GET /Del ... timed out        (ten seconds apart)
+attempt 7      "The watch has no notification with that id"
+attempt 8..16  the same, instantly
+               giving up on removal of 2013412544 after 16 attempts
+```
+
+Seven silences, and then the watch **answers** - with "no notification with
+that id". So:
+
+- The silence is not the link and not the registration. The watch simply
+  does not answer while it is showing the call alert, which is what the
+  previous sections suspected and this run shows directly: silence, then a
+  real reply the moment it stops.
+- And by the time it answers, **the notification is already gone**. The
+  alert ending and the notification ending are the same event. So a removal
+  that is possible is a removal that is no longer needed - which is exactly
+  why the official app does not bother completing one.
+
+That reframes what the retry is for. It is not useless: one earlier run had
+a removal succeed on attempt 2, so the window does sometimes open while the
+notification is still there. But it cannot be relied on, and it was never
+the thing keeping a ring on the watch.
+
+**The bug in that log is mine.** Attempts 8 to 16 retried a *definitive*
+answer, nine times in under a second, until the attempt cap stopped it.
+`requeue()` retried on any failure, and "no notification with that id" is
+not a failure to retry - it is the watch saying the job is done.
+
+Fixed by splitting the two: `sendNotification` and `removeNotification` now
+report `answered` alongside `ok`, false only when the watch said nothing at
+all. A refusal is an answer, and the daemon re-queues on silence only. The
+attempt cap stays, now as a guard rather than the thing doing the work.

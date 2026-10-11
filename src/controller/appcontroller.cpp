@@ -1219,7 +1219,10 @@ void AppController::testNotification(const QString &title, const QString &messag
     m_logbookTestInFlight = true;
     m_lastNotificationId = notification.notificationId;
     m_whiteboardClient->sendNotification(notification,
-            [this, trimmed](bool ok, const QString &error) {
+            // `answered` is for the daemon, which retries a watch that said
+            // nothing. This is a button somebody pressed: it reports what
+            // happened once and does not try again on their behalf.
+            [this, trimmed](bool ok, bool, const QString &error) {
         m_logbookTestInFlight = false;
         if (!ok) {
             emit logbookTestResult(error);
@@ -1248,7 +1251,7 @@ void AppController::testNotificationRemove()
 
     m_logbookTestInFlight = true;
     m_whiteboardClient->removeNotification(m_lastNotificationId,
-            [this](bool ok, const QString &error) {
+            [this](bool ok, bool, const QString &error) {
         m_logbookTestInFlight = false;
         m_lastNotificationId = 0;
         emit logbookTestResult(ok ? tr("The watch removed it") : error);

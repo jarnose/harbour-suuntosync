@@ -1048,18 +1048,20 @@ constexpr uint16_t kNotificationNotFound = 403;
 } // namespace
 
 void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notification,
-                                            SimpleCallback callback)
+                                            DeliveryCallback callback)
 {
     const QString path = QString::fromLatin1(kNotificationAddPath);
     getRaw([path](uint16_t requestId) {
         return Mds::encodeGetRequest(requestId, path.toStdString());
     }, [this, path, notification, callback](bool ok, const Mds::Frame &ack, const QString &error) {
         if (!ok) {
-            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            callback(false, false, tr("GET %1 failed: %2").arg(path, error));
             return;
         }
         if (ack.body.size() < 6) {
-            callback(false, tr("The watch acked %1 with an unusably short body").arg(path));
+            // An answer, just an unusable one: asking again would get the
+            // same short body.
+            callback(false, true, tr("The watch acked %1 with an unusably short body").arg(path));
             return;
         }
 
@@ -1068,7 +1070,8 @@ void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notificatio
         // becoming an exception thrown inside a BLE callback - callers are
         // expected to have run Ancs::truncateToFit() already.
         if (Ancs::encodedSize(notification) > Ancs::maximumEncodedSize()) {
-            callback(false, tr("The notification is %1 bytes, and the watch takes at most %2")
+            callback(false, true,
+                      tr("The notification is %1 bytes, and the watch takes at most %2")
                               .arg(static_cast<int>(Ancs::encodedSize(notification)))
                               .arg(static_cast<int>(Ancs::maximumEncodedSize())));
             return;
@@ -1079,22 +1082,24 @@ void MdsWhiteboardClient::sendNotification(const Ancs::Notification &notificatio
             return Ancs::encodeAdd(requestId, ackBody, notification);
         }, [callback](bool putOk, const Mds::Frame &reply, const QString &putError) {
             if (!putOk) {
-                callback(false, tr("The watch did not answer the notification: %1").arg(putError));
+                callback(false, false,
+                          tr("The watch did not answer the notification: %1").arg(putError));
                 return;
             }
             const uint16_t status = statusOf(reply);
             if (status != kNotificationOk) {
-                callback(false, tr("The watch refused the notification (status %1)").arg(status));
+                callback(false, true,
+                          tr("The watch refused the notification (status %1)").arg(status));
                 return;
             }
-            callback(true, QString());
+            callback(true, true, QString());
         });
     });
 }
 
 // The removal itself, once the path's ack body is in hand.
 void MdsWhiteboardClient::putRemoval(quint32 notificationId, bool mayRetry,
-                                      SimpleCallback callback)
+                                      DeliveryCallback callback)
 {
     const std::vector<uint8_t> ackBody = m_removalAck;
     getRaw([ackBody, notificationId](uint16_t requestId) {
@@ -1112,23 +1117,25 @@ void MdsWhiteboardClient::putRemoval(quint32 notificationId, bool mayRetry,
                 removeNotification(notificationId, callback);
                 return;
             }
-            callback(false, tr("The watch did not answer the removal: %1").arg(putError));
+            callback(false, false, tr("The watch did not answer the removal: %1").arg(putError));
             return;
         }
         const uint16_t status = statusOf(reply);
         if (status == kNotificationNotFound) {
-            callback(false, tr("The watch has no notification with that id"));
+            // The useful case to get right: it is gone, which is what was
+            // wanted. An answer, and nothing to try again.
+            callback(false, true, tr("The watch has no notification with that id"));
             return;
         }
         if (status != kNotificationOk) {
-            callback(false, tr("The watch refused the removal (status %1)").arg(status));
+            callback(false, true, tr("The watch refused the removal (status %1)").arg(status));
             return;
         }
-        callback(true, QString());
+        callback(true, true, QString());
     });
 }
 
-void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallback callback)
+void MdsWhiteboardClient::removeNotification(quint32 notificationId, DeliveryCallback callback)
 {
     // Already registered in this session: go straight to the removal. This is
     // the whole point - see m_removalAck for what the watch does to a second
@@ -1146,11 +1153,11 @@ void MdsWhiteboardClient::removeNotification(quint32 notificationId, SimpleCallb
     }, [this, path, notificationId, callback](bool ok, const Mds::Frame &ack,
                                                const QString &error) {
         if (!ok) {
-            callback(false, tr("GET %1 failed: %2").arg(path, error));
+            callback(false, false, tr("GET %1 failed: %2").arg(path, error));
             return;
         }
         if (ack.body.size() < 6) {
-            callback(false, tr("The watch acked %1 with an unusably short body").arg(path));
+            callback(false, true, tr("The watch acked %1 with an unusably short body").arg(path));
             return;
         }
 

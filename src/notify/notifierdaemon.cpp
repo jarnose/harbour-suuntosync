@@ -545,18 +545,23 @@ void NotifierDaemon::pump()
         });
     } else if (pending.kind == Pending::Remove) {
         m_client->removeNotification(pending.removeId,
-                                      [this, pending](bool ok, const QString &failure) {
+                                      [this, pending](bool ok, bool answered,
+                                                       const QString &failure) {
             m_busy = false;
             if (ok)
                 qInfo() << "took notification" << pending.removeId << "off the watch";
             else
                 qDebug() << "removal failed:" << failure;
-            if (!ok)
+            // Only silence is worth asking again about. A refusal is the
+            // watch's answer - and the one that matters, "no notification
+            // with that id", means it is already gone, which is what the
+            // removal wanted.
+            if (!ok && !answered)
                 requeue(pending, QStringLiteral("removal of %1").arg(pending.removeId));
             pump();
         });
     } else {
-        m_client->sendNotification(pending.add, [this, pending](bool ok,
+        m_client->sendNotification(pending.add, [this, pending](bool ok, bool answered,
                                                                    const QString &failure) {
             m_busy = false;
             // Logged on success too. This is the line that says the whole
@@ -566,8 +571,10 @@ void NotifierDaemon::pump()
                 qInfo() << "the watch took notification" << pending.add.notificationId;
             } else {
                 qWarning() << "sending failed:" << failure;
-                requeue(pending, QStringLiteral("notification %1")
-                                         .arg(pending.add.notificationId));
+                if (!answered) {
+                    requeue(pending, QStringLiteral("notification %1")
+                                             .arg(pending.add.notificationId));
+                }
             }
             pump();
         });

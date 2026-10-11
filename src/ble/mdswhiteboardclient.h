@@ -136,6 +136,16 @@ public:
     // the path explicitly and there is no "write anything anywhere" entry
     // point.
     using SimpleCallback = std::function<void(bool ok, const QString &error)>;
+
+    // For the two calls that hand something to the watch and can usefully be
+    // retried. `answered` is false only when the watch said nothing at all -
+    // a timeout, or a link that went away. A refusal is an answer: retrying
+    // it changes nothing, and when it comes back instantly it spins. That is
+    // not hypothetical - a removal answered "no notification with that id"
+    // was retried nine times in under a second before this distinction
+    // existed.
+    using DeliveryCallback =
+            std::function<void(bool ok, bool answered, const QString &error)>;
     void putString(const QString &path, const QString &value, SimpleCallback callback);
 
     // A PUT with no value - used for the "do this now" resources, and for
@@ -180,8 +190,9 @@ public:
     // The notification must already fit - Ancs::truncateToFit() - or the
     // encoder throws and this reports it. See src/ble/notificationcodec.h
     // and docs/notifications.md.
-    void sendNotification(const Ancs::Notification &notification, SimpleCallback callback);
-    void removeNotification(quint32 notificationId, SimpleCallback callback);
+    void sendNotification(const Ancs::Notification &notification,
+                           DeliveryCallback callback);
+    void removeNotification(quint32 notificationId, DeliveryCallback callback);
 
     // Removes a file the watch rendered for us. fetchTimelineFile() calls
     // this itself once the data is read.
@@ -351,7 +362,7 @@ private:
     // register the path again and try once more. Only the cached path sets
     // it, since a registration made a moment ago cannot be stale and
     // registering a second time is the thing the watch refuses.
-    void putRemoval(quint32 notificationId, bool mayRetry, SimpleCallback callback);
+    void putRemoval(quint32 notificationId, bool mayRetry, DeliveryCallback callback);
 
     quint32 m_sessionGeneration = 0;
 

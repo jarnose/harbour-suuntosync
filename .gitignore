@@ -28,5 +28,6 @@ RPMS/
 QtCreatorDeployment.txt
 documentation.list
 install_manifest.txt
+/harbour-suuntosync
 suuntosync-notifyd
 *_autogen/

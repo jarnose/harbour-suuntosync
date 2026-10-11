@@ -1679,3 +1679,91 @@ should have stopped showing one the moment it was answered.
 Said plainly: the cause is still unexplained, and this is a net rather than
 a fix. What it guarantees is that a ring cannot outlive the call by more than
 a minute and a half.
+
+## What the official Android app actually does with a call (2026-10-11)
+
+Jarno's observation first, because it reframes everything below: **the
+notifications stay on the watch with the official Suunto app too.** So the
+symptom this project had been chasing is not its own bug.
+
+A full HCI capture settled the rest. Taken on an unrooted Galaxy S24 - the
+snoop log is a developer-options toggle (`settings put global
+bluetooth_hci_log 1`, then restart Bluetooth), and `adb bugreport` carries
+the file out without root, at `FS/data/log/bt/btsnoop_hci.log`. Only the ATT
+handles 0x0012 and 0x0015 appear, so every frame below is the Race.
+
+### The incoming-call notification, as the official app sends it
+
+```
+--> GET  /Device/Connectivity/Ble/Ancs/Notification/Add   reqid 0x0730
+<-- ack 200
+--> PUT  reqid 0x0731, 124 bytes
+<-- put-resp 200
+```
+
+Parsed with this project's own field order:
+
+```
+id 0x5c9ebe72   type 0x1209   len 107   tag 0x14   form 0x00
+modifyExisting 0   categoryId 1   categoryCount 1   eventFlags 0x02
+appId   "com.android.phone"
+title   "Jarno Selänpää"
+message " "            <- a single space
+labels  none
+```
+
+Then the missed call, three seconds later: `categoryId 2`,
+**`modifyExisting 1`**, the same appId and title, message again a space, and
+one label - `"Hylkää"`. Sent **three times**, identically, each answered 200.
+
+### Two things this project had written down wrong
+
+**The `form` byte is not per watch model.** `notificationcodec.cpp` carries
+it as a per-device constant - 0x6a for a Race, 0x00 for a 9 Baro - derived
+from captures where that is what each watch's own app traffic used. Here the
+official app sends **0x00 to the Race**, on the Race's own ATT handle, and
+the watch answers 200. Both values are accepted by the same watch, so
+whatever the byte selects, it is not the device. This project's own 0x6a
+works and is left alone; the claim about what it *means* is what was wrong.
+
+**A label-less notification is accepted.** An earlier section here concluded
+that the watch refuses a structure whose label array is empty, on the
+strength of three timeouts followed by a success once a label was added. The
+official app's incoming call has **no label at all** and is answered 200. So
+that conclusion is unsupported: the timeouts were the non-response pattern
+below, and the label was a coincidence. The label stays - it is harmless and
+the Dismiss button turned out to be useful - but it was not the fix.
+
+### Why a removal times out, which is the useful part
+
+```
+--> GET /...Notification/Del   reqid 0x0732   <-- ack 200
+--> GET /...Notification/Del   reqid 0x0733   (no answer)
+--> GET /...Notification/Del   reqid 0x0734   (no answer)
+    ... six more, none answered ...
+--> PUT reqid 0x073b           <-- put-resp 200
+--> PUT reqid 0x073c           <-- put-resp 200
+```
+
+Nine registrations of the same path; **the first is answered and the other
+eight are ignored** - and the PUTs immediately after are answered normally,
+so the watch is not wedged. It is refusing to register `/Del` again while it
+already has.
+
+And the official app does not care: it fires nine, takes one answer, and
+never writes a removal payload at all. **It never completes a removal.**
+Which is exactly why its notifications stay on the watch, and why this
+project's do.
+
+`MdsWhiteboardClient::removeNotification()` re-runs `GET /Del` on every
+single call, so every retry is another registration of a path the watch has
+already registered. That is the shape of the bug. The fix is to register it
+once and keep the handle, which is what the protocol's handle model is for -
+noted here rather than done, because it changes the BLE client the
+application shares.
+
+**Not established**: the exact rule. "Answered once per session" fits this
+capture but not this project's own logs, where a retry ten seconds later
+sometimes succeeds. Some expiry is involved. A cached handle with a
+re-register fallback would work under any of the candidate rules, which is
+the argument for doing it that way.

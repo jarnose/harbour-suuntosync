@@ -642,7 +642,11 @@ void MdsWhiteboardClient::fetchCapabilities(DataCallback callback)
         }
         const std::vector<uint8_t> ackBody = ack.body;
         readPages([ackBody](uint16_t requestId, uint32_t at) {
-            return Mds::encodePagedReadRequest(requestId, ackBody, at);
+            // kParamIndex, not kParamInt32: this resource's cursor is an item
+            // index and it is typed differently on the wire - see
+            // mdswirecodec.h. The captured request says 07 00 where
+            // /Summary's says 06 00.
+            return Mds::encodePagedReadRequest(requestId, ackBody, at, Mds::kParamIndex);
         }, 0, {}, callback, PageAdvance::Items);
     });
 }

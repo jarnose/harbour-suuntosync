@@ -158,6 +158,20 @@ void testEncodePagedReadRequest()
     expectEq("encodePagedReadRequest(offset 451)",
               toHex(Mds::encodePagedReadRequest(0x0543, ackBody, 451)),
               "7ea50d0d004305002412018000010600c30100008bcc09977e");
+
+    // /Dev/Capabilities types the same field differently: its cursor is an
+    // item index, and the captured request says 07 00 where /Summary's says
+    // 06 00. Sending 06 00 there is answered with a ten-byte status frame
+    // and no page - found on the watch, not in the capture, which is why the
+    // bytes are pinned here. btsnoop_watchface_ok_20261012.log, reqIds
+    // 1795 and 1796, ack f07a00018000c800.
+    const auto capsAck = fromHex("f07a00018000c800");
+    expectEq("encodePagedReadRequest(kParamIndex, item 0)",
+              toHex(Mds::encodePagedReadRequest(1795, capsAck, 0, Mds::kParamIndex)),
+              "7ea50d0d000307f07a0001800001070000000000aa26b42b7e");
+    expectEq("encodePagedReadRequest(kParamIndex, item 10)",
+              toHex(Mds::encodePagedReadRequest(1796, capsAck, 10, Mds::kParamIndex)),
+              "7ea50d0d000407f07a000180000107000a000000d4c908df7e");
 }
 
 // --- captured response decode (watch -> phone, Handle Value Notification, handle 0x0015) ---

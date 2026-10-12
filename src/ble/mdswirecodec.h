@@ -214,6 +214,13 @@ constexpr uint16_t kParamSmallEnum = 0x0003;
 
 // The three confirmed type codes.
 constexpr uint16_t kParamInt32 = 0x0006;
+// A 32-bit value again, and the difference from kParamInt32 is the resource,
+// not the width: /Summary's paged reads carry their byte offset as 0x0006
+// and /Dev/Capabilities carries its *item* index as 0x0007. Sending 0x0006
+// there is answered with a ten-byte status frame rather than a page - which
+// is how this was found, on the watch, after the whole decode had been
+// derived from a capture that was read one byte too loosely.
+constexpr uint16_t kParamIndex = 0x0007;
 constexpr uint16_t kParamInt64 = 0x0008;
 constexpr uint16_t kParamString = 0x000C;
 // A byte array, seen carrying the GPS ephemeris blob to a Suunto 9 Baro in
@@ -283,7 +290,8 @@ std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
                                              uint32_t offset);
 
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
-                                              uint32_t offset);
+                                              uint32_t offset,
+                                              uint16_t parameterType = kParamInt32);
 
 // Incremental SLIP frame reassembler + envelope parser/validator. Feed it
 // raw bytes as they arrive from the notify characteristic, in order,

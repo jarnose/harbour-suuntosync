@@ -251,14 +251,14 @@ std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
 }
 
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
-                                              uint32_t offset)
+                                              uint32_t offset, uint16_t parameterType)
 {
     if (ackBody.size() < 6)
         throw std::invalid_argument("encodePagedReadRequest: ackBody shorter than 6 bytes");
     std::vector<uint8_t> body(ackBody.begin(), ackBody.begin() + 6);
     body.push_back(0x01);
-    body.push_back(0x06);
-    body.push_back(0x00);
+    body.push_back(static_cast<uint8_t>(parameterType & 0xFF));
+    body.push_back(static_cast<uint8_t>((parameterType >> 8) & 0xFF));
     body.push_back(static_cast<uint8_t>(offset & 0xFF));
     body.push_back(static_cast<uint8_t>((offset >> 8) & 0xFF));
     body.push_back(static_cast<uint8_t>((offset >> 16) & 0xFF));

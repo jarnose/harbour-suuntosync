@@ -736,6 +736,27 @@ AppController::AppController(QObject *parent)
     connect(this, &AppController::errorOccurred, this, [](const QString &message) {
         qWarning().noquote() << message;
     });
+    // errorOccurred is not the only channel, which the first version of this
+    // missed: an upload reports through workoutUploaded, so the one message
+    // actually being chased - the cloud's 523 - still went nowhere. Every
+    // signal that carries text a user reads belongs here.
+    connect(this, &AppController::workoutUploaded, this,
+            [](const QString &key, bool ok, const QString &message) {
+        qWarning().noquote() << QStringLiteral("upload %1 %2: %3")
+                                        .arg(key, ok ? QStringLiteral("ok")
+                                                     : QStringLiteral("failed"), message);
+    });
+    connect(this, &AppController::whiteboardTestResult, this, [](const QString &summary) {
+        qWarning().noquote() << summary;
+    });
+    connect(this, &AppController::logbookTestResult, this, [](const QString &summary) {
+        qWarning().noquote() << summary;
+    });
+    connect(this, &AppController::watchNotificationsRead, this,
+            [](int value, const QString &detail) {
+        qWarning().noquote() << QStringLiteral("watch notifications %1: %2")
+                                        .arg(value).arg(detail);
+    });
 
     QString error;
     if (!m_cloudAccountStore->open(&error)) {

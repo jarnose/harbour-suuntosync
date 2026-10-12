@@ -920,3 +920,85 @@ Everything else is a tmpfs bind mount and disappears on reboot. Leaving the
 proxy set while the cable is out, or across a reboot, breaks networking for
 every app on the phone until somebody notices - so unset it before walking
 away, even if the capture is not finished.
+
+## The 523 that was a unit, not a shape (2026-10-12)
+
+The first watch-recorded workout with a real `/Data` payload that this app
+tried to upload - a bike ride, 57 kB compressed where every earlier one held
+under 300 bytes - was refused with `523 Workout could not be saved`. It took
+six attempts to find, and five of them were structural fixes that were each
+correct and none of which was the cause. Worth recording in that order,
+because the order is the lesson.
+
+**The cause: latitude and longitude were in degrees, and the cloud's format
+is radians.**
+
+```
+official  Latitude 1.0730863393866827   Longitude 0.417278059626382
+ours      Latitude 61.4833183           Longitude 23.9082717
+```
+
+`Sample.Latitude` is `<FRM>int32 <MOD>PI*x/(10^7*180)`, so the schema's own
+unit is radians, and `src/ble/sbemtable.cpp` has deviated from it since it
+was written, with a comment saying why: degrees are what the map and the
+rest of the app work in. That is right for the app and wrong at the
+serialisation boundary, where the field's range is ±π/2 and 61.48 is not a
+latitude. The table now reports a factor back to the schema's unit - read
+off the `<MOD>` for a watch's own table, named explicitly for the two fields
+in the compiled-in one, which carries the deviation but not the fact of it.
+
+### What broke the deadlock
+
+Two things, neither of them a fix.
+
+**An indoor workout.** Jarno recorded a few minutes of pilates while
+cooking and it uploaded without complaint. That one observation ruled out
+every "the document is incomplete" theory at once - the indoor document is
+missing the same 85 null fields - and pointed at what an outdoor ride has
+and an indoor session does not. It also saved a large table-driven rewrite
+that was about to be started on the strength of exactly that theory.
+
+**Comparing values instead of structure.** Everything up to that point had
+compared path sets, entry counts and JSON types. The position was wrong by a
+constant factor the whole time and no structural comparison can see that.
+
+### The five fixes that were right but not it
+
+1. `'+'` is not a dot. Reading it as an ordinary character produced keys
+   like `"Windows+Window"`.
+2. `'+'` marks an array, and an element-marker segment belongs to its
+   parent: `Windows.Window.ActivityId` is `Windows[].ActivityId`.
+3. Enums are written as names, which is also how the watch states its own
+   serial number, model and firmware - `enum:0=2352D0000247`. The upload
+   had carried `"SerialNumber": 0`.
+4. The altitude calibration event is dropped, as the official app drops it.
+5. Array-ness comes from the schema, not from which readings arrived: `'+'`
+   sits on one member of a group and that member can be nil.
+
+All five stand on their own merits, and 3 and 5 recovered data that was
+being lost. But the upload could not have worked with any of them alone.
+
+### Method notes worth keeping
+
+- **A capture of the official app uploading the same workout is worth more
+  than any amount of reasoning**, and a rejected request is as good as an
+  accepted one for this purpose: the 403'd `POST /v1/workout` in the
+  2026-10-12 capture carried a complete body.
+- **Rebuild the document locally from the stored bytes.** `workout_sml`
+  keeps them, `SmlJson` is Qt-free, and a 60-line driver turns one into the
+  other in a second. Every finding here was verified that way before
+  anything was built.
+- **Watch for a duplicate confounder.** Once the official app had uploaded
+  the ride, our attempts could not be distinguished from a re-upload, and
+  the test was meaningless until it was deleted from the cloud.
+- One of my own probes misled me: Python's `dict.get()` returns `None` for
+  an absent key, which `json.dumps` prints as `null`, and I reported a bare
+  null field that was simply missing.
+
+### Still different, and tolerated
+
+`Sample.UTC` and `Settings.SgeeEpoTimestamp` go out as the same instant with
+the local offset where the official app writes `+00:00`. local64 carries its
+own offset and `Sbem::decodeLocal64` folds it away, so writing it back
+exactly needs that offset kept. The upload is accepted as it is. The fields
+the official writes as null and this omits are likewise accepted.

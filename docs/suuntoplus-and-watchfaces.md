@@ -264,17 +264,38 @@ split with any confidence: by analogy with the parameterised handle fetch it
 reads as one parameter of type `0x000d`, with the `02` belonging to the
 value.
 
-### Two things to resolve before writing one
+### The sequence, with both earlier doubts resolved
 
-**The handle the PUTs use is not the one the register returned.** The
-`0x0a /Dev/FileSystem/Stream` register is acked with handle `f0 23 05 03 80
-01`, and the PUTs carry `f0 23 0a 03 80 01`. A short `0x0d` walk sits
-between them, and what it resolves is not yet traced.
+Tracing the same capture answered the two questions this section first
+raised, and one of them was my own mistake.
 
-**The install traffic has its own request-id sequence.** Its ids run 1, 3,
-4, 11, 19, 20 … while the surrounding session is at 2378 and climbing. Two
-independent counters mean either a second logical session or a per-resource
-counter, and which it is matters for a client that has to pick its own ids.
+**The PUTs do use the register's handle.** `0x0a /Dev/FileSystem/Stream` is
+acked with `f0 23 0a 03 80 01` and that is exactly what the data PUTs
+carry. The `f0 23 05 03 80 01` I reported was the ack of a different
+request in the same neighbourhood. There is no unexplained walk in between.
 
-Both are in `btsnoop_watchface_ok_20261012.log`, and neither needs the
-watch to answer them.
+**The id sequence restarts because the session is a different one.** The
+install's requests are `03 80 01` where the rest of the traffic is
+`01 80 00` - the GET verb byte is `0x03`, not `0x01`, and the third byte is
+`01` rather than `00`. A separate session carries its own counter, which is
+why ids run from 1 while the main session is at 2378.
+
+So, per file, with ids exactly as captured every time:
+
+```
+0x0e  reqId=11   "b:/zapp"                     DirectoryCreate's parameter
+0x0a  reqId=1    /Dev/FileSystem/Stream        -> ack carries the handle
+0x0d  reqId=2..18                              schema introspection
+0x0e  reqId=19   "b:/zapp/<name>.zip"          names the file being written
+0x0e  reqId=20.. [total][end][len][data]       the file itself
+```
+
+Two details that could not be guessed: the watch's filesystem is addressed
+with a **drive prefix**, `b:/zapp/...`, and a filename is passed as a
+parameter of type `0x000c`, the NUL-terminated string type this project
+already knew from the sleep timeline's reads.
+
+The `0x0d` walk in the middle is introspection - `/Meta/Hash` answers
+`3829AF73` and the reads that follow return field names, `FileName` and
+`Data` among them. It is the same `protocol_v9` structure walk `/Entries`
+does, and as there, it is probably skippable. Worth trying without it.

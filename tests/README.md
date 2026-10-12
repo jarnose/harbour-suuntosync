@@ -100,3 +100,7 @@ project's own output. Where possible they come from a second, independent
 source - the Suunto cloud's own figures for the same workout or the same
 night, Python's `datetime` for epoch conversions, or the published example
 in a format's specification. That is what makes them worth running.
+
+- `test_capabilities.cpp` - the watch's capability list: the paged header's
+  item count, and the strings the cloud's `capabilities=` parameter is built
+  from. Vector is the real first page of /Dev/Capabilities.

@@ -219,6 +219,16 @@ Page {
                 onClicked: AppController.testWhiteboard()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testCapabilities().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testCapabilities() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Test capabilities")
+                onClicked: AppController.testCapabilities()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

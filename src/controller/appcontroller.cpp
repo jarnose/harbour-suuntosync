@@ -1,4 +1,6 @@
 #include "appcontroller.h"
+
+#include "../ble/capabilities.h"
 #include "../secrets/tokenvault.h"
 #include "../cloud/cloudaccountstore.h"
 #include "../ble/pairedwatchstore.h"
@@ -1071,6 +1073,42 @@ void AppController::forgetWatch()
     m_watchConnected = false;
     emit pairedWatchChanged();
     emit watchConnectedChanged();
+}
+
+void AppController::testCapabilities()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_whiteboardTestInFlight) {
+        emit whiteboardTestResult(tr("A test request is already in flight"));
+        return;
+    }
+
+    m_whiteboardTestInFlight = true;
+    m_whiteboardClient->fetchCapabilities(
+            [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        m_whiteboardTestInFlight = false;
+        if (!ok) {
+            emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
+            return;
+        }
+        const std::vector<std::string> caps = Capabilities::parse(payload);
+        if (caps.empty()) {
+            emit whiteboardTestResult(tr("Capabilities read returned %1 bytes that "
+                                          "decoded to nothing").arg(payload.size()));
+            return;
+        }
+        // The count is what to compare against the official app's request:
+        // the capture had 49 for this Race, and the joined string is what
+        // the cloud's `capabilities=` parameter carries.
+        emit whiteboardTestResult(tr("OK - %1 capabilities, %2 bytes: %3")
+                                           .arg(caps.size())
+                                           .arg(payload.size())
+                                           .arg(QString::fromStdString(
+                                                    Capabilities::join(caps))));
+    });
 }
 
 void AppController::testWhiteboard()

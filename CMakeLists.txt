@@ -107,6 +107,7 @@ set(WATCH_SOURCES
     src/ble/sleepdecoder.cpp
     src/ble/recoverydecoder.cpp
     src/ble/sbemtable.cpp
+    src/ble/capabilities.cpp
     src/ble/sbemlayout.cpp
     src/ble/activitydecoder.cpp
     src/ble/notificationcodec.cpp

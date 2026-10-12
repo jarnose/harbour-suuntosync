@@ -1,4 +1,6 @@
 #include "mdswhiteboardclient.h"
+
+#include "capabilities.h"
 #include "bluezmanagedobjects.h"
 
 #include <QDBusConnection>
@@ -581,11 +583,12 @@ void MdsWhiteboardClient::readNextPage(const std::vector<uint8_t> &ackBody, uint
 }
 
 void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
-                                     std::vector<uint8_t> collected, DataCallback callback)
+                                     std::vector<uint8_t> collected, DataCallback callback,
+                                     PageAdvance advance)
 {
     getRaw([encoder, offset](uint16_t requestId) {
         return encoder(requestId, offset);
-    }, [this, encoder, offset, collected, callback]
+    }, [this, encoder, offset, collected, callback, advance]
             (bool ok, const Mds::Frame &frame, const QString &error) mutable {
         if (!ok) {
             callback(false, {}, tr("Paged read at offset %1 failed: %2").arg(offset).arg(error));
@@ -610,7 +613,37 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
             callback(true, collected, QString());
             return;
         }
-        readPages(encoder, offset + static_cast<uint32_t>(payloadSize), collected, callback);
+        uint32_t step = static_cast<uint32_t>(payloadSize);
+        if (advance == PageAdvance::Items) {
+            step = static_cast<uint32_t>(Capabilities::itemsInPage(frame.body));
+            if (step == 0) {
+                // A page that says it holds nothing would loop for ever.
+                callback(true, collected, QString());
+                return;
+            }
+        }
+        readPages(encoder, offset + step, collected, callback, advance);
+    });
+}
+
+void MdsWhiteboardClient::fetchCapabilities(DataCallback callback)
+{
+    const QString path = QStringLiteral("/Dev/Capabilities");
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 was acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        readPages([ackBody](uint16_t requestId, uint32_t at) {
+            return Mds::encodePagedReadRequest(requestId, ackBody, at);
+        }, 0, {}, callback, PageAdvance::Items);
     });
 }
 

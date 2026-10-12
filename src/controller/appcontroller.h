@@ -143,6 +143,12 @@ public:
     // the raw result via whiteboardTestResult() - nothing is parsed or
     // stored yet (that's LogbookSync, once this plumbing is proven).
     Q_INVOKABLE void testWhiteboard();
+    // Reads the watch's capability list and reports it as the cloud's own
+    // parameter would spell it. A probe, because nothing in the SuuntoPlus
+    // store can be asked for before this works, and because the whole
+    // decode was derived from a capture rather than tried on hardware -
+    // see docs/suuntoplus-and-watchfaces.md.
+    Q_INVOKABLE void testCapabilities();
 
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of

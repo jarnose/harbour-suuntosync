@@ -337,11 +337,27 @@ private:
                              size_t offset, ProgressCallback progress,
                              SimpleCallback callback);
     void commitEphemeris(SimpleCallback callback);
+    // How a paged read's cursor advances between pages. /Summary and the
+    // timeline files count bytes; /Dev/Capabilities counts *items*, ten to a
+    // page, and says how many it returned in its header. Advancing one the
+    // other way re-reads the first page for ever.
+    enum class PageAdvance { Bytes, Items };
+
     void readPages(PageRequestEncoder encoder, uint32_t offset,
-                    std::vector<uint8_t> collected, DataCallback callback);
+                    std::vector<uint8_t> collected, DataCallback callback,
+                    PageAdvance advance = PageAdvance::Bytes);
 
     void readNextPage(const std::vector<uint8_t> &ackBody, uint32_t offset,
                        std::vector<uint8_t> collected, DataCallback callback);
+
+public:
+    // The watch's capability list, as Capabilities::parse() wants it: the
+    // concatenated payload of /Dev/Capabilities' pages. Nothing in the
+    // SuuntoPlus store can be listed or installed without it - see
+    // docs/suuntoplus-and-watchfaces.md.
+    void fetchCapabilities(DataCallback callback);
+
+private:
 
     QString m_deviceObjectPath;
     QString m_servicePath;

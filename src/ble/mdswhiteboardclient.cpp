@@ -71,6 +71,20 @@ MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
 
 void MdsWhiteboardClient::attachToDevice(const QString &deviceObjectPath)
 {
+    // Idempotent, and it has to be: AppController attaches both when a
+    // Connect() finishes and when an already-connected paired watch turns
+    // up, and either can come first. Re-attaching used to tear the session
+    // down and build it again, which is wasteful at best - and if
+    // QDBusConnection::disconnect() does not match the hook that connect()
+    // made, it leaks one hook per attach, and every notification is then
+    // delivered as many times as there are hooks. That is fatal for a reply
+    // spanning several notifications: the decoder sees each chunk twice and
+    // no frame ever satisfies its length and CRC check.
+    if (deviceObjectPath == m_deviceObjectPath && m_notifySubscribed) {
+        qDebug() << "attachToDevice: already attached to" << deviceObjectPath;
+        return;
+    }
+    qDebug() << "attachToDevice" << deviceObjectPath;
     detach();
     ++m_sessionGeneration;
     m_deviceObjectPath = deviceObjectPath;
@@ -99,6 +113,27 @@ void MdsWhiteboardClient::detach()
                 kBluezService, m_notifyCharPath, kPropertiesInterface,
                 QStringLiteral("PropertiesChanged"), this,
                 SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
+
+        // StopNotify, and it is not optional. Disconnecting the signal only
+        // stops us listening; BlueZ still counts this connection as one of
+        // the characteristic's notifying clients until it is told otherwise,
+        // and it emits PropertiesChanged once per notifying client. So a
+        // daemon that had attached once and then let go left the
+        // application receiving every notification twice - survivable for a
+        // reply that fits in one notification, because the duplicate lands
+        // after the real one resolved the request and the request-id guard
+        // drops it, and fatal for one spanning several, because the decoder
+        // then sees each chunk twice and no frame satisfies its length and
+        // CRC check. That is what made every paged read time out while an
+        // HCI capture showed the watch answering correctly.
+        //
+        // Errors are ignored on purpose: "no notify session" is the state we
+        // want, and that is also what the failure means.
+        if (m_notifySubscribed) {
+            QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,
+                                       QDBusConnection::systemBus());
+            notifyChar.call(QStringLiteral("StopNotify"));
+        }
     }
     m_notifySubscribed = false;
 
@@ -226,6 +261,7 @@ void MdsWhiteboardClient::subscribeToNotify()
                 QStringLiteral("PropertiesChanged"), this,
                 SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
         m_notifySubscribed = true;
+        qDebug() << "subscribed to" << m_notifyCharPath;
     }
 
     QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,

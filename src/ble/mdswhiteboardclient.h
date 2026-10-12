@@ -5,7 +5,6 @@
 #include "mdswirecodec.h"
 #include "notificationcodec.h"
 
-#include <QDBusMessage>
 #include <QObject>
 #include <QQueue>
 #include <QString>

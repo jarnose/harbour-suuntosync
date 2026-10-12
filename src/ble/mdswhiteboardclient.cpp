@@ -80,11 +80,8 @@ void MdsWhiteboardClient::attachToDevice(const QString &deviceObjectPath)
     // delivered as many times as there are hooks. That is fatal for a reply
     // spanning several notifications: the decoder sees each chunk twice and
     // no frame ever satisfies its length and CRC check.
-    if (deviceObjectPath == m_deviceObjectPath && m_notifySubscribed) {
-        qDebug() << "attachToDevice: already attached to" << deviceObjectPath;
+    if (deviceObjectPath == m_deviceObjectPath && m_notifySubscribed)
         return;
-    }
-    qDebug() << "attachToDevice" << deviceObjectPath;
     detach();
     ++m_sessionGeneration;
     m_deviceObjectPath = deviceObjectPath;
@@ -261,7 +258,6 @@ void MdsWhiteboardClient::subscribeToNotify()
                 QStringLiteral("PropertiesChanged"), this,
                 SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
         m_notifySubscribed = true;
-        qDebug() << "subscribed to" << m_notifyCharPath;
     }
 
     QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,
@@ -307,16 +303,12 @@ void MdsWhiteboardClient::onNotifyPropertiesChanged(const QString &interface,
     const auto frames = m_decoder.feed(reinterpret_cast<const uint8_t *>(value.constData()),
                                         static_cast<size_t>(value.size()));
     for (const Mds::Frame &frame : frames) {
-        // Kept deliberately. A doubled D-Bus subscription showed up here as
-        // every frame being logged twice, and nothing else in this class was
-        // visible from outside; an HCI capture proves what the watch sent,
-        // not what we made of it. Bulk chunks are the one high-volume case
-        // and are counted elsewhere, so they stay out.
-        if (frame.type != 0x01) {
-            qDebug() << "frame type" << int(frame.type) << "reqId" << int(frame.requestId)
-                     << "body" << int(frame.body.size())
-                     << "in flight" << int(m_inFlightRequestId);
-        }
+        // If this class ever has to be debugged from outside again, one
+        // qDebug() here - frame type, request id, body size and the current
+        // in-flight id, skipping the high-volume 0x01 bulk chunks - is what
+        // found the duplicate-notification bug in docs/notifications.md. An
+        // HCI capture cannot: it shows what the watch sent, not what we made
+        // of it.
         // TYPE=0x13, reqId=0 is specifically the session handshake's reply
         // (see Mds::literalSessionHandshakeRequest()).
         if (frame.type == 0x13 && frame.requestId == 0) {

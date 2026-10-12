@@ -93,6 +93,14 @@ public:
     // the watch is reporting something the list does not cover.
     bool hasEnumSpec(uint16_t id) const;
 
+    // What to multiply a reading by to get the unit the schema's own <MOD>
+    // expression produces, rather than the one this build chose. 1 for
+    // everything except latitude, longitude and heading, which are kept in
+    // degrees here and are radians in the schema. The cloud wants the
+    // schema's unit: an upload with latitude 61.48 in a field whose range
+    // is +-PI/2 was answered with 523.
+    double canonicalFactor(uint16_t id) const;
+
 private:
     struct Entry
     {
@@ -103,6 +111,7 @@ private:
         // text rather than a parsed map because it is consulted rarely and
         // a map per descriptor would cost more than it saves.
         std::string enumSpec;
+        double canonical = 1.0;
     };
 
     // Descriptor holds bare pointers into Entry::name/children, so they

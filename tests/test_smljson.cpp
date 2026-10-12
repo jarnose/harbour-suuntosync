@@ -184,6 +184,23 @@ void testFieldsLandWhereTheSchemaSaysTheyShould(const std::string &doc)
     // Hertz, not bpm: a captured upload has "HR": 1.35. A human heart rate
     // in hertz is around 1-3, so a value of 60+ would mean the canonical
     // unit had been converted away somewhere.
+    // Latitude and longitude go out in the schema's unit, radians, not the
+    // degrees this build keeps them in for the map's sake. An upload with
+    // 61.48 in a field whose range is +-PI/2 was answered with 523, and the
+    // captured upload of that ride has 1.0730863393866827.
+    const size_t lat = doc.find("\"Latitude\":");
+    if (lat != std::string::npos) {
+        const double v = std::atof(doc.c_str() + lat + 11);
+        check(v > -1.5708 && v < 1.5708,
+               "latitude is in radians (" + std::to_string(v) + ")");
+    }
+    const size_t lon = doc.find("\"Longitude\":");
+    if (lon != std::string::npos) {
+        const double v = std::atof(doc.c_str() + lon + 12);
+        check(v > -3.1416 && v < 3.1416,
+               "longitude is in radians (" + std::to_string(v) + ")");
+    }
+
     const size_t hr = doc.find("\"HR\":");
     if (hr != std::string::npos) {
         const double v = std::atof(doc.c_str() + hr + 5);

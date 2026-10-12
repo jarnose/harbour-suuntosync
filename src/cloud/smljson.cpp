@@ -340,7 +340,15 @@ std::string literalFor(const Sml::Reading &reading, int offsetMinutes,
     }
     if (reading.descriptor->format == SbemDescriptors::Format::Bool)
         return reading.value != 0 ? "true" : "false";
-    return formatNumber(reading.value, reading.descriptor->precision);
+
+    // Back to the schema's unit. This build keeps latitude, longitude and
+    // heading in degrees because that is what the map and the UI want; the
+    // cloud's format is the schema's own, which for those three is radians.
+    // The captured upload of the same ride has 1.0730863393866827 where
+    // this had 61.4833183 - the same position, and a value outside the
+    // field's range.
+    const double value = reading.value * table.canonicalFactor(reading.descriptor->id);
+    return formatNumber(value, reading.descriptor->precision);
 }
 
 } // namespace

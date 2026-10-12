@@ -47,21 +47,29 @@ struct ModEntry
     const char *expression;
     double scale;
     double offset;
+    // What to multiply this build's value by to get back to the unit the
+    // schema's own expression produces. 1 everywhere except where the
+    // deviation above applies - and the cloud wants the schema's unit, not
+    // this app's: an upload with latitude in degrees puts 61.48 in a field
+    // whose range is +-PI/2, and the server answered 523.
+    double canonical;
 };
 
+const double kDegreesToRadians = 3.14159265358979323846 / 180.0;
+
 const ModEntry kMods[] = {
-    { "x/1000", 1.0 / 1000, 0.0 },
-    { "x/10", 1.0 / 10, 0.0 },
-    { "x/5", 1.0 / 5, 0.0 },
-    { "x/50", 1.0 / 50, 0.0 },
-    { "x/60", 1.0 / 60, 0.0 },
-    { "x/100", 1.0 / 100, 0.0 },
-    { "x/(1000*128)", 1.0 / 128000, 0.0 },
-    { "x/5-1000", 1.0 / 5, -1000.0 },
-    { "x+85000", 1.0, 85000.0 },
-    { "x*3.6", 3.6, 0.0 },
-    { "PI*x/(10^7*180)", 1e-7, 0.0 },  // degrees, see above
-    { "PI*x/100/180", 1.0 / 100, 0.0 }, // degrees; the 9 Baro's compass
+    { "x/1000", 1.0 / 1000, 0.0, 1.0 },
+    { "x/10", 1.0 / 10, 0.0, 1.0 },
+    { "x/5", 1.0 / 5, 0.0, 1.0 },
+    { "x/50", 1.0 / 50, 0.0, 1.0 },
+    { "x/60", 1.0 / 60, 0.0, 1.0 },
+    { "x/100", 1.0 / 100, 0.0, 1.0 },
+    { "x/(1000*128)", 1.0 / 128000, 0.0, 1.0 },
+    { "x/5-1000", 1.0 / 5, -1000.0, 1.0 },
+    { "x+85000", 1.0, 85000.0, 1.0 },
+    { "x*3.6", 3.6, 0.0, 1.0 },
+    { "PI*x/(10^7*180)", 1e-7, 0.0, kDegreesToRadians },  // degrees, see above
+    { "PI*x/100/180", 1.0 / 100, 0.0, kDegreesToRadians }, // degrees; the 9 Baro's compass
 };
 
 // The prefixes the offline generator strips, so a name from a watch and a
@@ -300,6 +308,7 @@ Table Table::parse(const std::vector<uint8_t> &payload)
                 if (expression == candidate.expression) {
                     d.scale = candidate.scale;
                     d.offset = candidate.offset;
+                    entry.canonical = candidate.canonical;
                     known = true;
                     break;
                 }
@@ -332,6 +341,15 @@ const Table &Table::builtin()
             entry.descriptor = all[i];
             entry.name = all[i].name ? all[i].name : "";
             entry.children.assign(all[i].children, all[i].children + all[i].childCount);
+            // The generated table carries the deviation (degrees, not the
+            // schema's radians) but not the fact of it, so the two fields it
+            // applies to are named here. Matching by name rather than by
+            // scale on purpose: 1e-7 is not unique to a coordinate, and
+            // getting this wrong would put a wrong position in an upload
+            // rather than fail loudly. The runtime-parsed table reads it off
+            // the <MOD> instead and needs none of this.
+            if (entry.name == "Sample.Latitude" || entry.name == "Sample.Longitude")
+                entry.canonical = kDegreesToRadians;
             built.m_entries.push_back(std::move(entry));
         }
         built.relink();
@@ -347,6 +365,15 @@ bool Table::hasEnumSpec(uint16_t id) const
             return !candidate.enumSpec.empty();
     }
     return false;
+}
+
+double Table::canonicalFactor(uint16_t id) const
+{
+    for (const Entry &candidate : m_entries) {
+        if (candidate.descriptor.id == id)
+            return candidate.canonical;
+    }
+    return 1.0;
 }
 
 std::string Table::enumName(uint16_t id, double value) const

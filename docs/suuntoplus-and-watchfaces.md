@@ -299,3 +299,71 @@ The `0x0d` walk in the middle is introspection - `/Meta/Hash` answers
 `3829AF73` and the reads that follow return field names, `FileName` and
 `Data` among them. It is the same `protocol_v9` structure walk `/Entries`
 does, and as there, it is probably skippable. Worth trying without it.
+
+## zappctl, read properly (2026-10-12)
+
+[wylandplex/zappctl](https://github.com/wylandplex/zappctl) installs
+SuuntoPlus apps over BLE from Linux without Suunto's app, and it ports
+SyncFix's decompiled `MainActivity.java`. It is 0BSD, so the licence is no
+obstacle, but as with libdivecomputer nothing is copied here: it was read,
+and every claim checked against this project's own capture.
+
+**It confirms the stream write byte for byte.** `build_stream_frames` emits
+
+```python
+bytes([0xf0,0x23,0x0a,0x03,0x80,0x01, 0x01,0x0d,0x00,0x02])
+  + le24(len(pkg)) + le24(end) + le16(length) + pkg[off:end]
+```
+
+- the same ten-byte prefix derived above from the capture,
+- `le24`/`le24`/`le16`, which settles the "u24 or u32 with the 0x02 in it"
+  question in favour of 24-bit fields,
+- `CHUNK = 453`, "from SyncFix",
+- request ids from 20, and the filename frame at 19 as
+  `[handle][01][0c 00][path NUL]`.
+
+Two independent derivations agreeing on every field is as close to certain
+as this protocol gets.
+
+### What it added
+
+**The install commit, and a trap in it.** `post_frames.txt` is eight frames:
+register `/Plugin/Install`, six `0x0d` walk steps, then a `0x0e` whose whole
+body is `f0 <ref:2> 01 80 00`. zappctl's comment records that a recorded
+commit refused with 400 on a 9 Peak Pro while *the upload had already
+succeeded*, because the reference is device-assigned - `0x53,0x0e` on a
+Vertical 2, `0x53,0x0d` on a 9 Peak Pro.
+
+Read against the frame format, that "reference" is simply the middle two
+bytes of the handle the registration hands back, and this project's capture
+agrees: `/Plugin/Install` on the Race is acked with handle
+`f0 53 0f 01 80 00`, so the Race's reference is `53 0f`. A client that
+registers the path itself and uses the handle it is given needs neither
+zappctl's 139 replayed setup frames nor its re-pinning pass. **The replay
+and the re-pinning are the same problem**: captured frames carry another
+watch's handles. Our own capture bears this out from the other side - its
+install session is `03 80 01` where SyncFix's recording is `01 80 00`.
+
+**A silent failure worth more than the rest.** The drive prefix is per
+generation: NG3 wants `b:/zapp`, NG1 wants `/zapp`, and zappctl's comment
+says the wrong one "writes the upload to a path the watch ignores - and the
+install still answers 200". So a successful-looking install can leave
+nothing on the watch. The Race took `b:/zapp` in the capture, which settles
+it for this watch and for nothing else.
+
+**MTU.** zappctl forces an MTU exchange because "BlueZ reports the default
+ATT MTU (23) until an exchange happens", then writes `mtu - 3` at a time.
+This project's client writes 20 bytes unconditionally, which for a 100 kB
+watch face is some five thousand writes. Notifications from this watch
+already arrive 60 bytes at a time (see docs/notifications.md), so the link
+clearly carries more than 23 - worth doing before any upload is attempted
+in earnest, not after.
+
+### What remains unknown
+
+The `0x0d` walks - 139 frames before the write, six before the commit - are
+replayed by both SyncFix and zappctl, so neither explains them. They are the
+`protocol_v9` structure introspection this project has seen at `/Entries`
+and `/Summary`, and whether a client that already knows the handle can skip
+them is untested. That is the one thing to try first, because skipping them
+is the difference between a few frames and a hundred and forty.

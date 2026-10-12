@@ -347,6 +347,11 @@ private:
     QString m_servicePath;
     QString m_writeCharPath;
     QString m_notifyCharPath;
+    // Whether this session's PropertiesChanged hook for the notify
+    // characteristic is in place. QDBusConnection::connect() does not
+    // deduplicate, so subscribing twice delivers every notification twice,
+    // and the decoder cannot survive that - see subscribeToNotify().
+    bool m_notifySubscribed = false;
 
     Mds::Decoder m_decoder;
     uint16_t m_nextRequestId = 1;

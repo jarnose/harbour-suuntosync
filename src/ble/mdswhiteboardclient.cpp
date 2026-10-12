@@ -100,6 +100,7 @@ void MdsWhiteboardClient::detach()
                 QStringLiteral("PropertiesChanged"), this,
                 SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
     }
+    m_notifySubscribed = false;
 
     const bool wasReady = isReady();
     m_deviceObjectPath.clear();
@@ -145,7 +146,14 @@ void MdsWhiteboardClient::onDevicePropertiesChanged(const QString &interface,
 
 void MdsWhiteboardClient::tryDiscoverGattObjects()
 {
-    if (isReady() || m_deviceObjectPath.isEmpty())
+    // Not isReady(): that stays false until the handshake reply arrives, so
+    // a second ServicesResolved landing inside that window - tens of
+    // milliseconds, and BlueZ emits more than one - used to run the whole
+    // discovery again, subscribe a second time and send a second handshake.
+    // m_notifySubscribed is the honest question: is this session already
+    // set up? Discovery stays repeatable while it is not, so a StartNotify
+    // that failed can still be retried by the next ServicesResolved.
+    if (m_notifySubscribed || m_deviceObjectPath.isEmpty())
         return;
 
     QDBusInterface manager(kBluezService, QStringLiteral("/"), kObjectManagerInterface,
@@ -203,10 +211,22 @@ void MdsWhiteboardClient::tryDiscoverGattObjects()
 
 void MdsWhiteboardClient::subscribeToNotify()
 {
-    QDBusConnection::systemBus().connect(
-            kBluezService, m_notifyCharPath, kPropertiesInterface,
-            QStringLiteral("PropertiesChanged"), this,
-            SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
+    // Idempotent on purpose. QDBusConnection::connect() adds another hook
+    // rather than recognising the one already there, and a doubled hook
+    // delivers every notification twice. A reply that fits in one
+    // notification survives that - the duplicate arrives after the real one
+    // resolved the request, so the request-id guard drops it - but a reply
+    // spanning several does not: the decoder sees chunk1 chunk1 chunk2
+    // chunk2, and no frame ever satisfies its length and CRC check, so the
+    // request times out with the watch having answered correctly. That is
+    // what broke every paged read and every multi-notification response.
+    if (!m_notifySubscribed) {
+        QDBusConnection::systemBus().connect(
+                kBluezService, m_notifyCharPath, kPropertiesInterface,
+                QStringLiteral("PropertiesChanged"), this,
+                SLOT(onNotifyPropertiesChanged(QString, QVariantMap, QStringList)));
+        m_notifySubscribed = true;
+    }
 
     QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,
                                QDBusConnection::systemBus());
@@ -251,6 +271,16 @@ void MdsWhiteboardClient::onNotifyPropertiesChanged(const QString &interface,
     const auto frames = m_decoder.feed(reinterpret_cast<const uint8_t *>(value.constData()),
                                         static_cast<size_t>(value.size()));
     for (const Mds::Frame &frame : frames) {
+        // Kept deliberately. A doubled D-Bus subscription showed up here as
+        // every frame being logged twice, and nothing else in this class was
+        // visible from outside; an HCI capture proves what the watch sent,
+        // not what we made of it. Bulk chunks are the one high-volume case
+        // and are counted elsewhere, so they stay out.
+        if (frame.type != 0x01) {
+            qDebug() << "frame type" << int(frame.type) << "reqId" << int(frame.requestId)
+                     << "body" << int(frame.body.size())
+                     << "in flight" << int(m_inFlightRequestId);
+        }
         // TYPE=0x13, reqId=0 is specifically the session handshake's reply
         // (see Mds::literalSessionHandshakeRequest()).
         if (frame.type == 0x13 && frame.requestId == 0) {

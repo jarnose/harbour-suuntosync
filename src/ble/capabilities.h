@@ -4,7 +4,11 @@
 #include <string>
 #include <vector>
 
-// The watch's own capability list, read from suunto://<serial>/Dev/Capabilities.
+// The watch's two NUL-terminated token lists, which share a wire shape:
+// /Dev/Capabilities and /Plugin/List. Both answer with an item count in the
+// paged header's byte 14 and a payload of NUL-terminated names.
+//
+// The capability list, read from suunto://<serial>/Dev/Capabilities.
 //
 // It decides what the cloud will offer: both
 // GET /v1/suuntoplus/features/items and POST /v1/suuntoplus/watchface/push/
@@ -36,6 +40,14 @@ size_t itemsInPage(const std::vector<uint8_t> &pagedBody);
 // read two ways has to agree with the official app's parameter to be worth
 // anything. It does - 49 of 49 against the captured request.
 std::vector<std::string> parse(const std::vector<uint8_t> &payload);
+
+// The same extraction without sorting or deduplicating, for /Plugin/List -
+// the watch's installed plugins, which it names by **pluginId** rather than
+// by catalogue id: zzbrnr01 appears as `zzbrnren`, and the same id is what
+// the file on the watch is called. Mapping one to the other needs the
+// cloud's features/items listing, which carries both. A factory watch face
+// (`zwwtch01`) and a guide (`fp03pfbd`) come back in the same list.
+std::vector<std::string> tokens(const std::vector<uint8_t> &payload);
 
 // The `capabilities=` parameter's value, before URL encoding.
 std::string join(const std::vector<std::string> &capabilities);

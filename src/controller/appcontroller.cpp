@@ -1075,6 +1075,40 @@ void AppController::forgetWatch()
     emit watchConnectedChanged();
 }
 
+void AppController::testPluginList()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_whiteboardTestInFlight) {
+        emit whiteboardTestResult(tr("A test request is already in flight"));
+        return;
+    }
+
+    m_whiteboardTestInFlight = true;
+    m_whiteboardClient->fetchPluginList(
+            [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        m_whiteboardTestInFlight = false;
+        if (!ok) {
+            emit whiteboardTestResult(tr("Plugin list read failed: %1").arg(error));
+            return;
+        }
+        const std::vector<std::string> plugins = Capabilities::tokens(payload);
+        if (plugins.empty()) {
+            emit whiteboardTestResult(tr("Plugin list returned %1 bytes that decoded "
+                                          "to nothing").arg(payload.size()));
+            return;
+        }
+        // Ten on the captured Race: a factory watch face, eight sports apps
+        // and a guide.
+        emit whiteboardTestResult(tr("OK - %1 plugins: %2")
+                                           .arg(plugins.size())
+                                           .arg(QString::fromStdString(
+                                                    Capabilities::join(plugins))));
+    });
+}
+
 void AppController::testCapabilities()
 {
     if (!m_whiteboardReady) {

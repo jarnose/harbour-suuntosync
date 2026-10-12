@@ -626,6 +626,42 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
     });
 }
 
+void MdsWhiteboardClient::fetchPluginList(DataCallback callback)
+{
+    const QString path = QStringLiteral("/Plugin/List");
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 was acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        // A plain handle fetch with no parameters - the captured request's
+        // body is the ack's first six bytes and a single 0x00, and one reply
+        // carries the whole list.
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
+        }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+            if (!fetchOk) {
+                callback(false, {}, tr("Plugin list fetch failed: %1").arg(fetchError));
+                return;
+            }
+            if (frame.body.size() < 19) {
+                callback(false, {}, tr("Plugin list returned only %1 bytes")
+                                             .arg(frame.body.size()));
+                return;
+            }
+            callback(true, std::vector<uint8_t>(frame.body.begin() + 19, frame.body.end()),
+                      QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::fetchCapabilities(DataCallback callback)
 {
     const QString path = QStringLiteral("/Dev/Capabilities");

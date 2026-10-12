@@ -357,6 +357,11 @@ public:
     // docs/suuntoplus-and-watchfaces.md.
     void fetchCapabilities(DataCallback callback);
 
+    // The plugins installed on the watch, from /Plugin/List - one handle
+    // fetch, no paging, answered in a single frame. Hands back the paged
+    // reply's payload for Capabilities::tokens().
+    void fetchPluginList(DataCallback callback);
+
 private:
 
     QString m_deviceObjectPath;

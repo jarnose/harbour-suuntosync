@@ -149,6 +149,10 @@ public:
     // decode was derived from a capture rather than tried on hardware -
     // see docs/suuntoplus-and-watchfaces.md.
     Q_INVOKABLE void testCapabilities();
+    // What the watch says is installed. Reports pluginIds, which is what
+    // the watch stores - mapping them to catalogue ids needs the cloud's
+    // listing. A probe for the same reason the one above is.
+    Q_INVOKABLE void testPluginList();
 
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of

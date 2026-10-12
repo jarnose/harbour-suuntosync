@@ -38,6 +38,24 @@ size_t itemsInPage(const std::vector<uint8_t> &pagedBody)
             | (static_cast<size_t>(pagedBody[kItemCountOffset + 1]) << 8);
 }
 
+std::vector<std::string> tokens(const std::vector<uint8_t> &payload)
+{
+    std::vector<std::string> found;
+    std::string current;
+    for (uint8_t byte : payload) {
+        if (byte == 0x00) {
+            if (looksLikeCapability(current))
+                found.push_back(current);
+            current.clear();
+            continue;
+        }
+        current.push_back(static_cast<char>(byte));
+    }
+    if (looksLikeCapability(current))
+        found.push_back(current);
+    return found;
+}
+
 std::vector<std::string> parse(const std::vector<uint8_t> &payload)
 {
     std::vector<std::string> found;

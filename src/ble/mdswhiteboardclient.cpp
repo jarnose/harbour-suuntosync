@@ -948,6 +948,108 @@ void MdsWhiteboardClient::putEphemeris(const std::vector<uint8_t> &blob,
     });
 }
 
+namespace {
+// The watch's filesystem takes a drive prefix, and it is per generation:
+// NG3 wants "b:/zapp" and NG1 wants "/zapp". zappctl records that the wrong
+// one "writes the upload to a path the watch ignores - and the install still
+// answers 200", so getting this wrong looks like success. The Race took
+// b:/zapp in the 2026-10-12 capture, which settles it for this watch and
+// for no other.
+const char *const kZappDirectory = "b:/zapp";
+} // namespace
+
+void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArray &zip,
+                                         ProgressCallback progress, SimpleCallback callback)
+{
+    if (zip.isEmpty()) {
+        callback(false, tr("Nothing to install"));
+        return;
+    }
+    const auto blob = std::make_shared<const std::vector<uint8_t>>(
+            reinterpret_cast<const uint8_t *>(zip.constData()),
+            reinterpret_cast<const uint8_t *>(zip.constData()) + zip.size());
+    const QString target = QString::fromLatin1(kZappDirectory) + QLatin1Char('/') + fileName;
+
+    putString(QStringLiteral("/Dev/FileSystem/DirectoryCreate"),
+               QString::fromLatin1(kZappDirectory),
+               [this, target, blob, progress, callback](bool ok, const QString &error) {
+        if (!ok) {
+            callback(false, tr("Could not create the zapp directory: %1").arg(error));
+            return;
+        }
+        const QString path = QStringLiteral("/Dev/FileSystem/Stream");
+        getRaw([path](uint16_t requestId) {
+            return Mds::encodeGetRequest(requestId, path.toStdString());
+        }, [this, path, target, blob, progress, callback]
+                (bool streamOk, const Mds::Frame &ack, const QString &streamError) {
+            if (!streamOk) {
+                callback(false, tr("GET %1 failed: %2").arg(path, streamError));
+                return;
+            }
+            if (ack.body.size() < 6) {
+                callback(false, tr("GET %1 was acked with an unusably short body").arg(path));
+                return;
+            }
+            const std::vector<uint8_t> ackBody = ack.body;
+            // Names the file this stream writes. One string parameter, and
+            // the handle is the stream's own - the same one the data frames
+            // then carry.
+            getRaw([ackBody, target](uint16_t requestId) {
+                return Mds::encodePutString(requestId, ackBody, target.toStdString());
+            }, [this, ackBody, blob, target, progress, callback]
+                    (bool nameOk, const Mds::Frame &, const QString &nameError) {
+                if (!nameOk) {
+                    callback(false, tr("Could not name %1 on the watch: %2")
+                                      .arg(target, nameError));
+                    return;
+                }
+                sendPluginChunk(ackBody, blob, 0, progress, callback);
+            });
+        });
+    });
+}
+
+void MdsWhiteboardClient::sendPluginChunk(
+        const std::vector<uint8_t> &ackBody,
+        const std::shared_ptr<const std::vector<uint8_t>> &blob, size_t offset,
+        ProgressCallback progress, SimpleCallback callback)
+{
+    if (offset >= blob->size()) {
+        // The commit. Zero parameters, which parameterisedBody() spells as
+        // the handle plus a single 0x00 - byte-identical to the captured
+        // frame. The handle is this registration's own, which is what
+        // zappctl has to patch into its recorded frames instead.
+        putEmpty(QStringLiteral("/Plugin/Install"), callback);
+        return;
+    }
+
+    const size_t length = std::min(kEphemerisChunkSize, blob->size() - offset);
+    const size_t through = offset + length;
+    const uint32_t total = static_cast<uint32_t>(blob->size());
+
+    getRaw([ackBody, blob, offset, length, through, total](uint16_t requestId) {
+        return Mds::encodeEphemerisChunk(requestId, ackBody, total,
+                                           static_cast<uint32_t>(through),
+                                           blob->data() + offset, length);
+    }, [this, ackBody, blob, through, progress, callback]
+            (bool ok, const Mds::Frame &frame, const QString &error) {
+        if (!ok) {
+            callback(false, tr("Install stopped after %1 of %2 bytes: %3")
+                              .arg(through).arg(blob->size()).arg(error));
+            return;
+        }
+        const uint16_t status = statusOf(frame);
+        if (status != kPutStatusContinue && status != kPutStatusOk) {
+            callback(false, tr("The watch rejected the install at %1 of %2 bytes (status %3)")
+                              .arg(through).arg(blob->size()).arg(status));
+            return;
+        }
+        if (progress)
+            progress(static_cast<int>(through), static_cast<int>(blob->size()));
+        sendPluginChunk(ackBody, blob, through, progress, callback);
+    });
+}
+
 void MdsWhiteboardClient::sendEphemerisChunk(
         const std::vector<uint8_t> &ackBody,
         const std::shared_ptr<const std::vector<uint8_t>> &blob, size_t offset,

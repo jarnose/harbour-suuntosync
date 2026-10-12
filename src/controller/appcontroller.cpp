@@ -1093,6 +1093,103 @@ QString variantFrom(const std::vector<std::string> &capabilities)
 
 } // namespace
 
+void AppController::testInstallPlugin()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+    if (m_whiteboardTestInFlight)
+        return;
+
+    m_whiteboardTestInFlight = true;
+    m_whiteboardClient->fetchCapabilities(
+            [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        if (!ok) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
+            return;
+        }
+        const std::vector<std::string> caps = Capabilities::parse(payload);
+        const QString variant = variantFrom(caps);
+        const QString joined = QString::fromStdString(Capabilities::join(caps));
+
+        m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+                [this, variant, joined](bool secretOk, const QByteArray &data,
+                                         const QString &secretError) {
+            if (!secretOk) {
+                m_whiteboardTestInFlight = false;
+                emit whiteboardTestResult(tr("Could not read the session key: %1")
+                                                   .arg(secretError));
+                return;
+            }
+            const QString key = QString::fromUtf8(data);
+            const QString wanted = QStringLiteral("zzaero01");
+            m_cloudClient->listSuuntoPlusFeatures(key, variant, joined,
+                    [this, key, joined, wanted](
+                            bool listOk,
+                            const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
+                            const QString &listError) {
+                if (!listOk) {
+                    m_whiteboardTestInFlight = false;
+                    emit whiteboardTestResult(tr("Library listing failed: %1").arg(listError));
+                    return;
+                }
+                SuuntoCloudClient::SuuntoPlusItem target;
+                for (const SuuntoCloudClient::SuuntoPlusItem &item : items) {
+                    if (item.id == wanted)
+                        target = item;
+                }
+                if (target.id.isEmpty()) {
+                    m_whiteboardTestInFlight = false;
+                    emit whiteboardTestResult(tr("%1 is not in the library").arg(wanted));
+                    return;
+                }
+                // A watch face is stored under its catalogue id and a sports
+                // app under its pluginId - /Plugin/List answers in the
+                // latter, and the captured uploads are named that way.
+                const QString fileName =
+                        (target.type == QStringLiteral("watchface") ? target.id
+                                                                     : target.pluginId)
+                        + QStringLiteral(".zip");
+
+                m_cloudClient->downloadSuuntoPlusPlugin(key, target.id, joined,
+                        [this, target, fileName](bool dlOk, const QByteArray &zip,
+                                                  const QString &dlError) {
+                    if (!dlOk) {
+                        m_whiteboardTestInFlight = false;
+                        emit whiteboardTestResult(tr("Download of %1 failed: %2")
+                                                           .arg(target.id, dlError));
+                        return;
+                    }
+                    const int size = zip.size();
+                    m_whiteboardClient->installPlugin(fileName, zip, nullptr,
+                            [this, target, fileName, size](bool instOk, const QString &instError) {
+                        m_whiteboardTestInFlight = false;
+                        if (!instOk) {
+                            emit whiteboardTestResult(tr("Install of %1 failed: %2")
+                                                               .arg(fileName, instError));
+                            return;
+                        }
+                        // An install that answers 200 is not proof the file
+                        // landed - the wrong drive prefix is accepted just
+                        // as cheerfully - so the thing to check next is
+                        // whether /Plugin/List now names it.
+                        emit whiteboardTestResult(
+                                tr("Installed %1 (%2, %3 bytes). Run the plugin list to "
+                                    "check the watch agrees.")
+                                        .arg(fileName, target.name).arg(size));
+                    });
+                });
+            });
+        });
+    });
+}
+
 void AppController::testDownloadPlugin()
 {
     if (!m_whiteboardReady) {

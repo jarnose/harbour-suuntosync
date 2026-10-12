@@ -341,6 +341,9 @@ private:
                              size_t offset, ProgressCallback progress,
                              SimpleCallback callback);
     void commitEphemeris(SimpleCallback callback);
+    void sendPluginChunk(const std::vector<uint8_t> &ackBody,
+                          const std::shared_ptr<const std::vector<uint8_t>> &blob,
+                          size_t offset, ProgressCallback progress, SimpleCallback callback);
     // How a paged read's cursor advances between pages. /Summary and the
     // timeline files count bytes; /Dev/Capabilities counts *items*, ten to a
     // page, and says how many it returned in its header. Advancing one the
@@ -365,6 +368,24 @@ public:
     // fetch, no paging, answered in a single frame. Hands back the paged
     // reply's payload for Capabilities::tokens().
     void fetchPluginList(DataCallback callback);
+
+    // Writes a SuuntoPlus zip to the watch and installs it. `fileName` is
+    // what the file is called under the zapp directory: a watch face takes
+    // its catalogue id and a sports app its pluginId, both with ".zip" -
+    // see docs/suuntoplus-and-watchfaces.md.
+    //
+    // The sequence is the captured one with the introspection walks left
+    // out. SyncFix and zappctl both replay 139 frames before the write and
+    // six before the commit; this registers the paths itself and uses the
+    // handles it is given, which is what those walks resolve. Leaving them
+    // out is the experiment - a wrong guess here times out, which is this
+    // protocol's usual failure, rather than writing anything wrong.
+    //
+    // The data frames are encodeEphemerisChunk()'s: the zapp stream and the
+    // GPS ephemeris upload use the same frame, which is why this needed no
+    // new encoder and starts from something already proven on hardware.
+    void installPlugin(const QString &fileName, const QByteArray &zip,
+                        ProgressCallback progress, SimpleCallback callback);
 
 private:
 

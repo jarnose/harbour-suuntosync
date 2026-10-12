@@ -169,6 +169,13 @@ public:
     // is checkable.
     Q_INVOKABLE void testDownloadPlugin();
 
+    // **The first thing here that writes to the watch.** Installs
+    // ZoneSense: looks it up in the library for its pluginId and type,
+    // downloads the zip and streams it over, then commits. The file is named
+    // by pluginId for a sports app and by catalogue id for a watch face,
+    // which is what the capture shows and not a choice.
+    Q_INVOKABLE void testInstallPlugin();
+
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of
     // /Logbook/byId/<id>/Data - which is itself that workout's Unix start

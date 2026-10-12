@@ -259,6 +259,16 @@ Page {
                 onClicked: AppController.testDownloadPlugin()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testInstallPlugin().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testInstallPlugin() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Install ZoneSense on the watch")
+                onClicked: AppController.testInstallPlugin()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

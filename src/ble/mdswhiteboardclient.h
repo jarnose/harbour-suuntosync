@@ -346,6 +346,9 @@ private:
                              size_t offset, ProgressCallback progress,
                              SimpleCallback callback);
     void commitEphemeris(SimpleCallback callback);
+    // Walks streamSetupWalk()'s frames one at a time, then calls `then`.
+    void runStreamSetup(const std::vector<std::vector<uint8_t>> &bodies, size_t index,
+                         const std::function<void(bool ok, const QString &error)> &then);
     void sendPluginChunk(const std::vector<uint8_t> &ackBody,
                           const std::shared_ptr<const std::vector<uint8_t>> &blob,
                           size_t offset, ProgressCallback progress, SimpleCallback callback);

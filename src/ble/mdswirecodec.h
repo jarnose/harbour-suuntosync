@@ -86,6 +86,36 @@ constexpr uint8_t kSessionWrite = 0x01;
 std::vector<uint8_t> encodeRegisterRequest(uint16_t requestId, const std::string &path,
                                             uint8_t verb, uint8_t session);
 
+// The sixteen frames the official app sends between registering
+// /Dev/FileSystem/Stream and writing the first byte to it, and which a
+// write will not take effect without: an install that skipped them was
+// accepted frame by frame, answered 200 at every step including the commit,
+// and left nothing on the watch. See docs/suuntoplus-and-watchfaces.md.
+//
+// Most of it reads as metadata resolution rather than noise. Frame 1 reads
+// /Meta/Hash. Frames 2 through 12 ask about resource 0x230a - which is the
+// Stream handle's own id - and its six children. Frames 15 and 16 ask about
+// type codes 0x000c and 0x000d, the string and byte-array parameter types
+// the write is about to use. So the watch is being asked to describe the
+// structure before it is written to, which is also what protocol_v9's
+// StructureDeserializer does in libmds.so.
+//
+// What cannot be derived is replayed: 0x0182, 0x42aa, 0xa2b7 and 0x1444 are
+// ids from the watch's own metadata space with no visible provenance. The
+// two values that *are* watch-specific are taken from the watch instead of
+// baked in - the /Meta/Hash handle and the stream's resource id, both out of
+// their own registrations' acks - so this is not a byte-for-byte replay of
+// one device the way SyncFix's recording is.
+//
+// `streamAck` and `hashAck` are those two registrations' ack bodies.
+// Frames come back in order; the caller numbers them.
+std::vector<std::vector<uint8_t>> streamSetupWalk(const std::vector<uint8_t> &streamAck,
+                                                   const std::vector<uint8_t> &hashAck);
+
+// Wraps one of streamSetupWalk()'s bodies in its frame. The walk's steps are
+// all handle fetches; only the request id is the caller's.
+std::vector<uint8_t> encodeHandleFetch(uint16_t requestId, const std::vector<uint8_t> &body);
+
 // A GET request always timed out with zero response from the watch (real
 // hardware, 2026-09-21) until this was tried: the real app's very first
 // write after StartNotify(), BEFORE any /System/Mode or /Logbook/... GET, is

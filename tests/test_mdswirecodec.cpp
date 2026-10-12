@@ -344,6 +344,53 @@ void testEntriesIsTheZeroParameterCase()
 
 } // namespace
 
+
+// The stream setup walk, against the sixteen frames the official app sent
+// between registering /Dev/FileSystem/Stream and writing the first byte -
+// btsnoop_watchface_ok_20261012.log, request ids 2 to 18. An install that
+// skipped them was accepted at every step and left nothing on the watch.
+void testStreamSetupWalk()
+{
+    const auto streamAck = fromHex("f0230a038001c800");
+    const auto hashAck = fromHex("f0000e038001c800");
+    const auto bodies = Mds::streamSetupWalk(streamAck, hashAck);
+
+    const char *const expected[] = {
+        "f0000e03800100",
+        "f000030380010105000a23",
+        "f000040380010205000a23030001",
+        "f000070380010205008201030000",
+        "f000070380010205008201030001",
+        "f000050380010305000a23030001030000",
+        "f000050380010305000a23030001030001",
+        "f000050380010305000a23030001030002",
+        "f000050380010305000a23030001030003",
+        "f000050380010305000a23030001030004",
+        "f000050380010305000a23030001030005",
+        "f0000c038001010500aa42",
+        "f0000c038001010500b7a2",
+        "f0000b0380010105000c00",
+        "f0000b0380010105000d00",
+        "f0000c0380010105004414"
+    };
+    const size_t count = sizeof(expected) / sizeof(expected[0]);
+    expectEq("streamSetupWalk frame count", std::to_string(bodies.size()),
+              std::to_string(count));
+    for (size_t i = 0; i < bodies.size() && i < count; ++i) {
+        expectEq("streamSetupWalk body " + std::to_string(i + 1),
+                  toHex(bodies[i]), expected[i]);
+    }
+
+    // The stream's resource id is taken from the handle rather than baked
+    // in, and the handle holds it with the bytes the other way round from
+    // the parameter. A different watch issuing a different handle has to
+    // come out differently.
+    const auto otherAck = fromHex("f01234038001c800");
+    const auto other = Mds::streamSetupWalk(otherAck, hashAck);
+    expectEq("a different stream handle changes the walk",
+              other[1] != bodies[1] ? "differs" : "same", "differs");
+}
+
 int main()
 {
     testTimelineFileFetchMatchesTheCapture();
@@ -361,6 +408,7 @@ int main()
     testDecodeSinglePacketResponse();
     testDecodeMultiFragmentResponse();
     testDecoderRejectsCorruptedCrc();
+    testStreamSetupWalk();
 
     if (g_failures == 0) {
         std::printf("\nAll tests passed.\n");

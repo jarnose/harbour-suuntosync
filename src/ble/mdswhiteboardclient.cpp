@@ -1061,23 +1061,81 @@ void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArra
                 callback(false, tr("GET %1 was acked with an unusably short body").arg(path));
                 return;
             }
-            const std::vector<uint8_t> ackBody = ack.body;
-            // Names the file this stream writes. One string parameter, and
-            // the handle is the stream's own - the same one the data frames
-            // then carry.
-            getRaw([ackBody, target](uint16_t requestId) {
-                return Mds::encodePutString(requestId, ackBody, target.toStdString());
-            }, [this, ackBody, blob, target, progress, callback]
-                    (bool nameOk, const Mds::Frame &, const QString &nameError) {
-                if (!nameOk) {
-                    callback(false, tr("Could not name %1 on the watch: %2")
-                                      .arg(target, nameError));
+            const std::vector<uint8_t> streamAck = ack.body;
+            // /Meta/Hash next, in the same session, because the walk's first
+            // step reads it and the rest of the walk follows from there.
+            const QString hashPath = QStringLiteral("/Meta/Hash");
+            getRaw([hashPath](uint16_t requestId) {
+                return Mds::encodeRegisterRequest(requestId, hashPath.toStdString(),
+                                                    Mds::kVerbWrite, Mds::kSessionWrite);
+            }, [this, streamAck, blob, target, progress, callback]
+                    (bool hashOk, const Mds::Frame &hashAckFrame, const QString &hashError) {
+                if (!hashOk || hashAckFrame.body.size() < 6) {
+                    callback(false, tr("GET /Meta/Hash failed: %1").arg(hashError));
                     return;
                 }
-                sendPluginChunk(ackBody, blob, 0, progress, callback);
+                std::vector<std::vector<uint8_t>> walk;
+                try {
+                    walk = Mds::streamSetupWalk(streamAck, hashAckFrame.body);
+                } catch (const std::exception &e) {
+                    callback(false, tr("Could not build the stream setup: %1").arg(e.what()));
+                    return;
+                }
+                runStreamSetup(walk, 0, [this, streamAck, blob, target, progress, callback]
+                        (bool walkOk, const QString &walkError) {
+                    if (!walkOk) {
+                        callback(false, walkError);
+                        return;
+                    }
+                    // Names the file this stream writes. One string
+                    // parameter, on the stream's own handle - the same one
+                    // the data frames carry.
+                    getRaw([streamAck, target](uint16_t requestId) {
+                        return Mds::encodePutString(requestId, streamAck,
+                                                      target.toStdString());
+                    }, [this, streamAck, blob, target, progress, callback]
+                            (bool nameOk, const Mds::Frame &, const QString &nameError) {
+                        if (!nameOk) {
+                            callback(false, tr("Could not name %1 on the watch: %2")
+                                              .arg(target, nameError));
+                            return;
+                        }
+                        sendPluginChunk(streamAck, blob, 0, progress, callback);
+                    });
+                });
             });
         });
         }, Mds::kVerbWrite, Mds::kSessionWrite);
+    });
+}
+
+void MdsWhiteboardClient::runStreamSetup(
+        const std::vector<std::vector<uint8_t>> &bodies, size_t index,
+        const std::function<void(bool ok, const QString &error)> &then)
+{
+    if (index >= bodies.size()) {
+        then(true, QString());
+        return;
+    }
+    const std::vector<uint8_t> body = bodies[index];
+    getRaw([body](uint16_t requestId) {
+        return Mds::encodeHandleFetch(requestId, body);
+    }, [this, bodies, index, then](bool ok, const Mds::Frame &frame, const QString &error) {
+        if (!ok) {
+            then(false, tr("Stream setup step %1 of %2 failed: %3")
+                          .arg(index + 1).arg(bodies.size()).arg(error));
+            return;
+        }
+        // The captured walk is answered 200 at every step. Anything else
+        // means the watch did not recognise what it was asked about, and
+        // carrying on would write into a structure it has not agreed to.
+        const uint16_t status = statusOf(frame);
+        if (status != kPutStatusOk) {
+            then(false, tr("Stream setup step %1 of %2 answered %3")
+                          .arg(index + 1).arg(bodies.size()).arg(status));
+            return;
+        }
+        runStreamSetup(bodies, index + 1, then);
     });
 }
 

@@ -263,6 +263,64 @@ std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
                                        { kParamInt32, off } });
 }
 
+std::vector<uint8_t> encodeHandleFetch(uint16_t requestId, const std::vector<uint8_t> &body)
+{
+    return encodeFrame(kTypeHandleFetch, requestId, body);
+}
+
+std::vector<std::vector<uint8_t>> streamSetupWalk(const std::vector<uint8_t> &streamAck,
+                                                   const std::vector<uint8_t> &hashAck)
+{
+    if (streamAck.size() < 6 || hashAck.size() < 6)
+        throw std::invalid_argument("streamSetupWalk: an ack shorter than 6 bytes");
+
+    // The resource id lives in the handle's second and third bytes - a handle
+    // is f0 <id:2> <session:3> - and the walk's 0x0005 parameter carries the
+    // same id with the bytes the other way round. The handle holds 23 0a and
+    // the captured parameter holds 0a 23, so the handle is big-endian there
+    // and the parameter little-endian. Getting this backwards was the first
+    // thing the byte-for-byte check against the capture caught.
+    const uint8_t idLow = streamAck[2];
+    const uint8_t idHigh = streamAck[1];
+    const std::vector<uint8_t> session(streamAck.begin() + 3, streamAck.begin() + 6);
+
+    // A metadata endpoint's handle: f0 <id:2> <the same session>.
+    auto meta = [&session](uint8_t low, uint8_t high) {
+        std::vector<uint8_t> h { 0xF0, low, high };
+        h.insert(h.end(), session.begin(), session.end());
+        return h;
+    };
+    auto frame = [](std::vector<uint8_t> handle, const std::vector<uint8_t> &tail) {
+        handle.insert(handle.end(), tail.begin(), tail.end());
+        return handle;
+    };
+
+    std::vector<std::vector<uint8_t>> bodies;
+    // /Meta/Hash, read with no parameters.
+    bodies.push_back(frame(std::vector<uint8_t>(hashAck.begin(), hashAck.begin() + 6), { 0x00 }));
+    // The stream resource, then the stream resource's element 1.
+    bodies.push_back(frame(meta(0x00, 0x03), { 0x01, 0x05, 0x00, idLow, idHigh }));
+    bodies.push_back(frame(meta(0x00, 0x04),
+                            { 0x02, 0x05, 0x00, idLow, idHigh, 0x03, 0x00, 0x01 }));
+    // 0x0182, twice, element 0 then element 1.
+    bodies.push_back(frame(meta(0x00, 0x07), { 0x02, 0x05, 0x00, 0x82, 0x01, 0x03, 0x00, 0x00 }));
+    bodies.push_back(frame(meta(0x00, 0x07), { 0x02, 0x05, 0x00, 0x82, 0x01, 0x03, 0x00, 0x01 }));
+    // The stream's six children.
+    for (uint8_t child = 0; child < 6; ++child) {
+        bodies.push_back(frame(meta(0x00, 0x05),
+                                { 0x03, 0x05, 0x00, idLow, idHigh,
+                                  0x03, 0x00, 0x01, 0x03, 0x00, child }));
+    }
+    // The two fields the replies name, FileName and Data.
+    bodies.push_back(frame(meta(0x00, 0x0C), { 0x01, 0x05, 0x00, 0xAA, 0x42 }));
+    bodies.push_back(frame(meta(0x00, 0x0C), { 0x01, 0x05, 0x00, 0xB7, 0xA2 }));
+    // The parameter types the write uses: 0x000c string, 0x000d byte array.
+    bodies.push_back(frame(meta(0x00, 0x0B), { 0x01, 0x05, 0x00, 0x0C, 0x00 }));
+    bodies.push_back(frame(meta(0x00, 0x0B), { 0x01, 0x05, 0x00, 0x0D, 0x00 }));
+    bodies.push_back(frame(meta(0x00, 0x0C), { 0x01, 0x05, 0x00, 0x44, 0x14 }));
+    return bodies;
+}
+
 std::vector<uint8_t> encodePagedReadRequest(uint16_t requestId, const std::vector<uint8_t> &ackBody,
                                               uint32_t offset, uint16_t parameterType)
 {

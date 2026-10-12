@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <set>
 #include <map>
 #include <sstream>
 
@@ -206,19 +207,56 @@ bool isEnvelopeField(const char *name)
     return std::strcmp(name, "TimeISO8601") == 0 || std::strcmp(name, "Source") == 0;
 }
 
+// Every path in a table that is an array, as the emitted JSON spells it.
+//
+// Array-ness has to come from the schema, not from the readings. The '+'
+// marker sits on one particular member of a group - Windows.Window+Speed.Min,
+// +DownhillGrade.Min - and that member can be nil, in which case no reading
+// carries the marker and the group came out as a bare object. The official
+// app's upload has DownhillGrade as [{...}] in every window; ours had it as
+// {"Avg":0.8} in the one window where Avg was present and omitted it
+// elsewhere, which is a type the cloud has no slot for.
+std::set<std::string> arrayPaths(const SbemDescriptors::Table &table)
+{
+    std::set<std::string> paths;
+    for (size_t i = 0; i < table.size(); ++i) {
+        const SbemDescriptors::Descriptor *d = table.at(i);
+        if (!d || !d->name || d->name[0] == '\0')
+            continue;
+        const std::vector<std::string> parts = splitPath(d->name);
+        std::string acc;
+        for (const std::string &part : parts) {
+            if (part == "Array") {
+                if (!acc.empty())
+                    paths.insert(acc);
+                continue;
+            }
+            acc += acc.empty() ? part : "." + part;
+        }
+    }
+    return paths;
+}
+
 // Places one value at its dotted path. An "Array" segment marks the parent
-// as an array rather than becoming a key of its own.
-void insert(Node *root, const std::string &path, const std::string &literal)
+// as an array rather than becoming a key of its own, and `arrays` marks the
+// ones the schema says are arrays whether or not this particular path says
+// so.
+void insert(Node *root, const std::string &path, const std::string &literal,
+             const std::set<std::string> &arrays)
 {
     const std::vector<std::string> parts = splitPath(path);
     if (parts.empty())
         return;
     Node *node = root;
+    std::string acc;
     for (size_t i = 0; i < parts.size(); ++i) {
         if (parts[i] == "Array") {
             node->isArray = true;
             continue;
         }
+        acc += acc.empty() ? parts[i] : "." + parts[i];
+        if (arrays.count(acc) != 0 && i + 1 != parts.size())
+            node->children[parts[i]].isArray = true;
         if (i + 1 == parts.size()) {
             Node &leaf = node->children[parts[i]];
             leaf.isLeaf = true;
@@ -333,7 +371,9 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     };
     std::vector<Entry> entries(chunks.size());
 
-    Sml::decode(chunks, table, [&entries, offsetMinutes, &table](const Sml::Reading &reading) {
+    const std::set<std::string> arrays = arrayPaths(table);
+
+    Sml::decode(chunks, table, [&entries, offsetMinutes, &table, &arrays](const Sml::Reading &reading) {
         if (reading.chunkIndex >= entries.size() || !reading.descriptor)
             return;
         const char *name = reading.descriptor->name;
@@ -356,7 +396,7 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
             entry.suppressed = true;
             return;
         }
-        insert(&entry.root, name, literalFor(reading, offsetMinutes, table));
+        insert(&entry.root, name, literalFor(reading, offsetMinutes, table), arrays);
         entry.used = true;
         if (reading.timeMs != 0)
             entry.timeMs = reading.timeMs;

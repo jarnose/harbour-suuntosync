@@ -249,7 +249,8 @@ const char *lapTypeName(double value)
     }
 }
 
-std::string literalFor(const Sml::Reading &reading, int offsetMinutes)
+std::string literalFor(const Sml::Reading &reading, int offsetMinutes,
+                        const SbemDescriptors::Table &table)
 {
     if (reading.isText)
         return quote(reading.text);
@@ -266,6 +267,31 @@ std::string literalFor(const Sml::Reading &reading, int offsetMinutes)
                                             offsetMinutes));
     }
 
+    // An enum is written as its name, and the table is the authority on what
+    // that name is - the watch spells out every mapping in its own <FRM>,
+    // including single-valued enums whose name is a string it has no other
+    // way to state (its serial number, its model, its firmware version).
+    // Writing the number put `"SerialNumber": 0` into an upload where the
+    // official app writes "2352D0000247".
+    if (reading.descriptor->format == SbemDescriptors::Format::Enum) {
+        const std::string named = table.enumName(reading.descriptor->id, reading.value);
+        if (!named.empty())
+            return quote(named);
+        if (table.hasEnumSpec(reading.descriptor->id)) {
+            // The list exists and does not cover this value, which the
+            // official app writes as null rather than as the raw number -
+            // Settings.EnabledNavigationSystems is enum:1=GPS,3=...,
+            // has no entry for 0, and reads 0 on a watch with none
+            // selected. A number there is a value the cloud has no meaning
+            // for; null says "no reading", which is what it is.
+            return "null";
+        }
+    }
+
+    // Falls back to the hand-written lap table, which is all the compiled-in
+    // descriptors have: the generated table carries formats, not value
+    // names, so a watch whose own table has not been read yet still gets
+    // lap types right.
     const std::string name = reading.descriptor->name;
     if (name == "Sample.Events.Array.Lap.Type"
             || name == "Sample.Events.Array.VerticalLap.Type") {
@@ -303,14 +329,14 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     };
     std::vector<Entry> entries(chunks.size());
 
-    Sml::decode(chunks, table, [&entries, offsetMinutes](const Sml::Reading &reading) {
+    Sml::decode(chunks, table, [&entries, offsetMinutes, &table](const Sml::Reading &reading) {
         if (reading.chunkIndex >= entries.size() || !reading.descriptor)
             return;
         const char *name = reading.descriptor->name;
         if (!name || name[0] == '\0' || isEnvelopeField(name))
             return;
         Entry &entry = entries[reading.chunkIndex];
-        insert(&entry.root, name, literalFor(reading, offsetMinutes));
+        insert(&entry.root, name, literalFor(reading, offsetMinutes, table));
         entry.used = true;
         if (reading.timeMs != 0)
             entry.timeMs = reading.timeMs;

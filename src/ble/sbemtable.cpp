@@ -255,8 +255,12 @@ Table Table::parse(const std::vector<uint8_t> &payload)
         if (!format.empty()) {
             const std::vector<std::string> parts = split(format, ',');
             std::string base = parts.front();
-            if (base.compare(0, 5, "enum:") == 0)
+            if (base.compare(0, 5, "enum:") == 0) {
+                // The whole rest of the <FRM> is the value list, commas and
+                // all, so it has to come from the unsplit string.
+                entry.enumSpec = format.substr(5);
                 base = "enum";
+            }
 
             bool known = false;
             for (const FormatEntry &candidate : kFormats) {
@@ -334,6 +338,56 @@ const Table &Table::builtin()
         return built;
     }();
     return table;
+}
+
+bool Table::hasEnumSpec(uint16_t id) const
+{
+    for (const Entry &candidate : m_entries) {
+        if (candidate.descriptor.id == id)
+            return !candidate.enumSpec.empty();
+    }
+    return false;
+}
+
+std::string Table::enumName(uint16_t id, double value) const
+{
+    const Entry *entry = nullptr;
+    for (const Entry &candidate : m_entries) {
+        if (candidate.descriptor.id == id) {
+            entry = &candidate;
+            break;
+        }
+    }
+    if (!entry || entry->enumSpec.empty())
+        return std::string();
+
+    // "0=NotAvailable,1=VeryPoor,..." - and possibly a trailing attribute
+    // such as nillable=65535, which is why only all-digit keys count.
+    const long wanted = static_cast<long>(value);
+    size_t start = 0;
+    while (start <= entry->enumSpec.size()) {
+        const size_t comma = entry->enumSpec.find(',', start);
+        const std::string item = comma == std::string::npos
+                ? entry->enumSpec.substr(start)
+                : entry->enumSpec.substr(start, comma - start);
+        const size_t eq = item.find('=');
+        if (eq != std::string::npos && eq > 0) {
+            const std::string key = item.substr(0, eq);
+            bool numeric = true;
+            for (char ch : key) {
+                if (ch < '0' || ch > '9') {
+                    numeric = false;
+                    break;
+                }
+            }
+            if (numeric && std::strtol(key.c_str(), nullptr, 10) == wanted)
+                return item.substr(eq + 1);
+        }
+        if (comma == std::string::npos)
+            break;
+        start = comma + 1;
+    }
+    return std::string();
 }
 
 } // namespace SbemDescriptors

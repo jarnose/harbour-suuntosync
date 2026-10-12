@@ -74,12 +74,35 @@ public:
     // compass heading - which is why this is a count and not a hard error.
     int unknownMods() const { return m_unknownMods; }
 
+    // The name an enum descriptor gives this value, or "" when the
+    // descriptor is not an enum or has no entry for it.
+    //
+    // The watch states a surprising amount about itself this way, including
+    // its own identity: Header.Device.SerialNumber is
+    // `enum:0=2352D0000247`, Device.Name is `enum:0=Tianjin`, and
+    // Device.Info.HW and .SW likewise - single-valued enums whose *name* is
+    // the string. Writing the number instead put `"SerialNumber": 0` in an
+    // upload where the official app writes the serial, so these names are
+    // not cosmetic. See docs/workout-upload.md.
+    std::string enumName(uint16_t id, double value) const;
+
+    // Whether this descriptor's <FRM> carried an enum list at all, which is
+    // a different question from whether it names a particular value. The
+    // compiled-in table has formats but no names, so "no list" means "fall
+    // back to what this build knows" while "list without this value" means
+    // the watch is reporting something the list does not cover.
+    bool hasEnumSpec(uint16_t id) const;
+
 private:
     struct Entry
     {
         Descriptor descriptor {};
         std::string name;
         std::vector<uint16_t> children;
+        // Everything after "enum:" in the <FRM>, verbatim. Kept as the raw
+        // text rather than a parsed map because it is consulted rarely and
+        // a map per descriptor would cost more than it saves.
+        std::string enumSpec;
     };
 
     // Descriptor holds bare pointers into Entry::name/children, so they

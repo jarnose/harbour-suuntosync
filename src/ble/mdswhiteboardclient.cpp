@@ -5,6 +5,7 @@
 
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDBusUnixFileDescriptor>
 #include <QDBusReply>
 #include <QDebug>
 #include <QTimer>
@@ -240,6 +241,7 @@ void MdsWhiteboardClient::tryDiscoverGattObjects()
     m_servicePath = servicePath;
     m_writeCharPath = writePath;
     m_notifyCharPath = notifyPath;
+    learnWriteChunkSize();
     subscribeToNotify();
 }
 
@@ -380,14 +382,48 @@ void MdsWhiteboardClient::resolveInFlight(uint16_t requestId, bool ok, const Mds
 }
 
 namespace {
-// Chosen to fit inside the BLE-mandated minimum ATT_MTU (23 bytes, 20
-// usable after the 3-byte ATT header) with no MTU negotiation required at
-// all - see writeChunked()'s doc comment in the header for the full
-// reasoning (confirmed via a real HCI capture: Android's captured session
-// had negotiated a 127-byte MTU, so it never needed to split a write; ours
-// can't assume that).
-constexpr int kWriteChunkSize = 20;
+// The BLE-mandated minimum: an ATT_MTU of 23 leaves 20 usable after the
+// 3-byte header, and every link carries at least that without negotiating.
+// It is the floor, not the target - see learnWriteChunkSize().
+constexpr int kMinWriteChunkSize = 20;
 } // namespace
+
+void MdsWhiteboardClient::learnWriteChunkSize()
+{
+    m_writeChunkSize = kMinWriteChunkSize;
+    if (m_writeCharPath.isEmpty())
+        return;
+
+    // This client wrote 20 bytes at a time from the day it was written, on
+    // the reasoning that BlueZ would not negotiate more on its own. Measured
+    // on a Jolla Phone 2026 talking to a Race, that is wrong: the MTU is
+    // 127, the same value the captured Android session had, and the watch's
+    // own notifications already arrive 60 bytes at a time. At 20 bytes a
+    // 100 kB watch face would take some five thousand writes.
+    //
+    // There is no MTU property on GattCharacteristic1 in this BlueZ, and
+    // AcquireWrite is not even listed in the characteristic's introspection
+    // - but it works, and its reply's second argument is the MTU. The
+    // descriptor it hands back is closed as soon as the reply goes out of
+    // scope, and WriteAcquired reads false again afterwards, so asking costs
+    // nothing: the channel is not held and WriteValue keeps working.
+    QDBusInterface writeChar(kBluezService, m_writeCharPath, kCharInterface,
+                              QDBusConnection::systemBus());
+    const QDBusMessage reply = writeChar.call(QStringLiteral("AcquireWrite"),
+                                               QVariant::fromValue(QVariantMap()));
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2)
+        return;
+
+    bool parsed = false;
+    const int mtu = reply.arguments().at(1).toInt(&parsed);
+    if (!parsed || mtu <= 3)
+        return;
+    // WriteValue's payload is the MTU less the 3-byte ATT header.
+    m_writeChunkSize = std::max(kMinWriteChunkSize, mtu - 3);
+    // Once per session, and it is the one number that decides whether a
+    // large write takes seconds or minutes.
+    qWarning() << "ATT MTU" << mtu << "- writing" << m_writeChunkSize << "bytes at a time";
+}
 
 bool MdsWhiteboardClient::writeChunked(const std::vector<uint8_t> &framed, QString *error)
 {
@@ -404,8 +440,9 @@ bool MdsWhiteboardClient::writeChunked(const std::vector<uint8_t> &framed, QStri
     QDBusInterface writeChar(kBluezService, m_writeCharPath, kCharInterface,
                               QDBusConnection::systemBus());
 
-    for (size_t offset = 0; offset < framed.size(); offset += kWriteChunkSize) {
-        const size_t chunkLen = std::min<size_t>(kWriteChunkSize, framed.size() - offset);
+    const size_t chunkSize = static_cast<size_t>(m_writeChunkSize);
+    for (size_t offset = 0; offset < framed.size(); offset += chunkSize) {
+        const size_t chunkLen = std::min<size_t>(chunkSize, framed.size() - offset);
         const QByteArray chunk(reinterpret_cast<const char *>(framed.data() + offset),
                                 static_cast<int>(chunkLen));
         QDBusReply<void> reply = writeChar.call(QStringLiteral("WriteValue"), chunk, options);

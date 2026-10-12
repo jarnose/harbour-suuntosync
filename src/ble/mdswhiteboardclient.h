@@ -276,6 +276,10 @@ private slots:
 
 private:
     void tryDiscoverGattObjects();
+    // Asks BlueZ what this link's ATT MTU actually is, by acquiring the
+    // write channel for as long as it takes to read the number out of the
+    // reply and letting the descriptor close again.
+    void learnWriteChunkSize();
     void subscribeToNotify();
     void sendHandshake();
     // Writes a fully-framed message (as produced by Mds::encodeGetRequest()
@@ -373,6 +377,10 @@ private:
     // deduplicate, so subscribing twice delivers every notification twice,
     // and the decoder cannot survive that - see subscribeToNotify().
     bool m_notifySubscribed = false;
+    // How many bytes one WriteValue may carry, learned from the link rather
+    // than assumed - see learnWriteChunkSize(). 20 until a session says
+    // otherwise, which is the BLE-mandated minimum and always safe.
+    int m_writeChunkSize = 20;
 
     Mds::Decoder m_decoder;
     uint16_t m_nextRequestId = 1;

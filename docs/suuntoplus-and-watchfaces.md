@@ -234,3 +234,47 @@ appeared to show a `/Weather/Current/ValidWeatherData` PUT. It was a
 own JavaScript, travelling as file content. **Searching for resource paths
 in a capture that carries a file transfer will find the file's strings** -
 decode to frames and look at the request type before believing a hit.
+
+## The stream write, byte for byte (2026-10-12)
+
+Decoded from the watch-face install capture and verified by arithmetic
+rather than by eye. A `/Dev/FileSystem/Stream` write is a `TYPE=0x0E` PUT
+whose body is:
+
+```
+[handle 6 bytes][01 0d 00 02][total u24][end u24][len u16][len bytes of file]
+```
+
+| field | what it is | how it was verified |
+|---|---|---|
+| `total` | the file's whole length | constant across all 98 frames of one stream, and equal to 44294 - the exact byte count `GET features/plugins/zw31ju01` returned over HTTPS |
+| `end` | bytes written *including* this chunk | 453, 906, 1359 … 43941, 44294; the last equals `total` |
+| `len` | this chunk's payload | matched `body.size() - 18` in 131 of 131 frames, 453 for every chunk but the last |
+
+So `end` is the position after the chunk, not before it: the first frame
+carries 453 with `end == 453`. Concatenating the payloads in order gives a
+file that starts `PK\x03\x04` and continues `font-aod-q.pxb`, which is the
+zip the cloud served.
+
+`total` and `end` are read as three bytes each because that is what the
+observed frames show; a zapp is small enough (`plugin_maxzappsize_2`) that
+nothing here would distinguish a 24-bit field from a 32-bit one with the
+neighbouring `02` in it. The `01 0d 00 02` prefix is constant and is not
+split with any confidence: by analogy with the parameterised handle fetch it
+reads as one parameter of type `0x000d`, with the `02` belonging to the
+value.
+
+### Two things to resolve before writing one
+
+**The handle the PUTs use is not the one the register returned.** The
+`0x0a /Dev/FileSystem/Stream` register is acked with handle `f0 23 05 03 80
+01`, and the PUTs carry `f0 23 0a 03 80 01`. A short `0x0d` walk sits
+between them, and what it resolves is not yet traced.
+
+**The install traffic has its own request-id sequence.** Its ids run 1, 3,
+4, 11, 19, 20 … while the surrounding session is at 2378 and climbing. Two
+independent counters mean either a second logical session or a per-resource
+counter, and which it is matters for a client that has to pick its own ids.
+
+Both are in `btsnoop_watchface_ok_20261012.log`, and neither needs the
+watch to answer them.

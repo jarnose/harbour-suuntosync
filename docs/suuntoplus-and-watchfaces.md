@@ -367,3 +367,76 @@ replayed by both SyncFix and zappctl, so neither explains them. They are the
 and `/Summary`, and whether a client that already knows the handle can skip
 them is untested. That is the one thing to try first, because skipping them
 is the difference between a few frames and a hundred and forty.
+
+## The install, and the walk that turns out not to be optional (2026-10-12)
+
+The write sequence is implemented and every frame of it is accepted. It
+still installs nothing, and the answer took four attempts, three of which
+found real defects that were not the cause. Recording the order because the
+order is what the next person needs.
+
+### What the watch says, and what it does
+
+An HCI capture of our own attempt, decoded beside the official app's
+capture of the same install:
+
+```
+0x0a  /Dev/Capabilities        -> 200
+0x0a  /Plugin/InstallAid       -> 200, answers "b:/zapp"
+0x0a  /Dev/FileSystem/DirectoryCreate (03 80 01) -> 200
+0x0e  "b:/zapp"                -> 200
+0x0a  /Dev/FileSystem/Stream   (03 80 01) -> 200
+0x0e  "b:/zapp/zzaeroen.zip"   -> 100
+0x0e  × 39, 471 bytes each     -> 100 each, last one 200
+0x0a  /Plugin/Install          -> 200
+0x0e  commit, empty            -> 200
+```
+
+Nothing refuses anything. `/Plugin/List` is byte-identical before and
+after. This is the failure zappctl warns about - "the install still answers
+200" - reached without getting the path wrong.
+
+### The difference, counted
+
+Between the Stream registration and the first data frame the official app
+sends **18 frames** that this sequence did not: a `/Meta/Hash` registration
+and a sixteen-step `0x0d` walk. Its filename PUT is request id 19; ours was
+the next frame after the register.
+
+Everything else matches. Same register bodies, same 30-byte filename PUT,
+same 471-byte data frames with the same header fields, same empty commit.
+So by elimination, with every other variable checked against the capture:
+**the introspection walk is required, and skipping it is accepted and
+inert.** Both SyncFix and zappctl replay it, and neither explains it; this
+is why.
+
+### The three fixes that were not the cause
+
+Each was a real defect, found by looking for this one, and each stands:
+
+1. **`/Plugin/InstallAid` was not being called.** The captured install asks
+   it before touching the filesystem, and its reply carries the directory,
+   so asking removes the NG1/NG3 drive-prefix trap rather than hardcoding
+   one side of it. The watch knows where plugins go; nothing else has to.
+2. **A registration carries a verb, and the filesystem wants the write
+   one.** Counted across all nine registrations in the capture:
+   `/Dev/FileSystem/*` registers as `03 80 01`, everything else - including
+   `/Plugin/InstallAid` and `/Plugin/Install` - as `01 80 00`. This client
+   had read the middle bytes as a constant `0x80 0x00` since it was written,
+   which was true of every registration it had ever made.
+3. **The ATT MTU is 127, not 23.** Writes had been 20 bytes each on the
+   assumption that BlueZ would not negotiate more. A 100 kB watch face is
+   eight hundred writes instead of five thousand, and the watch's own
+   60-byte notifications had been saying so for weeks.
+
+### What to do next
+
+Replay those 18 frames, from this project's own capture rather than
+zappctl's recording - same watch, same firmware, and the handles will be the
+ones this watch issues. They are `f0 00 0e`, `f0 00 03`, `f0 00 04`,
+`f0 00 07`, `f0 00 05`, `f0 00 0c`, `f0 00 0b`, all in the `03 80 01`
+session, and `/Meta/Hash` is what allocates the first. Request ids are ours
+to choose; the official app numbers them 1-18 because the session is new.
+
+There is precedent for replaying bytes nobody understands with the reason
+written down: `Mds::literalSessionHandshakeRequest()`.

@@ -37,6 +37,7 @@
 #include <QDateTime>
 #include <QLocale>
 #include <QTimer>
+#include <QSet>
 #include <QSettings>
 #include <QTextStream>
 
@@ -1073,6 +1074,115 @@ void AppController::forgetWatch()
     m_watchConnected = false;
     emit pairedWatchChanged();
     emit watchConnectedChanged();
+}
+
+namespace {
+
+// The cloud wants the watch's variant as its own parameter, and the watch
+// states it inside the capability list as feat_simvariant_<name> - "Tianjin"
+// on the Race. Nothing else carries it, so this is not a shortcut.
+QString variantFrom(const std::vector<std::string> &capabilities)
+{
+    const std::string prefix = "feat_simvariant_";
+    for (const std::string &capability : capabilities) {
+        if (capability.compare(0, prefix.size(), prefix) == 0)
+            return QString::fromStdString(capability.substr(prefix.size()));
+    }
+    return QString();
+}
+
+} // namespace
+
+void AppController::testSuuntoPlusLibrary()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+    if (m_whiteboardTestInFlight) {
+        emit whiteboardTestResult(tr("A test request is already in flight"));
+        return;
+    }
+
+    m_whiteboardTestInFlight = true;
+    m_whiteboardClient->fetchCapabilities(
+            [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        if (!ok) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
+            return;
+        }
+        const std::vector<std::string> caps = Capabilities::parse(payload);
+        const QString variant = variantFrom(caps);
+        if (variant.isEmpty()) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("No feat_simvariant_ in the watch's %1 "
+                                          "capabilities").arg(caps.size()));
+            return;
+        }
+        const QString joined = QString::fromStdString(Capabilities::join(caps));
+
+        m_whiteboardClient->fetchPluginList(
+                [this, variant, joined](bool listOk, const std::vector<uint8_t> &listPayload,
+                                         const QString &listError) {
+            if (!listOk) {
+                m_whiteboardTestInFlight = false;
+                emit whiteboardTestResult(tr("Plugin list read failed: %1").arg(listError));
+                return;
+            }
+            QSet<QString> installed;
+            for (const std::string &plugin : Capabilities::tokens(listPayload))
+                installed.insert(QString::fromStdString(plugin));
+
+            m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+                    [this, variant, joined, installed](bool secretOk, const QByteArray &data,
+                                                        const QString &secretError) {
+                if (!secretOk) {
+                    m_whiteboardTestInFlight = false;
+                    emit whiteboardTestResult(tr("Could not read the session key: %1")
+                                                       .arg(secretError));
+                    return;
+                }
+                m_cloudClient->listSuuntoPlusFeatures(QString::fromUtf8(data), variant, joined,
+                        [this, installed](bool cloudOk,
+                                           const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
+                                           const QString &cloudError) {
+                    m_whiteboardTestInFlight = false;
+                    if (!cloudOk) {
+                        emit whiteboardTestResult(tr("Library listing failed: %1")
+                                                           .arg(cloudError));
+                        return;
+                    }
+                    int onWatch = 0;
+                    int faces = 0;
+                    QStringList missing;
+                    for (const SuuntoCloudClient::SuuntoPlusItem &item : items) {
+                        if (item.type == QStringLiteral("watchface"))
+                            ++faces;
+                        if (installed.contains(item.pluginId))
+                            ++onWatch;
+                        else
+                            missing.append(item.name);
+                    }
+                    // The join is the point: the watch names plugins by
+                    // pluginId and the cloud by catalogue id, and only the
+                    // listing carries both.
+                    emit whiteboardTestResult(
+                            tr("OK - library %1 (%2 watch faces), %3 on the watch, "
+                                "%4 installed the watch knows that the library does not. "
+                                "Not on the watch: %5")
+                                    .arg(items.size()).arg(faces).arg(onWatch)
+                                    .arg(installed.size() - onWatch)
+                                    .arg(missing.isEmpty() ? tr("none")
+                                                            : missing.join(QStringLiteral(", "))));
+                });
+            });
+        });
+    });
 }
 
 void AppController::testPluginList()

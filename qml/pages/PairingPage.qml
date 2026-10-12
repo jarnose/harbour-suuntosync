@@ -239,6 +239,16 @@ Page {
                 onClicked: AppController.testPluginList()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testSuuntoPlusLibrary().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testSuuntoPlusLibrary() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Test SuuntoPlus library")
+                onClicked: AppController.testSuuntoPlusLibrary()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

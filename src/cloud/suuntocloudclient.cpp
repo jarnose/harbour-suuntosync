@@ -506,6 +506,69 @@ void SuuntoCloudClient::fetchPersonalRecords(const QString &sessionKey,
     });
 }
 
+void SuuntoCloudClient::listSuuntoPlusFeatures(const QString &sessionKey,
+                                                const QString &variant,
+                                                const QString &capabilities,
+                                                SuuntoPlusListCallback callback)
+{
+    // onlyMyLibrary=true is what the official app sends for the library
+    // view; the whole catalogue is a different endpoint (store/sportsapps).
+    const QString path = QStringLiteral("suuntoplus/features/items?onlyMyLibrary=true"
+                                         "&variant=%1&capabilities=%2")
+            .arg(QString::fromUtf8(QUrl::toPercentEncoding(variant)),
+                  QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, {}, reply->errorString());
+            return;
+        }
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        if (!doc.isObject()) {
+            callback(false, {}, tr("Unexpected response from server"));
+            return;
+        }
+        const QJsonObject envelope = doc.object();
+        if (!envelope.value(QStringLiteral("error")).isNull()) {
+            const QJsonObject err = envelope.value(QStringLiteral("error")).toObject();
+            // The code arrives as a string on some endpoints and a number on
+            // others, which cost an afternoon once already.
+            callback(false, {},
+                     tr("Server error %1: %2")
+                             .arg(err.value(QStringLiteral("code")).toString(
+                                      QString::number(err.value(QStringLiteral("code"))
+                                                              .toInt())))
+                             .arg(err.value(QStringLiteral("description")).toString()));
+            return;
+        }
+
+        QVector<SuuntoPlusItem> items;
+        const QJsonArray payload = envelope.value(QStringLiteral("payload")).toArray();
+        items.reserve(payload.size());
+        for (const QJsonValue &v : payload) {
+            const QJsonObject o = v.toObject();
+            SuuntoPlusItem item;
+            item.id = o.value(QStringLiteral("id")).toString();
+            item.pluginId = o.value(QStringLiteral("pluginId")).toString();
+            item.name = o.value(QStringLiteral("name")).toString();
+            item.description = o.value(QStringLiteral("description")).toString();
+            item.type = o.value(QStringLiteral("type")).toString();
+            item.version = o.value(QStringLiteral("version")).toString();
+            item.iconUrl = o.value(QStringLiteral("iconUrl")).toString();
+            item.enabled = o.value(QStringLiteral("enabled")).toBool();
+            item.modificationTime =
+                    static_cast<qint64>(o.value(QStringLiteral("modificationTime")).toDouble());
+            if (!item.id.isEmpty())
+                items.append(item);
+        }
+        callback(true, items, QString());
+    });
+}
+
 void SuuntoCloudClient::listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit,
                                       int offset, WorkoutListCallback callback)
 {

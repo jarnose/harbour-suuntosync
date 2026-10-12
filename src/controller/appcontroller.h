@@ -154,6 +154,13 @@ public:
     // listing. A probe for the same reason the one above is.
     Q_INVOKABLE void testPluginList();
 
+    // Ties the two together: reads the watch's capabilities and the variant
+    // inside them, asks the cloud for this watch's library, reads what the
+    // watch has installed, and reports the join. The last probe before any
+    // of this gets a UI - it exercises every piece a catalogue page would
+    // need, and nothing it does writes anything.
+    Q_INVOKABLE void testSuuntoPlusLibrary();
+
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of
     // /Logbook/byId/<id>/Data - which is itself that workout's Unix start

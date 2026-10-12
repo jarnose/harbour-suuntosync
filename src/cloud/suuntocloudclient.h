@@ -54,6 +54,30 @@ public:
     // app only ever asked for one page, and got 7 of a possible 50, which
     // the two readings agree on. So it is carried for diagnostics and
     // nothing paginates off it.
+    // One entry of the account's SuuntoPlus library, from
+    // GET v1/suuntoplus/features/items. Sports apps and watch faces come
+    // from the same endpoint and are told apart by `type`; guides are a
+    // separate listing. See docs/suuntoplus-and-watchfaces.md.
+    struct SuuntoPlusItem
+    {
+        QString id;         // the catalogue id, "zzbrnr01"
+        // What the watch calls the same thing, and what the file on the
+        // watch is named: "zzbrnren". /Plugin/List answers in these, so
+        // this is the field that says whether an item is installed.
+        QString pluginId;
+        QString name;
+        QString description;
+        QString type;       // "feature" or "watchface"
+        QString version;
+        QString iconUrl;
+        bool enabled = false;
+        qint64 modificationTime = 0;
+    };
+
+    using SuuntoPlusListCallback =
+            std::function<void(bool ok, const QVector<SuuntoPlusItem> &items,
+                                const QString &error)>;
+
     struct WorkoutPageInfo
     {
         qint64 untilMs = 0;
@@ -97,6 +121,16 @@ public:
     // three months earlier and syncing with a cursor standing after its
     // creation: it came back. So an incremental sync picks up edits as
     // well as new workouts.
+    // The account's SuuntoPlus library for one watch. Both parameters come
+    // from the watch itself and neither is optional: `capabilities` is the
+    // sorted, comma-joined list from /Dev/Capabilities, and `variant` is the
+    // name inside its feat_simvariant_<name> entry. The cloud answers a
+    // different set for a different watch, which is the whole point of
+    // sending them.
+    void listSuuntoPlusFeatures(const QString &sessionKey, const QString &variant,
+                                 const QString &capabilities,
+                                 SuuntoPlusListCallback callback);
+
     void listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit, int offset,
                        WorkoutListCallback callback);
 

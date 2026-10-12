@@ -137,35 +137,61 @@ struct Node
 
 std::vector<std::string> splitPath(const std::string &path)
 {
-    // '+' separates a path exactly as '.' does. The watch's own table uses it
-    // where a group's *first* child is named, and the pairs prove it:
+    // Two things are going on in these paths, and both were derived from the
+    // captured upload rather than guessed - see docs/workout-upload.md.
     //
-    //   Windows+Window.Type        beside  Windows.Window.ActivityId
-    //   Windows.Window+Speed.Min   beside  Windows.Window.Speed.Max
-    //   Sample.Events+Array.ArrayBegin
-    //   R-R+IBI                    which is SML's {"R-R":{"IBI":[...]}}
+    // **'+' marks the segment after it as an array.** Not a plain separator:
+    // reading it as one produced keys like "Windows+Window", and reading it
+    // as a dot produced Windows.Window.Altitude.Avg where the cloud wants
+    // Windows[].Altitude[].Avg. Both were rejected with 523.
     //
-    // Treating it as an ordinary character produced keys like
-    // "Windows+Window", and the cloud answered 523 "Workout could not be
-    // saved". It stayed hidden because the compiled-in table has these paths
-    // already spelled with dots, so only a watch's *own* table - which this
-    // app could not fetch until the duplicate-notification bug was fixed -
-    // ever carried a '+' into here.
+    // **An element-marker segment is dropped, and its array-ness belongs to
+    // its parent.** Two of them are visible: the literal "Array", and a
+    // segment that is its parent's name without a trailing 's'
+    // ("Windows.Window" -> Windows[]). The captured document settles the
+    // shape:
     //
-    // This also subsumes the +Array case that used to be special-cased:
-    // "Sample.Events+Array.ArrayBegin" and "Sample.Events.Array.Lap.Type"
-    // both come out as Events, Array, ... so one rule handles both, and the
-    // captured upload's habit of putting ArrayBegin and Lap in the same
-    // element still falls out of it.
-    std::vector<std::string> parts;
+    //   Windows.Window.ActivityId      -> Windows[].ActivityId
+    //   Windows.Window+Altitude.Min    -> Windows[].Altitude[].Min
+    //   Windows.Window.Altitude.Avg    -> Windows[].Altitude[].Avg
+    //   Sample.Events+Array.ArrayBegin -> Sample.Events[].ArrayBegin
+    //
+    // The uncertainty worth stating: only those two markers appear in the
+    // material there is, and "Events"/"Array" is not a plural pair, so the
+    // rule cannot be derived from the names alone. Another watch model may
+    // well carry a third.
+    //
+    // insert() does the work: an "Array" part sets isArray on the node just
+    // descended into, so emitting "Array" in place of a marker makes the
+    // parent an array, and emitting it *after* a '+'-marked segment makes
+    // that segment one.
+    std::vector<std::string> raw;
+    std::vector<bool> afterPlus;
     size_t start = 0;
     while (start <= path.size()) {
         const size_t sep = path.find_first_of(".+", start);
-        parts.push_back(sep == std::string::npos
-                                ? path.substr(start) : path.substr(start, sep - start));
+        raw.push_back(sep == std::string::npos ? path.substr(start)
+                                                : path.substr(start, sep - start));
+        afterPlus.push_back(start > 0 && path[start - 1] == '+');
         if (sep == std::string::npos)
             break;
         start = sep + 1;
+    }
+
+    std::vector<std::string> parts;
+    for (size_t i = 0; i < raw.size(); ++i) {
+        const std::string &seg = raw[i];
+        const bool isMarker = seg == "Array"
+                || (i > 0 && raw[i - 1].size() == seg.size() + 1
+                    && raw[i - 1].compare(0, seg.size(), seg) == 0
+                    && raw[i - 1].back() == 's');
+        if (isMarker) {
+            parts.push_back("Array");
+            continue;
+        }
+        parts.push_back(seg);
+        if (afterPlus[i])
+            parts.push_back("Array");
     }
     return parts;
 }

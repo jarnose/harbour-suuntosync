@@ -144,3 +144,93 @@ the one missing measurement.
    rather than installing one.
 
 Nothing here is implemented in this app. It is a map of where to dig.
+
+## The transfer, measured (2026-10-12)
+
+The BLE half above was a map with one missing measurement: how the zip's
+bytes travel. Two HCI captures from the rooted phone, taken while the
+official app installed a watch face (`zwc05201`) and a sports app
+(`zzhrzo01`), answer it. **Both use the same sequence**, which settles the
+"one mechanism" reading:
+
+```
+0x0a  /Plugin/InstallAid                  ask where plugins live
+0x0a  /Dev/FileSystem/DirectoryCreate     create /zapp
+0x0e  → /zapp                             (the directory name, as a PUT parameter)
+0x0a  /Dev/FileSystem/Stream              open a stream for /zapp/<file>.zip
+0x0e  × N, 471-byte bodies                the zip, with a byte offset in each
+0x0e  /Settings/Watchface/Current         watch faces only: make it current
+0x0a  /Plugin/Install                     install
+0x0a  /Dev/FileSystem/FileDelete          clean up
+```
+
+So it is `/Dev/FileSystem/Stream` with `0x0e` PUTs carrying an offset - the
+same stream machinery the sleep timeline is *read* through, in the write
+direction. **The inference recorded above, that the bytes go through
+`MDS/FileSystem/<serial>/File`, is wrong.** That resource exists in the
+app's string pool but is not what an install uses.
+
+The zip travels uncompressed and in the clear: `PK\x03\x04` headers,
+`clface-q.pxb`, `font-aod-q.pxb`, `main.js` and the app's own XML and
+JavaScript are all readable in the capture.
+
+### The filename is the pluginId, not the id
+
+A watch face is written as its catalogue id - `/zapp/zwc05201.zip` - and a
+sports app as its **`pluginId`**: store item `zzaero01` arrives as
+`/zapp/zzaeroen.zip`, and `zzhrzo01` as `/zapp/zzhrzoen.zip`. That field is
+right there in the `features/items` listing (`"pluginId": "zzbrnren"` for
+`zzbrnr01`) and its purpose was not guessable from the APK.
+
+### Adding to the library is a separate call
+
+Picking something in the store sends `PUT /apiserver/v1/store/library` ->
+`201`, and only then does the app fetch `features/plugins/<id>` and push it.
+The first capture attempt caught the PUT but not the push, and the watch
+face genuinely did not arrive - a useful accident, because it shows the two
+halves are independent.
+
+### Resource paths the APK's string pool does not have
+
+Live traffic carries more than the 115 paths in
+`docs/mds-resource-paths.txt`:
+
+```
+/Plugin/List          /Plugin/Install        /Meta/Hash
+/Dev/Capabilities     /Dev/FileSystem/Stream /Dev/FileSystem/FileDelete
+/Dev/FileSystem/DirectoryCreate             /Sync/BusyState
+/Logbook/UnsynchronisedLogs                 /Settings/General/TimeZoneInfo
+/Settings/Unit/UnitsMode                    /Settings/Navigation/RouteList
+/Navigation/Poi/List  /Navigation/QuickNaviState
+/Voice/AutoLap        /Voice/HeartRateZone   /Voice/Status
+/Device/Power/Batterylevel                  /Update/Suggest
+/Device/GNSS/ExtendedEphemerisData/Upload/0..2
+/Weather/Sync         /System/Mode           /Info
+```
+
+Two of those answer standing questions: the ephemeris upload is
+`/Device/GNSS/ExtendedEphemerisData/Upload/<n>`, and `/Update/Suggest`
+reads back the firmware string `Tianjin-fw_2.53.42.31929-Q-c7ce43eb`.
+`/Settings/Zapp/Watchface/Default` answers with `zwwtch01`.
+
+### A frame pair this project had not named
+
+Alongside `0x0d`/`0x05` (handle read and response) the capture is full of
+`0x10`/`0x08`. This project knew `0x10` only as the bulk-stream start
+trigger; it is the general "read this handle" request as well, and `0x08`
+is its response. `/Weather/Sync` and most of the small settings reads above
+use it.
+
+### Weather is still not done
+
+The app said it was syncing weather, and what the capture actually contains
+is `0x0a /Weather/Sync` twice, each answered with a single byte `01`. That
+is a flag, not a forecast. No weather payload is pushed anywhere in this
+capture, so `docs/watch-push-resources.md`'s open item stands.
+
+Worth recording as a method note: an ASCII grep across the traffic first
+appeared to show a `/Weather/Current/ValidWeatherData` PUT. It was a
+`$.subscribe('/Weather/Current/ValidWeatherData')` inside the watch face's
+own JavaScript, travelling as file content. **Searching for resource paths
+in a capture that carries a file transfer will find the file's strings** -
+decode to frames and look at the request type before believing a hit.

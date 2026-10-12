@@ -384,6 +384,18 @@ public:
     // The data frames are encodeEphemerisChunk()'s: the zapp stream and the
     // GPS ephemeris upload use the same frame, which is why this needed no
     // new encoder and starts from something already proven on hardware.
+    using LocationCallback =
+            std::function<void(bool ok, const QString &location, const QString &error)>;
+
+    // Where the watch wants plugins written, from /Plugin/InstallAid - it
+    // answers with the directory itself, "b:/zapp" on the Race.
+    //
+    // Asking removes a trap rather than just a constant. The drive prefix is
+    // per generation (NG1 takes /zapp, NG3 takes b:/zapp) and zappctl
+    // records that the wrong one writes where the watch does not look while
+    // the install still answers 200. The watch knows; nothing else has to.
+    void fetchInstallLocation(LocationCallback callback);
+
     void installPlugin(const QString &fileName, const QByteArray &zip,
                         ProgressCallback progress, SimpleCallback callback);
 

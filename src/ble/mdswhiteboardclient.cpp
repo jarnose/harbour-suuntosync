@@ -949,14 +949,68 @@ void MdsWhiteboardClient::putEphemeris(const std::vector<uint8_t> &blob,
 }
 
 namespace {
-// The watch's filesystem takes a drive prefix, and it is per generation:
-// NG3 wants "b:/zapp" and NG1 wants "/zapp". zappctl records that the wrong
-// one "writes the upload to a path the watch ignores - and the install still
-// answers 200", so getting this wrong looks like success. The Race took
-// b:/zapp in the 2026-10-12 capture, which settles it for this watch and
-// for no other.
-const char *const kZappDirectory = "b:/zapp";
+// The directory in /Plugin/InstallAid's reply: a NUL-terminated ASCII run
+// with a slash in it, after the paged header. Picked out by shape rather
+// than by offset because the rest of that reply's structure is not pinned
+// down, and the one field wanted here is unmistakable.
+QString locationIn(const std::vector<uint8_t> &body)
+{
+    std::string current;
+    std::string best;
+    for (uint8_t byte : body) {
+        if (byte == 0x00) {
+            if (current.size() >= 3 && current.find('/') != std::string::npos)
+                best = current;
+            current.clear();
+            continue;
+        }
+        if (byte < 0x20 || byte > 0x7E) {
+            current.clear();
+            continue;
+        }
+        current.push_back(static_cast<char>(byte));
+    }
+    if (best.empty() && current.size() >= 3 && current.find('/') != std::string::npos)
+        best = current;
+    return QString::fromStdString(best);
+}
 } // namespace
+
+void MdsWhiteboardClient::fetchInstallLocation(LocationCallback callback)
+{
+    const QString path = QStringLiteral("/Plugin/InstallAid");
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, QString(), tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, QString(),
+                      tr("GET %1 was acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
+        }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
+            if (!fetchOk) {
+                callback(false, QString(),
+                          tr("Install location fetch failed: %1").arg(fetchError));
+                return;
+            }
+            const QString location = locationIn(frame.body);
+            if (location.isEmpty()) {
+                callback(false, QString(),
+                          tr("No install location in the watch's %1-byte reply")
+                                  .arg(frame.body.size()));
+                return;
+            }
+            callback(true, location, QString());
+        });
+    });
+}
 
 void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArray &zip,
                                          ProgressCallback progress, SimpleCallback callback)
@@ -968,13 +1022,24 @@ void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArra
     const auto blob = std::make_shared<const std::vector<uint8_t>>(
             reinterpret_cast<const uint8_t *>(zip.constData()),
             reinterpret_cast<const uint8_t *>(zip.constData()) + zip.size());
-    const QString target = QString::fromLatin1(kZappDirectory) + QLatin1Char('/') + fileName;
 
-    putString(QStringLiteral("/Dev/FileSystem/DirectoryCreate"),
-               QString::fromLatin1(kZappDirectory),
-               [this, target, blob, progress, callback](bool ok, const QString &error) {
+    // InstallAid first, and not only for the directory it names. The
+    // captured install asks it before touching the filesystem, and an
+    // install that skipped it was accepted frame by frame - every status
+    // 100 or 200, the commit answered OK - and left nothing on the watch.
+    // So it is treated as part of the sequence rather than as a lookup.
+    fetchInstallLocation([this, fileName, blob, progress, callback]
+            (bool ok, const QString &location, const QString &error) {
         if (!ok) {
-            callback(false, tr("Could not create the zapp directory: %1").arg(error));
+            callback(false, tr("Could not ask the watch where plugins go: %1").arg(error));
+            return;
+        }
+        const QString target = location + QLatin1Char('/') + fileName;
+
+        putString(QStringLiteral("/Dev/FileSystem/DirectoryCreate"), location,
+                   [this, target, blob, progress, callback](bool dirOk, const QString &dirError) {
+        if (!dirOk) {
+            callback(false, tr("Could not create the zapp directory: %1").arg(dirError));
             return;
         }
         const QString path = QStringLiteral("/Dev/FileSystem/Stream");
@@ -1005,6 +1070,7 @@ void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArra
                 }
                 sendPluginChunk(ackBody, blob, 0, progress, callback);
             });
+        });
         });
     });
 }

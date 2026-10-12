@@ -1080,12 +1080,13 @@ löytyy - %2 tavua
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="798"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="927"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="986"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1142"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1169"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1196"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1228"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1366"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1464"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1051"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1208"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1235"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1262"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1294"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1432"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1530"/>
         <source>GET %1 failed: %2</source>
         <translation>GET %1 epäonnistui: %2</translation>
     </message>
@@ -1128,7 +1129,8 @@ löytyy - %2 tavua
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="607"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="677"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="713"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="990"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="991"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1055"/>
         <source>GET %1 was acked with an unusably short body</source>
         <translation>GET %1 sai liian lyhyen vastauksen</translation>
     </message>
@@ -1155,10 +1157,10 @@ löytyy - %2 tavua
     <message>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="739"/>
         <location filename="../src/ble/mdswhiteboardclient.cpp" line="802"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1146"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1173"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1200"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1232"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1212"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1239"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1266"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1298"/>
         <source>GET %1 acked with an unusably short body</source>
         <translation>GET %1 sai liian lyhyen vastauksen</translation>
     </message>
@@ -1193,115 +1195,130 @@ löytyy - %2 tavua
         <translation>Kello ei suostunut aloittamaan lähetystä: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="965"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1000"/>
+        <source>Install location fetch failed: %1</source>
+        <translation>Asennuspaikan haku epäonnistui: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1006"/>
+        <source>No install location in the watch&apos;s %1-byte reply</source>
+        <translation>Kellon %1 tavun vastauksessa ei ole asennuspaikkaa</translation>
+    </message>
+    <message>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1019"/>
         <source>Nothing to install</source>
         <translation>Ei mitään asennettavaa</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="977"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1034"/>
+        <source>Could not ask the watch where plugins go: %1</source>
+        <translation>Kellolta ei saatu liitännäisten sijaintia: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1042"/>
         <source>Could not create the zapp directory: %1</source>
         <translation>Zapp-hakemiston luonti epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1002"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1067"/>
         <source>Could not name %1 on the watch: %2</source>
         <translation>Kohteen %1 nimeäminen kellossa epäonnistui: %2</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1037"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1103"/>
         <source>Install stopped after %1 of %2 bytes: %3</source>
         <translation>Asennus pysähtyi %1/%2 tavun jälkeen: %3</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1043"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1109"/>
         <source>The watch rejected the install at %1 of %2 bytes (status %3)</source>
         <translation>Kello hylkäsi asennuksen kohdassa %1/%2 tavua (status %3)</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1074"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1140"/>
         <source>Upload stopped after %1 of %2 bytes: %3</source>
         <translation>Lähetys keskeytyi %1/%2 tavun kohdalla: %3</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1083"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1149"/>
         <source>The watch rejected the upload at %1 of %2 bytes (status %3)</source>
         <translation>Kello hylkäsi lähetyksen %1/%2 tavun kohdalla (tila %3)</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1100"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1166"/>
         <source>Data sent, but GET %1 failed: %2</source>
         <translation>Data lähetetty, mutta GET %1 epäonnistui: %2</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1104"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1170"/>
         <source>Data sent, but %1 acked oddly</source>
         <translation>Data lähetetty, mutta %1 kuittasi oudosti</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1112"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1178"/>
         <source>Data sent, but the watch would not load it: %1</source>
         <translation>Data lähetetty, mutta kello ei suostunut lataamaan sitä: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1118"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1184"/>
         <source>Data sent, but the watch refused to load it (status %1)</source>
         <translation>Data lähetetty, mutta kello kieltäytyi lataamasta sitä (tila %1)</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1154"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1182"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1208"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1220"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1248"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1274"/>
         <source>PUT %1 failed: %2</source>
         <translation>PUT %1 epäonnistui: %2</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1243"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1309"/>
         <source>Timeline render request failed: %1</source>
         <translation>Aikajanan luontipyyntö epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1253"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1319"/>
         <source>GET /Dev/FileSystem/Stream failed: %1</source>
         <translation>GET /Dev/FileSystem/Stream epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1258"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1324"/>
         <source>Filesystem stream acked with a short body</source>
         <translation>Tiedostovirta vastasi liian lyhyesti</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1372"/>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1468"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1438"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1534"/>
         <source>The watch acked %1 with an unusably short body</source>
         <translation>Kello kuittasi kohteen %1 liian lyhyellä rungolla</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1382"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1448"/>
         <source>The notification is %1 bytes, and the watch takes at most %2</source>
         <translation>Ilmoitus on %1 tavua, ja kello ottaa vastaan enintään %2</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1394"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1460"/>
         <source>The watch did not answer the notification: %1</source>
         <translation>Kello ei vastannut ilmoitukseen: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1400"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1466"/>
         <source>The watch refused the notification (status %1)</source>
         <translation>Kello hylkäsi ilmoituksen (tila %1)</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1428"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1494"/>
         <source>The watch did not answer the removal: %1</source>
         <translation>Kello ei vastannut poistoon: %1</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1435"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1501"/>
         <source>The watch has no notification with that id</source>
         <translation>Kellossa ei ole ilmoitusta tuolla tunnisteella</translation>
     </message>
     <message>
-        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1439"/>
+        <location filename="../src/ble/mdswhiteboardclient.cpp" line="1505"/>
         <source>The watch refused the removal (status %1)</source>
         <translation>Kello hylkäsi poiston (tila %1)</translation>
     </message>

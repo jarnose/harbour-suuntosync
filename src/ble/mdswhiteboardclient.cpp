@@ -678,24 +678,18 @@ void MdsWhiteboardClient::fetchPluginList(DataCallback callback)
             return;
         }
         const std::vector<uint8_t> ackBody = ack.body;
-        // A plain handle fetch with no parameters - the captured request's
-        // body is the ack's first six bytes and a single 0x00, and one reply
-        // carries the whole list.
-        getRaw([ackBody](uint16_t requestId) {
-            return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
-        }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
-            if (!fetchOk) {
-                callback(false, {}, tr("Plugin list fetch failed: %1").arg(fetchError));
-                return;
-            }
-            if (frame.body.size() < 19) {
-                callback(false, {}, tr("Plugin list returned only %1 bytes")
-                                             .arg(frame.body.size()));
-                return;
-            }
-            callback(true, std::vector<uint8_t>(frame.body.begin() + 19, frame.body.end()),
-                      QString());
-        });
+        // Paged, and the first version of this was not. A single
+        // zero-parameter fetch is what the capture shows, and it answered
+        // with fifteen names - which looked like the whole list and was
+        // simply one frame's worth. A sixteenth plugin was on the watch,
+        // visible in its own menu, and absent here through two reboots.
+        //
+        // So the same paging as /Dev/Capabilities: the cursor counts items,
+        // the header's byte 14 says how many came back, and status 100 means
+        // another page follows.
+        readPages([ackBody](uint16_t requestId, uint32_t at) {
+            return Mds::encodePagedReadRequest(requestId, ackBody, at, Mds::kParamIndex);
+        }, 0, {}, callback, PageAdvance::Items);
     });
 }
 

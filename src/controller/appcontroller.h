@@ -161,6 +161,14 @@ public:
     // need, and nothing it does writes anything.
     Q_INVOKABLE void testSuuntoPlusLibrary();
 
+    // Downloads one library item's zip and reports what came back. Reads
+    // only: nothing is written to the watch. zzaero01 (ZoneSense) is the
+    // target because it is the one item in this account's library that the
+    // watch does not have, which makes it the install step's natural first
+    // subject - and the capture says its zip is 17784 bytes, so the answer
+    // is checkable.
+    Q_INVOKABLE void testDownloadPlugin();
+
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of
     // /Logbook/byId/<id>/Data - which is itself that workout's Unix start

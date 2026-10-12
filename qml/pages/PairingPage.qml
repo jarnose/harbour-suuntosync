@@ -249,6 +249,16 @@ Page {
                 onClicked: AppController.testSuuntoPlusLibrary()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testDownloadPlugin().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testDownloadPlugin() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Test plugin download")
+                onClicked: AppController.testDownloadPlugin()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

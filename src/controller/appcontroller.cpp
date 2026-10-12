@@ -1093,6 +1093,58 @@ QString variantFrom(const std::vector<std::string> &capabilities)
 
 } // namespace
 
+void AppController::testDownloadPlugin()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+    if (m_whiteboardTestInFlight)
+        return;
+
+    m_whiteboardTestInFlight = true;
+    // The capability string is sent on the download too, the way the
+    // official app sends it, so it has to be read first.
+    m_whiteboardClient->fetchCapabilities(
+            [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        if (!ok) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
+            return;
+        }
+        const QString joined =
+                QString::fromStdString(Capabilities::join(Capabilities::parse(payload)));
+        m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+                [this, joined](bool secretOk, const QByteArray &data, const QString &secretError) {
+            if (!secretOk) {
+                m_whiteboardTestInFlight = false;
+                emit whiteboardTestResult(tr("Could not read the session key: %1")
+                                                   .arg(secretError));
+                return;
+            }
+            const QString id = QStringLiteral("zzaero01");
+            m_cloudClient->downloadSuuntoPlusPlugin(QString::fromUtf8(data), id, joined,
+                    [this, id](bool dlOk, const QByteArray &zip, const QString &dlError) {
+                m_whiteboardTestInFlight = false;
+                if (!dlOk) {
+                    emit whiteboardTestResult(tr("Download of %1 failed: %2")
+                                                       .arg(id, dlError));
+                    return;
+                }
+                // 17784 in the capture. A different number is not
+                // necessarily wrong - the store does update packages - but
+                // it is worth noticing rather than glossing.
+                emit whiteboardTestResult(tr("OK - %1 is %2 bytes (capture had 17784)")
+                                                   .arg(id).arg(zip.size()));
+            });
+        });
+    });
+}
+
 void AppController::testSuuntoPlusLibrary()
 {
     if (!m_whiteboardReady) {

@@ -506,6 +506,38 @@ void SuuntoCloudClient::fetchPersonalRecords(const QString &sessionKey,
     });
 }
 
+void SuuntoCloudClient::downloadSuuntoPlusPlugin(const QString &sessionKey,
+                                                  const QString &id,
+                                                  const QString &capabilities,
+                                                  PluginDownloadCallback callback)
+{
+    const QString path = QStringLiteral("suuntoplus/features/plugins/%1?capabilities=%2")
+            .arg(QString::fromUtf8(QUrl::toPercentEncoding(id)),
+                  QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, QByteArray(), reply->errorString());
+            return;
+        }
+        const QByteArray body = reply->readAll();
+        // A zip, not the usual ASKO envelope, so the only shape check worth
+        // making is the one the local header gives. An error here would
+        // arrive as JSON and fail this.
+        if (!body.startsWith("PK\x03\x04")) {
+            callback(false, QByteArray(),
+                     tr("Expected a zip, got %1 bytes starting %2")
+                             .arg(body.size())
+                             .arg(QString::fromLatin1(body.left(16).toHex())));
+            return;
+        }
+        callback(true, body, QString());
+    });
+}
+
 void SuuntoCloudClient::listSuuntoPlusFeatures(const QString &sessionKey,
                                                 const QString &variant,
                                                 const QString &capabilities,

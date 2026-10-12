@@ -127,6 +127,18 @@ public:
     // name inside its feat_simvariant_<name> entry. The cloud answers a
     // different set for a different watch, which is the whole point of
     // sending them.
+    using PluginDownloadCallback =
+            std::function<void(bool ok, const QByteArray &zip, const QString &error)>;
+
+    // One SuuntoPlus item's zip, from GET v1/suuntoplus/features/plugins/<id>.
+    // Watch faces come from this same endpoint as sports apps do. The zip is
+    // what goes on the watch unchanged - manifest.jsn, main.js and whatever
+    // assets it carries - and the capabilities parameter is sent again here,
+    // as the official app sends it.
+    void downloadSuuntoPlusPlugin(const QString &sessionKey, const QString &id,
+                                   const QString &capabilities,
+                                   PluginDownloadCallback callback);
+
     void listSuuntoPlusFeatures(const QString &sessionKey, const QString &variant,
                                  const QString &capabilities,
                                  SuuntoPlusListCallback callback);

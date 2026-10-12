@@ -137,28 +137,35 @@ struct Node
 
 std::vector<std::string> splitPath(const std::string &path)
 {
+    // '+' separates a path exactly as '.' does. The watch's own table uses it
+    // where a group's *first* child is named, and the pairs prove it:
+    //
+    //   Windows+Window.Type        beside  Windows.Window.ActivityId
+    //   Windows.Window+Speed.Min   beside  Windows.Window.Speed.Max
+    //   Sample.Events+Array.ArrayBegin
+    //   R-R+IBI                    which is SML's {"R-R":{"IBI":[...]}}
+    //
+    // Treating it as an ordinary character produced keys like
+    // "Windows+Window", and the cloud answered 523 "Workout could not be
+    // saved". It stayed hidden because the compiled-in table has these paths
+    // already spelled with dots, so only a watch's *own* table - which this
+    // app could not fetch until the duplicate-notification bug was fixed -
+    // ever carried a '+' into here.
+    //
+    // This also subsumes the +Array case that used to be special-cased:
+    // "Sample.Events+Array.ArrayBegin" and "Sample.Events.Array.Lap.Type"
+    // both come out as Events, Array, ... so one rule handles both, and the
+    // captured upload's habit of putting ArrayBegin and Lap in the same
+    // element still falls out of it.
     std::vector<std::string> parts;
     size_t start = 0;
     while (start <= path.size()) {
-        const size_t dot = path.find('.', start);
-        const std::string part = dot == std::string::npos
-                ? path.substr(start) : path.substr(start, dot - start);
-        // The table spells an array two ways for the same thing:
-        // "Sample.Events.Array.Lap.Type" and "Sample.Events+Array.ArrayBegin"
-        // both mean Events is a list whose element holds the rest. Normalise
-        // the suffix form into the segment form so one rule handles both -
-        // the captured upload puts ArrayBegin and Lap in the *same* element,
-        // which is what falls out of that.
-        const size_t plus = part.rfind("+Array");
-        if (plus != std::string::npos && plus + 6 == part.size()) {
-            parts.push_back(part.substr(0, plus));
-            parts.push_back("Array");
-        } else {
-            parts.push_back(part);
-        }
-        if (dot == std::string::npos)
+        const size_t sep = path.find_first_of(".+", start);
+        parts.push_back(sep == std::string::npos
+                                ? path.substr(start) : path.substr(start, sep - start));
+        if (sep == std::string::npos)
             break;
-        start = dot + 1;
+        start = sep + 1;
     }
     return parts;
 }

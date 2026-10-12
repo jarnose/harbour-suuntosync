@@ -151,6 +151,32 @@ void testFieldsLandWhereTheSchemaSaysTheyShould(const std::string &doc)
 {
     // Dotted descriptor names have to become nested objects, not flat keys.
     check(!contains(doc, "\"Sample.HR\""), "no flattened dotted keys leak through");
+
+    // '+' separates a path just as '.' does, so it must never survive into a
+    // key either: the watch's own table spells group openings that way
+    // ("Windows+Window.Type", "Windows.Window+Speed.Min", "R-R+IBI"), and
+    // leaving them literal produced keys like "Windows+Window" that the
+    // cloud rejected with 523. This assertion cannot fail against the
+    // compiled-in table, which has these paths already spelled with dots -
+    // it guards the rule, and only a run against a real watch's table
+    // exercises it. See docs/workout-upload.md.
+    {
+        bool plusInKey = false;
+        for (size_t i = 0; i + 1 < doc.size(); ++i) {
+            if (doc[i] != '"')
+                continue;
+            const size_t end = doc.find('"', i + 1);
+            if (end == std::string::npos)
+                break;
+            if (end + 1 < doc.size() && doc[end + 1] == ':'
+                    && doc.find('+', i + 1) < end) {
+                plusInKey = true;
+                break;
+            }
+            i = end;
+        }
+        check(!plusInKey, "no key carries a '+' separator");
+    }
     check(contains(doc, "{\"Sample\":{"), "readings nest under Sample");
     check(contains(doc, "\"HR\":"), "heart rate is present");
     check(contains(doc, "\"Altitude\":"), "altitude is present");

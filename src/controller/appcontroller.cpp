@@ -728,8 +728,13 @@ AppController::AppController(QObject *parent)
     // past, or was too long to read on a phone, was simply gone. Connecting
     // it here catches every emitter rather than asking fifty call sites to
     // remember.
+    // qWarning, not qInfo: Sailfish's default logging rules drop an
+    // application's info level, so the first attempt at this logged nothing
+    // at all while debug and warning from the same process came through. The
+    // level is wrong for the cheerful half of these messages; being readable
+    // matters more.
     connect(this, &AppController::errorOccurred, this, [](const QString &message) {
-        qInfo().noquote() << message;
+        qWarning().noquote() << message;
     });
 
     QString error;

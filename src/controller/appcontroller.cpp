@@ -46,6 +46,27 @@
 
 namespace {
 
+// Where the preferences live, and it has to be said explicitly.
+//
+// A default-constructed QSettings writes ~/.config/<Org>/<App>.conf, and
+// Sailjail does not grant that path: it grants the *directory*
+// ~/.config/<Org>/<App>, which is exactly what QStandardPaths'
+// AppConfigLocation names. On this phone that directory existed and was
+// empty while the .conf beside it had not been written since the day the
+// cover setting was added - every setValue since had gone nowhere, silently,
+// because QSettings reports a status nobody checks. The base-map switch was
+// simply the first preference anyone changed twice.
+//
+// Reads kept working, which is what made it look like a save bug rather than
+// a path bug.
+QString settingsPath()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(dir);
+    return dir + QStringLiteral("/settings.ini");
+}
+
+
 // What the watch shows as the sending application. The official app sends
 // the posting package's name here; ours is the only sender there is.
 const char *const kApplicationId = "io.github.jarnose.suuntosync";
@@ -786,7 +807,18 @@ AppController::AppController(QObject *parent)
         // QSettings rather than another SQLite table: these are two
         // preferences, and Sailfish puts them under the app's own config
         // directory automatically.
-        QSettings settings;
+        // One-time move out of the path Sailjail never granted, so a cover
+        // choice made before this is not silently forgotten.
+        if (!QFile::exists(settingsPath())) {
+            QSettings legacy;
+            QSettings moved(settingsPath(), QSettings::IniFormat);
+            const QStringList keys = legacy.allKeys();
+            for (const QString &key : keys)
+                moved.setValue(key, legacy.value(key));
+            moved.sync();
+        }
+
+        QSettings settings(settingsPath(), QSettings::IniFormat);
         m_coverMode = settings.value(QStringLiteral("cover/mode"),
                                       QStringLiteral("latest")).toString();
         m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
@@ -2393,7 +2425,8 @@ void AppController::setBaseMapEnabled(bool enabled)
     if (enabled == m_baseMapEnabled)
         return;
     m_baseMapEnabled = enabled;
-    QSettings().setValue(QStringLiteral("map/enabled"), enabled);
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("map/enabled"), enabled);
     emit baseMapChanged();
 }
 
@@ -2406,7 +2439,8 @@ void AppController::setMapTileUrl(const QString &url)
     if (value == m_mapTileUrl)
         return;
     m_mapTileUrl = value;
-    QSettings().setValue(QStringLiteral("map/tileUrl"), value);
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("map/tileUrl"), value);
     emit baseMapChanged();
 }
 
@@ -2420,7 +2454,8 @@ void AppController::setCoverMode(const QString &mode)
     if (mode == m_coverMode)
         return;
     m_coverMode = mode;
-    QSettings().setValue(QStringLiteral("cover/mode"), mode);
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("cover/mode"), mode);
     emit coverModeChanged();
 }
 
@@ -2429,7 +2464,8 @@ void AppController::setSyncOnConnect(bool enabled)
     if (enabled == m_syncOnConnect)
         return;
     m_syncOnConnect = enabled;
-    QSettings().setValue(QStringLiteral("sync/onConnect"), enabled);
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("sync/onConnect"), enabled);
     emit syncOnConnectChanged();
 }
 

@@ -722,6 +722,16 @@ AppController::AppController(QObject *parent)
     , m_workoutModel(new WorkoutListModel(this))
     , m_healthStore(new HealthStore(dbPath()))
 {
+    // Everything the user is told goes to the journal too. errorOccurred is
+    // this app's one channel for anything worth putting on a banner, and
+    // until now none of it was recorded anywhere: a message that scrolled
+    // past, or was too long to read on a phone, was simply gone. Connecting
+    // it here catches every emitter rather than asking fifty call sites to
+    // remember.
+    connect(this, &AppController::errorOccurred, this, [](const QString &message) {
+        qInfo().noquote() << message;
+    });
+
     QString error;
     if (!m_cloudAccountStore->open(&error)) {
         emit errorOccurred(tr("Failed to open database: %1").arg(error));

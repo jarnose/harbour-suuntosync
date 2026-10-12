@@ -377,6 +377,17 @@ public:
     // reply's payload for Capabilities::tokens().
     void fetchPluginList(DataCallback callback);
 
+    // Lists a directory on the watch. Hands back the whole reply body: the
+    // JSON sits somewhere inside it, and finding it by its braces is what
+    // zappctl does too rather than trusting an offset.
+    //
+    // This exists because /Plugin/List turned out to be the wrong question.
+    // The official app pushed /zapp/zzaeroen.zip and that name never
+    // appeared there either, so the plugin list does not enumerate
+    // everything on the watch, and an install cannot be judged by it. The
+    // filesystem can.
+    void listDirectory(const QString &path, DataCallback callback);
+
     // Writes a SuuntoPlus zip to the watch and installs it. `fileName` is
     // what the file is called under the zapp directory: a watch face takes
     // its catalogue id and a sports app its pluginId, both with ".zip" -

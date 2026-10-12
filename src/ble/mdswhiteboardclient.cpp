@@ -663,6 +663,51 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
     });
 }
 
+void MdsWhiteboardClient::listDirectory(const QString &path, DataCallback callback)
+{
+    const QString resource = QStringLiteral("/Dev/FileSystem/DirectoryList");
+    getRaw([resource](uint16_t requestId) {
+        // The filesystem family, so the write verb - the same pair
+        // /Dev/FileSystem/Stream registers with.
+        return Mds::encodeRegisterRequest(requestId, resource.toStdString(),
+                                            Mds::kVerbWrite, Mds::kSessionWrite);
+    }, [this, resource, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(resource, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 was acked with an unusably short body")
+                                         .arg(resource));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        const QString wanted = path;
+        getRaw([ackBody, wanted](uint16_t requestId) {
+            return Mds::encodeDirectoryList(requestId, ackBody, wanted.toStdString());
+        }, [callback, wanted](bool listOk, const Mds::Frame &frame, const QString &listError) {
+            if (!listOk) {
+                callback(false, {}, tr("Listing %1 failed: %2").arg(wanted, listError));
+                return;
+            }
+            // The status is reported rather than ignored this time. Reading
+            // one page of /Plugin/List and never looking at its status cost
+            // several rounds of chasing an install that may have been
+            // working. Read here rather than through statusOf(), which is
+            // declared further down this file.
+            const uint16_t status = frame.body.size() >= kPagedStatusOffset + 2
+                    ? static_cast<uint16_t>(frame.body[kPagedStatusOffset]
+                              | (static_cast<uint16_t>(frame.body[kPagedStatusOffset + 1]) << 8))
+                    : 0;
+            if (status != 200 && status != kPageStatusContinue) {
+                callback(false, {}, tr("Listing %1 answered %2").arg(wanted).arg(status));
+                return;
+            }
+            callback(true, frame.body, QString());
+        });
+    });
+}
+
 void MdsWhiteboardClient::fetchPluginList(DataCallback callback)
 {
     const QString path = QStringLiteral("/Plugin/List");

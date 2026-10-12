@@ -263,6 +263,17 @@ std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
                                        { kParamInt32, off } });
 }
 
+std::vector<uint8_t> encodeDirectoryList(uint16_t requestId,
+                                          const std::vector<uint8_t> &ackBody,
+                                          const std::string &path)
+{
+    std::vector<uint8_t> name(path.begin(), path.end());
+    name.push_back(0x00);
+    return encodeParameterisedFetch(requestId, ackBody,
+                                     { { kParamString, name },
+                                       { 0x0003, { 0x00 } } });
+}
+
 std::vector<uint8_t> encodeHandleFetch(uint16_t requestId, const std::vector<uint8_t> &body)
 {
     return encodeFrame(kTypeHandleFetch, requestId, body);

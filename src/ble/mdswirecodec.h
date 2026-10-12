@@ -116,6 +116,21 @@ std::vector<std::vector<uint8_t>> streamSetupWalk(const std::vector<uint8_t> &st
 // all handle fetches; only the request id is the caller's.
 std::vector<uint8_t> encodeHandleFetch(uint16_t requestId, const std::vector<uint8_t> &body);
 
+// Lists a directory on the watch, via /Dev/FileSystem/DirectoryList. Two
+// parameters: the path as a NUL-terminated string, and a 0x0003 byte that
+// is 0 in SyncFix's own request. The reply carries JSON -
+// {"files":[...],"dirs":[...]} - with an empty {} meaning the path was
+// spelled for the other generation (see the drive-prefix note in
+// docs/suuntoplus-and-watchfaces.md).
+//
+// Ported from wylandplex/zappctl's build_dirlist_path_frame, which ports
+// SyncFix's MainActivity.buildDirectoryListPathFrame. Nothing here is
+// copied: the frame is built with this project's own parameter encoder, and
+// the shape was checked against zappctl's bytes.
+std::vector<uint8_t> encodeDirectoryList(uint16_t requestId,
+                                          const std::vector<uint8_t> &ackBody,
+                                          const std::string &path);
+
 // A GET request always timed out with zero response from the watch (real
 // hardware, 2026-09-21) until this was tried: the real app's very first
 // write after StartNotify(), BEFORE any /System/Mode or /Logbook/... GET, is

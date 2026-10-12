@@ -1093,6 +1093,60 @@ QString variantFrom(const std::vector<std::string> &capabilities)
 
 } // namespace
 
+void AppController::testListZappDirectory()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_whiteboardTestInFlight)
+        return;
+
+    m_whiteboardTestInFlight = true;
+    // Ask the watch where plugins go rather than assuming the prefix, then
+    // list exactly that.
+    m_whiteboardClient->fetchInstallLocation(
+            [this](bool ok, const QString &location, const QString &error) {
+        if (!ok) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("Could not ask the watch where plugins go: %1")
+                                               .arg(error));
+            return;
+        }
+        m_whiteboardClient->listDirectory(location,
+                [this, location](bool listOk, const std::vector<uint8_t> &body,
+                                  const QString &listError) {
+            m_whiteboardTestInFlight = false;
+            if (!listOk) {
+                emit whiteboardTestResult(listError);
+                return;
+            }
+            // The JSON is found by its braces, which is what zappctl does -
+            // the reply's own header is not worth trusting an offset into.
+            const QByteArray raw(reinterpret_cast<const char *>(body.data()),
+                                  static_cast<int>(body.size()));
+            const int open = raw.indexOf('{');
+            const int close = raw.lastIndexOf('}');
+            if (open < 0 || close <= open) {
+                emit whiteboardTestResult(tr("No listing in the watch's %1-byte reply")
+                                                   .arg(body.size()));
+                return;
+            }
+            const QByteArray json = raw.mid(open, close - open + 1);
+            if (json == QByteArrayLiteral("{}")) {
+                // zappctl's measured meaning for this: the path was spelled
+                // for the other generation. It should not happen now that
+                // the location comes from the watch.
+                emit whiteboardTestResult(tr("The watch returned an empty listing for %1")
+                                                   .arg(location));
+                return;
+            }
+            emit whiteboardTestResult(tr("%1: %2").arg(location,
+                                                        QString::fromUtf8(json)));
+        });
+    });
+}
+
 void AppController::testInstallPlugin()
 {
     if (!m_whiteboardReady) {

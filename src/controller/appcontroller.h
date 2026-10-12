@@ -176,6 +176,12 @@ public:
     // which is what the capture shows and not a choice.
     Q_INVOKABLE void testInstallPlugin();
 
+    // Lists b:/zapp on the watch. The only honest answer to "did the
+    // install work": /Plugin/List does not enumerate everything that is
+    // there, and a feature showing up in the watch's own menu may be built
+    // into the firmware.
+    Q_INVOKABLE void testListZappDirectory();
+
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of
     // /Logbook/byId/<id>/Data - which is itself that workout's Unix start

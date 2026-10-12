@@ -269,6 +269,16 @@ Page {
                 onClicked: AppController.testInstallPlugin()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testListZappDirectory().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testListZappDirectory() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("List the zapp directory")
+                onClicked: AppController.testListZappDirectory()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

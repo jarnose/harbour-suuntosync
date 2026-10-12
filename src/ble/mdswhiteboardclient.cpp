@@ -1036,15 +1036,21 @@ void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArra
         }
         const QString target = location + QLatin1Char('/') + fileName;
 
+        // The write verb, and only here: /Dev/FileSystem/* is the one family
+        // the captured install registers as 03 80 01. Registering it the
+        // reading way is what made the first attempt accept every frame and
+        // leave nothing on the watch.
         putString(QStringLiteral("/Dev/FileSystem/DirectoryCreate"), location,
                    [this, target, blob, progress, callback](bool dirOk, const QString &dirError) {
         if (!dirOk) {
             callback(false, tr("Could not create the zapp directory: %1").arg(dirError));
             return;
         }
+        
         const QString path = QStringLiteral("/Dev/FileSystem/Stream");
         getRaw([path](uint16_t requestId) {
-            return Mds::encodeGetRequest(requestId, path.toStdString());
+            return Mds::encodeRegisterRequest(requestId, path.toStdString(),
+                                                Mds::kVerbWrite, Mds::kSessionWrite);
         }, [this, path, target, blob, progress, callback]
                 (bool streamOk, const Mds::Frame &ack, const QString &streamError) {
             if (!streamOk) {
@@ -1071,7 +1077,7 @@ void MdsWhiteboardClient::installPlugin(const QString &fileName, const QByteArra
                 sendPluginChunk(ackBody, blob, 0, progress, callback);
             });
         });
-        });
+        }, Mds::kVerbWrite, Mds::kSessionWrite);
     });
 }
 
@@ -1198,11 +1204,11 @@ void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallbac
 }
 
 void MdsWhiteboardClient::putString(const QString &path, const QString &value,
-                                     SimpleCallback callback)
+                                     SimpleCallback callback, uint8_t verb, uint8_t session)
 {
     const std::string text = value.toStdString();
-    getRaw([path](uint16_t requestId) {
-        return Mds::encodeGetRequest(requestId, path.toStdString());
+    getRaw([path, verb, session](uint16_t requestId) {
+        return Mds::encodeRegisterRequest(requestId, path.toStdString(), verb, session);
     }, [this, path, text, callback](bool ok, const Mds::Frame &ack, const QString &error) {
         if (!ok) {
             callback(false, tr("GET %1 failed: %2").arg(path, error));

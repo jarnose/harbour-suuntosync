@@ -90,12 +90,25 @@ uint32_t crc32(const uint8_t *data, size_t length)
 
 std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &path)
 {
-    // BODY = verb(1)=0x01, const(2)=0x80 0x00, pathLen(1), path
+    return encodeRegisterRequest(requestId, path, kGetVerb, 0x00);
+}
+
+std::vector<uint8_t> encodeRegisterRequest(uint16_t requestId, const std::string &path,
+                                            uint8_t verb, uint8_t session)
+{
+    // BODY = verb(1), 0x80, session(1), pathLen(1), path.
+    //
+    // The middle two bytes were read as a constant 0x80 0x00 for as long as
+    // every registration this client made was a read. The captured install
+    // registers /Dev/FileSystem/Stream, /Plugin/InstallAid and
+    // /Plugin/Install with 0x03 0x80 0x01 instead, and zappctl's first frame
+    // does the same - so the first byte is a verb and the third is not a
+    // constant.
     std::vector<uint8_t> body;
     body.reserve(4 + path.size());
-    body.push_back(kGetVerb);
+    body.push_back(verb);
     body.push_back(0x80);
-    body.push_back(0x00);
+    body.push_back(session);
     body.push_back(static_cast<uint8_t>(path.size()));
     body.insert(body.end(), path.begin(), path.end());
     return encodeFrame(kTypeGetRequest, requestId, body);

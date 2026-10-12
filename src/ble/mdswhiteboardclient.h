@@ -146,7 +146,12 @@ public:
     // existed.
     using DeliveryCallback =
             std::function<void(bool ok, bool answered, const QString &error)>;
-    void putString(const QString &path, const QString &value, SimpleCallback callback);
+    // `verb` and `session` are the registration's own - see
+    // Mds::encodeRegisterRequest(). Everything but the watch's filesystem
+    // resources registers as a read; /Dev/FileSystem/* wants the write verb,
+    // measured across all nine registrations in the captured install.
+    void putString(const QString &path, const QString &value, SimpleCallback callback,
+                    uint8_t verb = Mds::kVerbRead, uint8_t session = 0x00);
 
     // A PUT with no value - used for the "do this now" resources, and for
     // deleting a rendered file once its name has been written.

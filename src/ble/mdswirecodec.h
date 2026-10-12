@@ -73,6 +73,19 @@ uint32_t crc32(const uint8_t *data, size_t length);
 // "/Logbook/Entries" GET, requestId 0x04AF).
 std::vector<uint8_t> encodeGetRequest(uint16_t requestId, const std::string &path);
 
+// The same registration with the verb and session byte spelled out. Every
+// read this client makes is verb 0x01 with session 0x00 - encodeGetRequest()
+// above - and the captured SuuntoPlus install registers its paths with verb
+// 0x03 and session 0x01 instead. Writing to a handle registered the reading
+// way is accepted frame by frame and lands nothing, which is what made this
+// worth separating.
+constexpr uint8_t kVerbRead = 0x01;
+constexpr uint8_t kVerbWrite = 0x03;
+constexpr uint8_t kSessionWrite = 0x01;
+
+std::vector<uint8_t> encodeRegisterRequest(uint16_t requestId, const std::string &path,
+                                            uint8_t verb, uint8_t session);
+
 // A GET request always timed out with zero response from the watch (real
 // hardware, 2026-09-21) until this was tried: the real app's very first
 // write after StartNotify(), BEFORE any /System/Mode or /Logbook/... GET, is

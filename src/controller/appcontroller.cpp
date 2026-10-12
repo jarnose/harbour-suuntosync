@@ -1093,6 +1093,57 @@ QString variantFrom(const std::vector<std::string> &capabilities)
 
 } // namespace
 
+void AppController::testDeleteZoneSense()
+{
+    if (!m_whiteboardReady) {
+        emit whiteboardTestResult(tr("Whiteboard channel isn't ready yet"));
+        return;
+    }
+    if (m_whiteboardTestInFlight)
+        return;
+
+    m_whiteboardTestInFlight = true;
+    m_whiteboardClient->fetchInstallLocation(
+            [this](bool ok, const QString &location, const QString &error) {
+        if (!ok) {
+            m_whiteboardTestInFlight = false;
+            emit whiteboardTestResult(tr("Could not ask the watch where plugins go: %1")
+                                               .arg(error));
+            return;
+        }
+        // The installed form, not the staged zip: the watch keeps a sports
+        // app as <pluginId>.fea, a watch face as .wfa and a guide as .gui,
+        // and there is no .zip left in the directory at all.
+        const QString target = location + QStringLiteral("/zzaeroen.fea");
+        m_whiteboardClient->deleteFile(target,
+                [this, location, target](bool delOk, const QString &delError) {
+            if (!delOk) {
+                m_whiteboardTestInFlight = false;
+                emit whiteboardTestResult(delError);
+                return;
+            }
+            m_whiteboardClient->listDirectory(location,
+                    [this, target](bool listOk, const std::vector<uint8_t> &body,
+                                    const QString &listError) {
+                m_whiteboardTestInFlight = false;
+                if (!listOk) {
+                    emit whiteboardTestResult(tr("Deleted %1, but listing failed: %2")
+                                                       .arg(target, listError));
+                    return;
+                }
+                const QByteArray raw(reinterpret_cast<const char *>(body.data()),
+                                      static_cast<int>(body.size()));
+                const bool stillThere = raw.contains("zzaeroen.fea");
+                emit whiteboardTestResult(
+                        stillThere ? tr("The watch accepted the delete but zzaeroen.fea "
+                                         "is still listed")
+                                   : tr("zzaeroen.fea is gone. Now install it again and "
+                                         "list the directory."));
+            });
+        });
+    });
+}
+
 void AppController::testListZappDirectory()
 {
     if (!m_whiteboardReady) {

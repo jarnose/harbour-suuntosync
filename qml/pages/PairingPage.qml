@@ -279,6 +279,16 @@ Page {
                 onClicked: AppController.testListZappDirectory()
             }
             MenuItem {
+                // Phase 6 validation probe - see AppController::testDeleteZoneSense().
+                // Not gated on whiteboardReady too: GATT service discovery can
+                // still be resolving right after Connect() succeeds, and
+                // testDeleteZoneSense() itself reports that case cleanly instead of
+                // this item just doing nothing.
+                visible: AppController.watchConnected
+                text: qsTr("Delete ZoneSense from the watch")
+                onClicked: AppController.testDeleteZoneSense()
+            }
+            MenuItem {
                 // See AppController::testEntriesFetch()'s doc comment -
                 // the cheap experiment towards listing workouts without a
                 // hand-typed id: tries the same bulk-fetch shortcut that

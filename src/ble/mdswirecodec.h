@@ -112,6 +112,16 @@ std::vector<uint8_t> encodeRegisterRequest(uint16_t requestId, const std::string
 std::vector<std::vector<uint8_t>> streamSetupWalk(const std::vector<uint8_t> &streamAck,
                                                    const std::vector<uint8_t> &hashAck);
 
+// The same thing for /Dev/FileSystem/FileDelete, and it is a different walk
+// rather than the same one with another id in it: eight steps instead of
+// sixteen, two children instead of six, one field and one parameter type
+// instead of two each, and 0x017b where the stream's has 0x0182. So the walk
+// describes the resource it is about to use, and each resource needs its
+// own. Captured at frames 1799-1826 of btsnoop_watchface_ok_20261012.log,
+// where the official app deletes sysevt.sbm.
+std::vector<std::vector<uint8_t>> fileDeleteSetupWalk(const std::vector<uint8_t> &deleteAck,
+                                                       const std::vector<uint8_t> &hashAck);
+
 // Wraps one of streamSetupWalk()'s bodies in its frame. The walk's steps are
 // all handle fetches; only the request id is the caller's.
 std::vector<uint8_t> encodeHandleFetch(uint16_t requestId, const std::vector<uint8_t> &body);

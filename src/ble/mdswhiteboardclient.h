@@ -388,6 +388,16 @@ public:
     // filesystem can.
     void listDirectory(const QString &path, DataCallback callback);
 
+    // Deletes one file on the watch. `path` is the full path, as the
+    // filesystem's other resources take it - /Dev/FileSystem/Stream's
+    // filename parameter and DirectoryList's both do. The captured delete
+    // passes a bare "sysevt.sbm", but whatever directory that is relative
+    // to is not known, and a full path is the unambiguous form.
+    //
+    // This is the only call in this client that removes something from the
+    // watch.
+    void deleteFile(const QString &path, SimpleCallback callback);
+
     // Writes a SuuntoPlus zip to the watch and installs it. `fileName` is
     // what the file is called under the zapp directory: a watch face takes
     // its catalogue id and a sports app its pluginId, both with ".zip" -

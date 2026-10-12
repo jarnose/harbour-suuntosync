@@ -182,6 +182,15 @@ public:
     // into the firmware.
     Q_INVOKABLE void testListZappDirectory();
 
+    // Deletes ZoneSense's installed file and lists the directory to show
+    // that it is gone. The point is the experiment that follows: install it
+    // again with this app and see whether the file comes back, which is the
+    // only way left to tell our install from the official app's earlier
+    // push of the same package. Reversible - it is in the account's library.
+    //
+    // The only probe here that removes anything from the watch.
+    Q_INVOKABLE void testDeleteZoneSense();
+
     // Phase 6: fetches and fully decodes one real workout directly from the
     // watch by its logbook id (the numeric suffix of
     // /Logbook/byId/<id>/Data - which is itself that workout's Unix start

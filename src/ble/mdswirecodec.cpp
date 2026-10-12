@@ -263,6 +263,41 @@ std::vector<uint8_t> encodeFileReadRequest(uint16_t requestId,
                                        { kParamInt32, off } });
 }
 
+std::vector<std::vector<uint8_t>> fileDeleteSetupWalk(const std::vector<uint8_t> &deleteAck,
+                                                       const std::vector<uint8_t> &hashAck)
+{
+    if (deleteAck.size() < 6 || hashAck.size() < 6)
+        throw std::invalid_argument("fileDeleteSetupWalk: an ack shorter than 6 bytes");
+
+    const uint8_t idLow = deleteAck[2];
+    const uint8_t idHigh = deleteAck[1];
+    const std::vector<uint8_t> session(deleteAck.begin() + 3, deleteAck.begin() + 6);
+    auto meta = [&session](uint8_t low, uint8_t high) {
+        std::vector<uint8_t> h { 0xF0, low, high };
+        h.insert(h.end(), session.begin(), session.end());
+        return h;
+    };
+    auto frame = [](std::vector<uint8_t> handle, const std::vector<uint8_t> &tail) {
+        handle.insert(handle.end(), tail.begin(), tail.end());
+        return handle;
+    };
+
+    std::vector<std::vector<uint8_t>> bodies;
+    bodies.push_back(frame(std::vector<uint8_t>(hashAck.begin(), hashAck.begin() + 6), { 0x00 }));
+    bodies.push_back(frame(meta(0x00, 0x03), { 0x01, 0x05, 0x00, idLow, idHigh }));
+    bodies.push_back(frame(meta(0x00, 0x04),
+                            { 0x02, 0x05, 0x00, idLow, idHigh, 0x03, 0x00, 0x01 }));
+    bodies.push_back(frame(meta(0x00, 0x07), { 0x02, 0x05, 0x00, 0x7B, 0x01, 0x03, 0x00, 0x00 }));
+    for (uint8_t child = 0; child < 2; ++child) {
+        bodies.push_back(frame(meta(0x00, 0x05),
+                                { 0x03, 0x05, 0x00, idLow, idHigh,
+                                  0x03, 0x00, 0x01, 0x03, 0x00, child }));
+    }
+    bodies.push_back(frame(meta(0x00, 0x0C), { 0x01, 0x05, 0x00, 0xAA, 0x42 }));
+    bodies.push_back(frame(meta(0x00, 0x0B), { 0x01, 0x05, 0x00, 0x0C, 0x00 }));
+    return bodies;
+}
+
 std::vector<uint8_t> encodeDirectoryList(uint16_t requestId,
                                           const std::vector<uint8_t> &ackBody,
                                           const std::string &path)

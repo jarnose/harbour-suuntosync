@@ -663,6 +663,54 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
     });
 }
 
+void MdsWhiteboardClient::deleteFile(const QString &path, SimpleCallback callback)
+{
+    const QString resource = QStringLiteral("/Dev/FileSystem/FileDelete");
+    getRaw([resource](uint16_t requestId) {
+        return Mds::encodeRegisterRequest(requestId, resource.toStdString(),
+                                            Mds::kVerbWrite, Mds::kSessionWrite);
+    }, [this, resource, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok || ack.body.size() < 6) {
+            callback(false, tr("GET %1 failed: %2").arg(resource, error));
+            return;
+        }
+        const std::vector<uint8_t> deleteAck = ack.body;
+        getRaw([](uint16_t requestId) {
+            return Mds::encodeRegisterRequest(requestId, "/Meta/Hash",
+                                                Mds::kVerbWrite, Mds::kSessionWrite);
+        }, [this, deleteAck, path, callback]
+                (bool hashOk, const Mds::Frame &hashAck, const QString &hashError) {
+            if (!hashOk || hashAck.body.size() < 6) {
+                callback(false, tr("GET /Meta/Hash failed: %1").arg(hashError));
+                return;
+            }
+            std::vector<std::vector<uint8_t>> walk;
+            try {
+                walk = Mds::fileDeleteSetupWalk(deleteAck, hashAck.body);
+            } catch (const std::exception &e) {
+                callback(false, tr("Could not build the delete setup: %1").arg(e.what()));
+                return;
+            }
+            runStreamSetup(walk, 0, [this, deleteAck, path, callback]
+                    (bool walkOk, const QString &walkError) {
+                if (!walkOk) {
+                    callback(false, walkError);
+                    return;
+                }
+                getRaw([deleteAck, path](uint16_t requestId) {
+                    return Mds::encodePutString(requestId, deleteAck, path.toStdString());
+                }, [path, callback](bool putOk, const Mds::Frame &, const QString &putError) {
+                    if (!putOk) {
+                        callback(false, tr("Deleting %1 failed: %2").arg(path, putError));
+                        return;
+                    }
+                    callback(true, QString());
+                });
+            });
+        });
+    });
+}
+
 void MdsWhiteboardClient::listDirectory(const QString &path, DataCallback callback)
 {
     const QString resource = QStringLiteral("/Dev/FileSystem/DirectoryList");

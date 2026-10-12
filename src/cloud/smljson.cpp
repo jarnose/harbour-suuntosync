@@ -326,6 +326,10 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
         Node root;
         int64_t timeMs = 0;
         bool used = false;
+        // The whole chunk is dropped, not just the field - see the altitude
+        // event below. A flag rather than an early exit because readings
+        // arrive in one stream and nothing promises this one comes first.
+        bool suppressed = false;
     };
     std::vector<Entry> entries(chunks.size());
 
@@ -336,6 +340,22 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
         if (!name || name[0] == '\0' || isEnvelopeField(name))
             return;
         Entry &entry = entries[reading.chunkIndex];
+
+        // The watch records an altitude calibration event - an offset pair
+        // and the source it came from - and the official app does not pass
+        // it on. Its upload of the same ride has exactly one entry fewer
+        // than ours did, and that entry is this one; its event types are
+        // Activity, ArrayBegin, Lap and Pause, with no Altitude at all.
+        //
+        // It is also the only thing we sent that it does not, which makes
+        // it the obvious suspect for the cloud's 523 on that ride: an
+        // indoor workout, which has no barometric calibration and so no
+        // such event, uploaded from here without complaint.
+        static const char kAltitudeEvent[] = "Sample.Events.Array.Altitude.";
+        if (std::strncmp(name, kAltitudeEvent, sizeof(kAltitudeEvent) - 1) == 0) {
+            entry.suppressed = true;
+            return;
+        }
         insert(&entry.root, name, literalFor(reading, offsetMinutes, table));
         entry.used = true;
         if (reading.timeMs != 0)
@@ -345,7 +365,7 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     std::string out = "{\"Samples\":[";
     bool first = true;
     for (const Entry &entry : entries) {
-        if (!entry.used)
+        if (!entry.used || entry.suppressed)
             continue;
         // A /Summary payload carries no clock chunk at all, so every entry
         // in it has timeMs == 0. The captured upload stamps summary.json's

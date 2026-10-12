@@ -1918,3 +1918,82 @@ more often has the watch talking to it while nothing is pending.
 This was in the client from the day it was written, and it is in the half the
 application shares - so it could have taken the UI down at any time the watch
 said something unprompted.
+
+## Two processes, one characteristic, every notification twice (2026-10-12)
+
+Reading sleep off the watch, and listing its logbook entries, both failed
+with `paged read at offset 0 ... timed out`. Both had worked before.
+
+An HCI capture from the phone (`btmon -w`, decoded with `tshark`) cleared the
+watch completely. The paged read went out at t=5.716 and the reply came back
+at t=5.923 — 0.2 seconds — as a complete, CRC-valid 470-byte `TYPE=0x05`
+frame in ten notifications inside 20 ms, carrying the continue status and an
+`SBEM0102` payload. The application then sat silent for exactly the
+ten-second request timeout and deleted the file it had asked the watch to
+render. So the bytes were on the air and we made nothing of them.
+
+One `qDebug()` per decoded frame said why: every frame was logged twice.
+Every notification was being delivered to the application twice.
+
+### The mechanism
+
+**BlueZ emits `PropertiesChanged` once per notifying client**, and
+`MdsWhiteboardClient::detach()` only disconnected our own signal hook. It
+never called `StopNotify`, so BlueZ went on counting that D-Bus connection
+among the characteristic's notifying clients for the rest of the process's
+life. The daemon attaches, does its work and lets go — `letGo()` drops the
+flock and detaches, with a comment saying the application should be able to
+pick the watch up without waiting for us — but until now it had no way to
+make that fully true. One daemon that had attached once, plus the
+application, meant two clients and two emissions.
+
+Why it hid for so long: a reply that fits in **one** notification survives
+being doubled. The duplicate arrives after the real one has already resolved
+the request, so `m_inFlightRequestId` has moved on and the request-id guard
+drops it. Every short GET therefore kept working, which is almost everything
+the daemon does. A reply spanning **several** notifications does not survive
+it: the decoder sees chunk1 chunk1 chunk2 chunk2, and no frame ever satisfies
+its length-and-CRC check, so the request times out with the watch having
+answered perfectly.
+
+The fix is `StopNotify` in `detach()`, ignoring its errors — "no notify
+session" is the state being asked for, and that is also what a failure means.
+
+### What this cost, and what shortened it
+
+Two wrong turns first, both plausible and both measured away: a guard on the
+subscription (`m_notifySubscribed`) and an idempotent `attachToDevice()`.
+Neither was the cause. They were worth keeping on their own merits, and the
+logging they came with is what settled it — the log showed **one** attach,
+**one** subscribe and still doubled frames, which ruled out any duplication
+of our own and pointed outside the process.
+
+Three hypotheses died to measurement before that: the reqId-0 crash fix in
+`75f7abc` (the paged reply is `TYPE=0x05` with a matching id, so its
+unconditional `continue` branches cannot swallow it), the daemon competing
+for requests (the `flock` handover works; the daemon logs that it is waiting),
+and a shared timeout timer (`dispatchNext()` captures the request id).
+
+The decisive move was stopping the daemon and retrying: the sync went through
+immediately, which turned "something duplicates notifications" into "a second
+subscriber duplicates notifications" in one step.
+
+### A correction worth recording
+
+Earlier analysis in this project explained `btmon` showing every event on
+both `hci0` and `hci1` as a monitor artefact, mirroring across two HCI
+indices. That was wrong. This phone really has two adapters —
+`/sys/class/bluetooth` lists `hci0`, `hci1` and the connection `hci1:512` —
+and the watch is on `hci1`
+(`/org/bluez/hci1/dev_0C_8C_DC_C2_13_59/service0010/char0014`). It is not
+what caused this bug, and deduplicating a capture by `hci_mon.adapter_id` is
+still the right thing to do, but the reason is that the same traffic is
+genuinely visible on two adapters, not that the monitor invents a copy.
+
+### One `qDebug()` stays
+
+One line per non-bulk frame, with its type, request id, body size and the
+current in-flight id. It is what made this visible, and nothing else in this
+class was observable from outside: a capture proves what the watch sent, not
+what we did with it. Bulk chunks are excluded — they are the one
+high-volume case and are counted elsewhere.

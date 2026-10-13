@@ -399,11 +399,17 @@ public:
     // names against seventeen files on this watch - and the official app's
     // own pushes are missing from it too. See
     // docs/suuntoplus-and-watchfaces.md.
+    //
+    // `type` is the cloud's own word for the kind - "watchface", "feature"
+    // or "sequence" - and the list arrives grouped by it, watch faces then
+    // sports apps then guides, so the page can head each group where the
+    // kind changes.
     Q_INVOKABLE QVariantList suuntoPlusItems() const;
 
     // Reads the watch's capabilities, asks the cloud for this watch's
-    // library, and lists the watch's plugin directory. Needs both the watch
-    // and an account: the capability string decides what the cloud offers.
+    // library - two listings, because guides are their own endpoint - and
+    // lists the watch's plugin directory. Needs both the watch and an
+    // account: the capability string decides what the cloud offers.
     Q_INVOKABLE void refreshSuuntoPlus();
 
     // Downloads one library item and installs it. `id` is the catalogue id.
@@ -749,6 +755,12 @@ private:
     // from a different listing and are not in this library.
     static QString suuntoPlusFileName(const QVariantMap &item);
     void setSuuntoPlusBusy(bool busy);
+
+    // The second half of refreshSuuntoPlus(): where the watch keeps plugins
+    // and what is in there. Its own method because the library half is two
+    // chained cloud requests now, and the nesting had stopped being
+    // readable.
+    void readWatchPluginFiles();
     // Runs `then` with the session key, the variant and the capability
     // string - the three things every SuuntoPlus request needs.
     void withSuuntoPlusContext(const std::function<void(const QString &key,

@@ -3394,10 +3394,17 @@ QVariantMap recordRow(const QString &type, const QJsonObject &allTime, const QJs
 QString AppController::suuntoPlusFileName(const QVariantMap &item)
 {
     // Measured from the watch's own directory: eight .wfa named by catalogue
-    // id beside eight .fea named by pluginId. The staged .zip does not
-    // survive the install.
-    if (item.value(QStringLiteral("type")).toString() == QStringLiteral("watchface"))
+    // id beside eight .fea named by pluginId, and one .gui also named by
+    // catalogue id. The staged .zip does not survive the install.
+    //
+    // Only a sports app is named by pluginId. A guide has none at all - its
+    // listing does not carry the field - so getting this branch wrong would
+    // look for ".fea" and silently report every guide as not installed.
+    const QString type = item.value(QStringLiteral("type")).toString();
+    if (type == QStringLiteral("watchface"))
         return item.value(QStringLiteral("id")).toString() + QStringLiteral(".wfa");
+    if (type == QStringLiteral("sequence"))
+        return item.value(QStringLiteral("id")).toString() + QStringLiteral(".gui");
     return item.value(QStringLiteral("pluginId")).toString() + QStringLiteral(".fea");
 }
 
@@ -3411,6 +3418,52 @@ QVariantMap suuntoPlusEntry(const QVariantList &library, const QString &id)
             return item;
     }
     return QVariantMap();
+}
+
+// The order the three kinds are shown in: watch faces, then sports apps,
+// then guides. The cloud's own type names are kept as the grouping key
+// rather than translated into a parallel vocabulary here - the page turns
+// them into headings, and the install path branches on them too.
+int suuntoPlusKindOrder(const QString &type)
+{
+    if (type == QStringLiteral("watchface"))
+        return 0;
+    if (type == QStringLiteral("sequence"))
+        return 2;
+    return 1;
+}
+
+void appendSuuntoPlusItems(QVariantList &library,
+                            const QVector<SuuntoCloudClient::SuuntoPlusItem> &items)
+{
+    for (const SuuntoCloudClient::SuuntoPlusItem &item : items) {
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), item.id);
+        entry.insert(QStringLiteral("pluginId"), item.pluginId);
+        entry.insert(QStringLiteral("name"), item.name);
+        entry.insert(QStringLiteral("description"), item.description);
+        entry.insert(QStringLiteral("type"), item.type);
+        entry.insert(QStringLiteral("version"), item.version);
+        library.append(entry);
+    }
+}
+
+// Grouped by kind, and by name inside a kind. The page draws a heading
+// wherever the kind changes from one row to the next, so the sort is what
+// makes the three groups whole rather than scattered.
+void sortSuuntoPlusLibrary(QVariantList &library)
+{
+    std::sort(library.begin(), library.end(),
+              [](const QVariant &left, const QVariant &right) {
+        const QVariantMap a = left.toMap();
+        const QVariantMap b = right.toMap();
+        const int ka = suuntoPlusKindOrder(a.value(QStringLiteral("type")).toString());
+        const int kb = suuntoPlusKindOrder(b.value(QStringLiteral("type")).toString());
+        if (ka != kb)
+            return ka < kb;
+        return a.value(QStringLiteral("name")).toString()
+                       .localeAwareCompare(b.value(QStringLiteral("name")).toString()) < 0;
+    });
 }
 } // namespace
 
@@ -3427,9 +3480,6 @@ QVariantList AppController::suuntoPlusItems() const
     QVariantList out;
     for (const QVariant &value : m_suuntoPlusLibrary) {
         QVariantMap entry = value.toMap();
-        entry.insert(QStringLiteral("isWatchFace"),
-                      entry.value(QStringLiteral("type")).toString()
-                              == QStringLiteral("watchface"));
         entry.insert(QStringLiteral("installed"),
                       m_suuntoPlusFiles.contains(suuntoPlusFileName(entry)));
         out.append(entry);
@@ -3486,63 +3536,76 @@ void AppController::refreshSuuntoPlus()
     withSuuntoPlusContext([this](const QString &key, const QString &variant,
                                    const QString &capabilities) {
         m_cloudClient->listSuuntoPlusFeatures(key, variant, capabilities,
-                [this](bool ok, const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
-                        const QString &error) {
+                [this, key](bool ok,
+                             const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
+                             const QString &error) {
             if (!ok) {
                 setSuuntoPlusBusy(false);
                 emit errorOccurred(tr("Library listing failed: %1").arg(error));
                 return;
             }
             m_suuntoPlusLibrary.clear();
-            for (const SuuntoCloudClient::SuuntoPlusItem &item : items) {
-                QVariantMap entry;
-                entry.insert(QStringLiteral("id"), item.id);
-                entry.insert(QStringLiteral("pluginId"), item.pluginId);
-                entry.insert(QStringLiteral("name"), item.name);
-                entry.insert(QStringLiteral("description"), item.description);
-                entry.insert(QStringLiteral("type"), item.type);
-                entry.insert(QStringLiteral("version"), item.version);
-                m_suuntoPlusLibrary.append(entry);
-            }
-            // And now what the watch actually has. The directory, not
-            // /Plugin/List - see suuntoPlusItems().
-            m_whiteboardClient->fetchInstallLocation(
-                    [this](bool locOk, const QString &location, const QString &locError) {
-                if (!locOk) {
-                    setSuuntoPlusBusy(false);
-                    emit suuntoPlusChanged();
-                    emit errorOccurred(tr("Could not ask the watch where plugins go: %1")
-                                                .arg(locError));
-                    return;
-                }
-                m_suuntoPlusLocation = location;
-                m_whiteboardClient->listDirectory(location,
-                        [this](bool listOk, const std::vector<uint8_t> &body,
-                                const QString &listError) {
-                    setSuuntoPlusBusy(false);
-                    if (!listOk) {
-                        emit suuntoPlusChanged();
-                        emit errorOccurred(listError);
-                        return;
-                    }
-                    m_suuntoPlusFiles.clear();
-                    // The reply is JSON somewhere inside the body; the
-                    // filenames are all that is wanted from it.
-                    const QByteArray raw(reinterpret_cast<const char *>(body.data()),
-                                          static_cast<int>(body.size()));
-                    const int open = raw.indexOf('{');
-                    const int close = raw.lastIndexOf('}');
-                    if (open >= 0 && close > open) {
-                        const QJsonObject doc =
-                                QJsonDocument::fromJson(raw.mid(open, close - open + 1)).object();
-                        for (const QJsonValue &v :
-                                     doc.value(QStringLiteral("files")).toArray()) {
-                            m_suuntoPlusFiles.insert(v.toString());
-                        }
-                    }
-                    emit suuntoPlusChanged();
-                });
+            appendSuuntoPlusItems(m_suuntoPlusLibrary, items);
+
+            // Guides are a second listing, not a type inside the first one:
+            // features/items never returns a `sequence`, which is why the
+            // guide this watch has was missing from the page entirely while
+            // sitting in the watch's directory as a .gui. The watch keeps
+            // all three kinds side by side, so they belong in one list.
+            m_cloudClient->listSuuntoPlusGuides(key,
+                    [this](bool guideOk,
+                            const QVector<SuuntoCloudClient::SuuntoPlusItem> &guides,
+                            const QString &guideError) {
+                if (guideOk)
+                    appendSuuntoPlusItems(m_suuntoPlusLibrary, guides);
+                sortSuuntoPlusLibrary(m_suuntoPlusLibrary);
+                // Worth saying, not worth abandoning the apps and watch
+                // faces for: the rest of the refresh is still useful.
+                if (!guideOk)
+                    emit errorOccurred(tr("Guide listing failed: %1").arg(guideError));
+                readWatchPluginFiles();
             });
+        });
+    });
+}
+
+void AppController::readWatchPluginFiles()
+{
+    // What the watch actually has: the directory, not /Plugin/List - see
+    // suuntoPlusItems().
+    m_whiteboardClient->fetchInstallLocation(
+            [this](bool locOk, const QString &location, const QString &locError) {
+        if (!locOk) {
+            setSuuntoPlusBusy(false);
+            emit suuntoPlusChanged();
+            emit errorOccurred(tr("Could not ask the watch where plugins go: %1")
+                                        .arg(locError));
+            return;
+        }
+        m_suuntoPlusLocation = location;
+        m_whiteboardClient->listDirectory(location,
+                [this](bool listOk, const std::vector<uint8_t> &body,
+                        const QString &listError) {
+            setSuuntoPlusBusy(false);
+            if (!listOk) {
+                emit suuntoPlusChanged();
+                emit errorOccurred(listError);
+                return;
+            }
+            m_suuntoPlusFiles.clear();
+            // The reply is JSON somewhere inside the body; the filenames are
+            // all that is wanted from it.
+            const QByteArray raw(reinterpret_cast<const char *>(body.data()),
+                                  static_cast<int>(body.size()));
+            const int open = raw.indexOf('{');
+            const int close = raw.lastIndexOf('}');
+            if (open >= 0 && close > open) {
+                const QJsonObject doc =
+                        QJsonDocument::fromJson(raw.mid(open, close - open + 1)).object();
+                for (const QJsonValue &v : doc.value(QStringLiteral("files")).toArray())
+                    m_suuntoPlusFiles.insert(v.toString());
+            }
+            emit suuntoPlusChanged();
         });
     });
 }
@@ -3559,10 +3622,15 @@ void AppController::installSuuntoPlusItem(const QString &id)
     }
     const QString name = target.value(QStringLiteral("name")).toString();
 
+    // A guide's zip comes from its own endpoint. Asking features/plugins for
+    // a guide id answers an error, not a zip.
+    const bool guide = target.value(QStringLiteral("type")).toString()
+            == QStringLiteral("sequence");
+
     setSuuntoPlusBusy(true);
-    withSuuntoPlusContext([this, target, id, name](const QString &key, const QString &,
-                                                     const QString &capabilities) {
-        m_cloudClient->downloadSuuntoPlusPlugin(key, id, capabilities,
+    withSuuntoPlusContext([this, target, id, name, guide](const QString &key, const QString &,
+                                                            const QString &capabilities) {
+        auto downloaded =
                 [this, target, name](bool dlOk, const QByteArray &zip, const QString &dlError) {
             if (!dlOk) {
                 setSuuntoPlusBusy(false);
@@ -3570,7 +3638,7 @@ void AppController::installSuuntoPlusItem(const QString &id)
                 return;
             }
             // The staged name is the installed name with .zip: the watch
-            // replaces it with .wfa or .fea itself.
+            // replaces it with .wfa, .fea or .gui itself.
             const QString staged = suuntoPlusFileName(target).section(QLatin1Char('.'), 0, 0)
                     + QStringLiteral(".zip");
             m_whiteboardClient->installPlugin(staged, zip, nullptr,
@@ -3587,7 +3655,12 @@ void AppController::installSuuntoPlusItem(const QString &id)
                 emit errorOccurred(tr("Installed %1").arg(name));
                 refreshSuuntoPlus();
             });
-        });
+        };
+
+        if (guide)
+            m_cloudClient->downloadSuuntoPlusGuide(key, id, capabilities, downloaded);
+        else
+            m_cloudClient->downloadSuuntoPlusPlugin(key, id, capabilities, downloaded);
     });
 }
 

@@ -3,6 +3,12 @@ import Sailfish.Silica 1.0
 
 // The account's SuuntoPlus library, and which of it the watch has.
 //
+// Three kinds live here, grouped under their own headings: watch faces,
+// sports apps and guides (workout plans). The cloud keeps guides in a
+// listing of their own - features/items never answers a `sequence` - so a
+// guide on the watch was invisible on this page until that second request
+// was made. AppController does both and hands over one list sorted by kind.
+//
 // "Installed" is read from the watch's own plugin directory, not from its
 // /Plugin/List resource. That distinction cost a long evening and is worth
 // restating here: /Plugin/List reports less than what is installed - fifteen
@@ -10,8 +16,9 @@ import Sailfish.Silica 1.0
 // Suunto app's own pushes are missing from it too. The directory is the
 // truth. See docs/suuntoplus-and-watchfaces.md.
 //
-// A sports app is kept on the watch as <pluginId>.fea and a watch face as
-// <id>.wfa; the zip that was uploaded does not survive the install.
+// A sports app is kept on the watch as <pluginId>.fea, a watch face as
+// <id>.wfa and a guide as <id>.gui; the zip that was uploaded does not
+// survive the install.
 Page {
     id: page
 
@@ -20,6 +27,20 @@ Page {
 
     function reload() {
         items = AppController.suuntoPlusItems()
+    }
+
+    // The cloud's own type names. "feature" covers anything that is not a
+    // watch face or a guide, so it is the fallback rather than a case.
+    function kindTitle(type) {
+        if (type === "watchface")
+            return qsTr("Watch faces")
+        if (type === "sequence")
+            return qsTr("Guides")
+        return qsTr("Sports apps")
+    }
+
+    function startsGroup(index) {
+        return index === 0 || page.items[index - 1].type !== page.items[index].type
     }
 
     Component.onCompleted: {
@@ -79,52 +100,64 @@ Page {
             }
         }
 
-        delegate: ListItem {
-            id: item
-            contentHeight: content.height + Theme.paddingMedium
-            // Nothing to do while a BLE write is in flight, and the watch
-            // takes one request at a time anyway.
-            enabled: !AppController.suuntoPlusBusy
+        // A Column, not the ListItem itself, so each group can carry its own
+        // heading. SectionHeader is drawn for the first row of a kind and
+        // left invisible for the rest, which a Column leaves out of its
+        // layout entirely - the ListView's own section support is no use
+        // here, because a plain JavaScript array exposes no roles for
+        // section.property to read.
+        delegate: Column {
+            width: listView.width
 
-            Column {
-                id: content
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                y: Theme.paddingSmall
-
-                Label {
-                    width: parent.width
-                    truncationMode: TruncationMode.Fade
-                    text: modelData.name
-                    color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
-                }
-
-                Label {
-                    width: parent.width
-                    truncationMode: TruncationMode.Fade
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: modelData.installed ? Theme.highlightColor
-                                                : Theme.secondaryColor
-                    text: {
-                        var kind = modelData.isWatchFace ? qsTr("Watch face")
-                                                          : qsTr("Sports app")
-                        var where = modelData.installed ? qsTr("on the watch")
-                                                         : qsTr("not on the watch")
-                        return kind + " · " + where
-                    }
-                }
+            SectionHeader {
+                text: page.kindTitle(modelData.type)
+                visible: page.startsGroup(index)
             }
 
-            menu: ContextMenu {
-                MenuItem {
-                    visible: !modelData.installed
-                    text: qsTr("Install on the watch")
-                    onClicked: AppController.installSuuntoPlusItem(modelData.id)
+            ListItem {
+                id: item
+                width: parent.width
+                contentHeight: content.height + Theme.paddingMedium
+                // Nothing to do while a BLE write is in flight, and the
+                // watch takes one request at a time anyway.
+                enabled: !AppController.suuntoPlusBusy
+
+                Column {
+                    id: content
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    y: Theme.paddingSmall
+
+                    Label {
+                        width: parent.width
+                        truncationMode: TruncationMode.Fade
+                        text: modelData.name
+                        color: item.highlighted ? Theme.highlightColor
+                                                 : Theme.primaryColor
+                    }
+
+                    Label {
+                        width: parent.width
+                        truncationMode: TruncationMode.Fade
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: modelData.installed ? Theme.highlightColor
+                                                    : Theme.secondaryColor
+                        text: modelData.installed ? qsTr("On the watch")
+                                                   : qsTr("Not on the watch")
+                    }
                 }
-                MenuItem {
-                    visible: modelData.installed
-                    text: qsTr("Remove from the watch")
-                    onClicked: AppController.removeSuuntoPlusItem(modelData.id)
+
+                menu: ContextMenu {
+                    MenuItem {
+                        visible: !modelData.installed
+                        text: qsTr("Install on the watch")
+                        onClicked: AppController.installSuuntoPlusItem(modelData.id)
+                    }
+                    MenuItem {
+                        visible: modelData.installed
+                        text: qsTr("Remove from the watch")
+                        onClicked: AppController.removeSuuntoPlusItem(modelData.id)
+                    }
                 }
             }
         }

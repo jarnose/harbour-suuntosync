@@ -67,7 +67,9 @@ public:
         QString pluginId;
         QString name;
         QString description;
-        QString type;       // "feature" or "watchface"
+        // "feature" (a sports app), "watchface", or "sequence" (a guide).
+        // Guides come from their own listing and have no pluginId.
+        QString type;
         QString version;
         QString iconUrl;
         bool enabled = false;
@@ -142,6 +144,20 @@ public:
     void listSuuntoPlusFeatures(const QString &sessionKey, const QString &variant,
                                  const QString &capabilities,
                                  SuuntoPlusListCallback callback);
+
+    // The account's guides (workout plans), from GET v1/suuntoplus/guides/items.
+    // Deliberately no variant and no capabilities: the captured app sends
+    // that URL bare, where it sends both on every features request. A guide
+    // is a `sequence` and goes on the watch as <id>.gui.
+    void listSuuntoPlusGuides(const QString &sessionKey, SuuntoPlusListCallback callback);
+
+    // One guide's zip, from GET v1/suuntoplus/guides/plugins/<id>. A
+    // different endpoint from downloadSuuntoPlusPlugin() but the same shape,
+    // and this one does take the capabilities parameter - the listing above
+    // is the odd one out, not this.
+    void downloadSuuntoPlusGuide(const QString &sessionKey, const QString &id,
+                                  const QString &capabilities,
+                                  PluginDownloadCallback callback);
 
     void listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit, int offset,
                        WorkoutListCallback callback);
@@ -285,6 +301,14 @@ private:
     // SuuntoAuth::generateTotp() stays, for whichever endpoint eventually
     // needs it.
     QNetworkRequest authorizedRequest(const QString &url, const QString &sessionKey) const;
+
+    // Shared by the features and guides listings, which answer the same
+    // envelope with the same item fields from two different paths, and by
+    // the two plugin-zip endpoints. `path` is everything after the base url.
+    void fetchSuuntoPlusList(const QString &path, const QString &sessionKey,
+                              SuuntoPlusListCallback callback);
+    void fetchSuuntoPlusZip(const QString &path, const QString &sessionKey,
+                             PluginDownloadCallback callback);
 
     QNetworkAccessManager *m_network;
     QString m_accountEmail;

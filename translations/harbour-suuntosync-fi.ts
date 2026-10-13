@@ -101,13 +101,13 @@
         <location filename="../src/controller/appcontroller.cpp" line="1318"/>
         <location filename="../src/controller/appcontroller.cpp" line="1370"/>
         <location filename="../src/controller/appcontroller.cpp" line="1492"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3447"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3497"/>
         <source>Capabilities read failed: %1</source>
         <translation>Kyvykkyyksien luku epäonnistui: %1</translation>
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1377"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3454"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3504"/>
         <source>No feat_simvariant_ in the watch&apos;s %1 capabilities</source>
         <translation>Kellon %1 kyvykkyydessä ei ole feat_simvariant_-merkintää</translation>
     </message>
@@ -115,14 +115,14 @@
         <location filename="../src/controller/appcontroller.cpp" line="1231"/>
         <location filename="../src/controller/appcontroller.cpp" line="1327"/>
         <location filename="../src/controller/appcontroller.cpp" line="1400"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3464"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3514"/>
         <source>Could not read the session key: %1</source>
         <translation>Istuntoavainta ei voitu lukea: %1</translation>
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1270"/>
         <location filename="../src/controller/appcontroller.cpp" line="1336"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3569"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3637"/>
         <source>Download of %1 failed: %2</source>
         <translation>Kohteen %1 lataus epäonnistui: %2</translation>
     </message>
@@ -134,14 +134,14 @@
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1244"/>
         <location filename="../src/controller/appcontroller.cpp" line="1410"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3493"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3544"/>
         <source>Library listing failed: %1</source>
         <translation>Kirjaston listaus epäonnistui: %1</translation>
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1110"/>
         <location filename="../src/controller/appcontroller.cpp" line="1163"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3514"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3581"/>
         <source>Could not ask the watch where plugins go: %1</source>
         <translation>Kellolta ei saatu liitännäisten sijaintia: %1</translation>
     </message>
@@ -172,13 +172,13 @@
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1254"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3557"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3620"/>
         <source>%1 is not in the library</source>
         <translation>%1 ei ole kirjastossa</translation>
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1279"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3580"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3648"/>
         <source>Install of %1 failed: %2</source>
         <translation>Kohteen %1 asennus epäonnistui: %2</translation>
     </message>
@@ -440,7 +440,7 @@ löytyy - %2 tavua
         <location filename="../src/controller/appcontroller.cpp" line="2417"/>
         <location filename="../src/controller/appcontroller.cpp" line="2500"/>
         <location filename="../src/controller/appcontroller.cpp" line="2782"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3481"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3531"/>
         <source>Sign in to the Suunto cloud first.</source>
         <translation>Kirjaudu ensin Suunto-tilille.</translation>
     </message>
@@ -458,7 +458,7 @@ löytyy - %2 tavua
         <location filename="../src/controller/appcontroller.cpp" line="2474"/>
         <location filename="../src/controller/appcontroller.cpp" line="2830"/>
         <location filename="../src/controller/appcontroller.cpp" line="2840"/>
-        <location filename="../src/controller/appcontroller.cpp" line="4084"/>
+        <location filename="../src/controller/appcontroller.cpp" line="4157"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
@@ -522,7 +522,7 @@ löytyy - %2 tavua
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="1932"/>
         <location filename="../src/controller/appcontroller.cpp" line="2576"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3477"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3527"/>
         <source>Connect the watch first.</source>
         <translation>Yhdistä kello ensin.</translation>
     </message>
@@ -594,7 +594,7 @@ löytyy - %2 tavua
     </message>
     <message>
         <location filename="../src/controller/appcontroller.cpp" line="3015"/>
-        <location filename="../src/controller/appcontroller.cpp" line="3677"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3750"/>
         <source>Failed to load login session: %1</source>
         <translation>Istunnon lataus epäonnistui: %1</translation>
     </message>
@@ -639,52 +639,57 @@ löytyy - %2 tavua
         <translation>Käyriä ei löytynyt näytedatasta, eikä sitä voitu tallentaa.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3587"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3565"/>
+        <source>Guide listing failed: %1</source>
+        <translation>Oppaiden listaus epäonnistui: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/controller/appcontroller.cpp" line="3655"/>
         <source>Installed %1</source>
         <translation>Asennettu %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3601"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3674"/>
         <source>Refresh the list first.</source>
         <translation>Päivitä lista ensin.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3614"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3687"/>
         <source>Removed %1 from the watch</source>
         <translation>Poistettu %1 kellosta</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3693"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3766"/>
         <source>Failed to fetch records: %1</source>
         <translation>Ennätysten haku epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3703"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3776"/>
         <source>Failed to save records: %1</source>
         <translation>Ennätysten tallennus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="3905"/>
+        <location filename="../src/controller/appcontroller.cpp" line="3978"/>
         <source>Failed to list watch entries: %1</source>
         <translation>Kellon merkintöjen listaus epäonnistui: %1</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="4036"/>
+        <location filename="../src/controller/appcontroller.cpp" line="4109"/>
         <source>Re-read %1 stored workouts with this watch&apos;s own field table.</source>
         <translation>Luettiin %1 tallennettua harjoitusta uudelleen tämän kellon omalla kenttätaululla.</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="4062"/>
+        <location filename="../src/controller/appcontroller.cpp" line="4135"/>
         <source>Synced %1 of %2 watch workouts. Failed: %3</source>
         <translation>Synkronoitiin %1/%2 kellon harjoitusta. Epäonnistui: %3</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="4096"/>
+        <location filename="../src/controller/appcontroller.cpp" line="4169"/>
         <source>%1: decode failed (%2)</source>
         <translation>%1: purku epäonnistui (%2)</translation>
     </message>
     <message>
-        <location filename="../src/controller/appcontroller.cpp" line="4141"/>
+        <location filename="../src/controller/appcontroller.cpp" line="4214"/>
         <source>%1: failed to save (%2)</source>
         <translation>%1: tallennus epäonnistui (%2)</translation>
     </message>
@@ -1960,8 +1965,8 @@ löytyy - %2 tavua
         <location filename="../src/cloud/suuntocloudclient.cpp" line="391"/>
         <location filename="../src/cloud/suuntocloudclient.cpp" line="450"/>
         <location filename="../src/cloud/suuntocloudclient.cpp" line="491"/>
-        <location filename="../src/cloud/suuntocloudclient.cpp" line="564"/>
-        <location filename="../src/cloud/suuntocloudclient.cpp" line="627"/>
+        <location filename="../src/cloud/suuntocloudclient.cpp" line="593"/>
+        <location filename="../src/cloud/suuntocloudclient.cpp" line="656"/>
         <source>Unexpected response from server</source>
         <translation>Odottamaton vastaus palvelimelta</translation>
     </message>
@@ -1975,8 +1980,8 @@ löytyy - %2 tavua
         <location filename="../src/cloud/suuntocloudclient.cpp" line="398"/>
         <location filename="../src/cloud/suuntocloudclient.cpp" line="457"/>
         <location filename="../src/cloud/suuntocloudclient.cpp" line="498"/>
-        <location filename="../src/cloud/suuntocloudclient.cpp" line="573"/>
-        <location filename="../src/cloud/suuntocloudclient.cpp" line="634"/>
+        <location filename="../src/cloud/suuntocloudclient.cpp" line="602"/>
+        <location filename="../src/cloud/suuntocloudclient.cpp" line="663"/>
         <source>Server error %1: %2</source>
         <translation>Palvelinvirhe %1: %2</translation>
     </message>
@@ -1986,7 +1991,7 @@ löytyy - %2 tavua
         <translation>Yhtään %1-merkintää ei voitu lukea (%2 jäsentymätöntä)</translation>
     </message>
     <message>
-        <location filename="../src/cloud/suuntocloudclient.cpp" line="532"/>
+        <location filename="../src/cloud/suuntocloudclient.cpp" line="549"/>
         <source>Expected a zip, got %1 bytes starting %2</source>
         <translation>Odotettiin zipiä, saatiin %1 tavua jotka alkavat %2</translation>
     </message>
@@ -1994,57 +1999,62 @@ löytyy - %2 tavua
 <context>
     <name>SuuntoPlusPage</name>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="49"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="36"/>
+        <source>Watch faces</source>
+        <translation>Kellotaulut</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="38"/>
+        <source>Guides</source>
+        <translation>Oppaat</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="39"/>
+        <source>Sports apps</source>
+        <translation>Urheilusovellukset</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="70"/>
         <source>Refresh</source>
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="57"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="78"/>
         <source>SuuntoPlus</source>
         <translation>SuuntoPlus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="77"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="98"/>
         <source>Connect the watch and pull down to refresh.</source>
         <translation>Yhdistä kello ja päivitä vetämällä alas.</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="78"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="99"/>
         <source>Sign in to the Suunto cloud to see your library.</source>
         <translation>Kirjaudu Suunto-tiliin nähdäksesi kirjastosi.</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="109"/>
-        <source>Watch face</source>
-        <translation>Kellotaulu</translation>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="145"/>
+        <source>On the watch</source>
+        <translation>Kellossa</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="110"/>
-        <source>Sports app</source>
-        <translation>Urheilusovellus</translation>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="146"/>
+        <source>Not on the watch</source>
+        <translation>Ei kellossa</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="111"/>
-        <source>on the watch</source>
-        <translation>kellossa</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="112"/>
-        <source>not on the watch</source>
-        <translation>ei kellossa</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="121"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="153"/>
         <source>Install on the watch</source>
         <translation>Asenna kelloon</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="126"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="158"/>
         <source>Remove from the watch</source>
         <translation>Poista kellosta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/SuuntoPlusPage.qml" line="134"/>
+        <location filename="../qml/pages/SuuntoPlusPage.qml" line="167"/>
         <source>Reading the watch</source>
         <translation>Luetaan kelloa</translation>
     </message>

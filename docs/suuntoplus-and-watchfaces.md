@@ -512,3 +512,88 @@ and the system disagree, the instrument is a suspect too** - and here it was
 the only suspect never examined. The watch's own menu was free to look at
 from the first round, and the directory listing that finally settled it took
 an hour to write.
+
+## Three kinds, and the listing that was missing (2026-10-13)
+
+The page shows the library grouped under three headings - watch faces,
+sports apps, guides - and the third one needed a second request. There is
+no `sequence` in `features/items`, ever: a guide sitting on this watch as
+`fp03pfbd.gui` was invisible on a page built from that listing alone.
+
+| kind | listing | zip | installed as |
+|---|---|---|---|
+| watch face | `features/items` (`type: watchface`) | `features/plugins/<id>?capabilities=…` | `<id>.wfa` |
+| sports app | `features/items` (`type: feature`) | `features/plugins/<id>?capabilities=…` | `<pluginId>.fea` |
+| guide | `guides/items` | `guides/plugins/<id>?capabilities=…` | `<id>.gui` |
+
+Two asymmetries in that table are measured, not assumed, and both are easy
+to get backwards:
+
+- **The guide *listing* takes no parameters at all.** The captured app
+  requests `v1/suuntoplus/guides/items` bare, where every features request
+  carries `variant` and `capabilities`. The guide *download* does carry
+  `capabilities` - so the listing is the odd one out, not the download.
+- **Only a sports app is named by `pluginId`.** A watch face is named by
+  catalogue id, and a guide has no `pluginId` field in its listing at all,
+  so a filename rule that fell through to `.fea` would report every guide
+  as not installed - silently, and with the correct-looking explanation
+  that the user simply has not installed it.
+
+What is inferred rather than observed: that a guide zip staged as
+`<id>.zip` is renamed to `<id>.gui` by the watch, the way a watch face's
+becomes `.wfa` and an app's `.fea`. The watch picks the extension itself,
+and nothing in the install frames names it, so this follows from the
+mechanism rather than from a captured guide install. If it is wrong, the
+install reports success and the next directory read still shows the guide
+as absent - a visible failure, not a silent one.
+
+The grouping is a `SectionHeader` drawn by the delegate wherever the kind
+changes from one row to the next, with the list sorted by kind and then by
+name in `AppController`. `ListView.section` is no use here: the model is a
+plain JavaScript array, which exposes no roles for `section.property` to
+read. Nesting the `ListItem` inside a `Column` under the header costs
+nothing - `ContextMenu` finds its flickable by walking the parent chain
+(`Util.findFlickable`), and the `ListView.view` attached property that
+`ViewItem` looks for is only used to set `__silica_contextmenu_instance`,
+which `SilicaListView` does not even declare.
+
+## aabbeell/suuntoplus-agentic-dev-env, read for protocol detail (2026-10-13)
+
+A third independent project in this area, and worth being clear about what
+it is: tooling for *writing* SuuntoPlus apps on a Mac, which drives the
+official **SuuntoPlus Editor** VS Code extension. Its install path is
+`vscode.commands.executeCommand('suuntoplus.deployApp', …)`, and the BLE
+happens inside Suunto's own closed `SDSApplicationServer` (an Intel binary
+on port 9801). So it adds **no wire-level detail** over zappctl - it never
+speaks the Whiteboard protocol itself. Its tools talk to that server in
+JSON over a WebSocket, in the same resource vocabulary our APK string dump
+already had: `suunto://SDS/ConnectedDevices`,
+`suunto://<serial>/Plugin/List`, `suunto://SDS/SystemEvents/<serial>`.
+
+Four things in it are still useful to us:
+
+- **Where a `pluginId` comes from.** The Editor's `suunto-plus.js getAppId`
+  makes it from the first six letters of the manifest name - spaces, `-`,
+  `.` and non-ASCII removed, lower-cased - plus a two-digit counter. That
+  is exactly the shape of the ids we join the library on (`zzbrnr01`), and
+  it means the id is a *name*, not a hash: two differently-named apps can
+  collide on one id and replace each other on the watch.
+- **"The next phone sync deletes every sideloaded app."** The official app
+  reconciles the watch against the account library. Nothing we install is
+  at risk, because we only ever install library items - but anything
+  sideloaded is, and it explains why the watch's directory is not simply
+  an append-only pile.
+- **The platform's own limits**, from the watch's system log on a Race S:
+  two SuuntoPlus apps per sport mode, and a shared pool of about sixteen
+  simultaneous resource subscriptions per mode. Installing more than that
+  is allowed; using them in one mode is not. Worth knowing before we offer
+  a Store that makes installing easy.
+- **`/Plugin/List` is what the official Editor reads too** - its
+  `watch-apps.js` prints exactly that body. It is the same resource we
+  found to under-report, so the directory stays our oracle; what this adds
+  is that Suunto's own tooling has the same blind spot.
+
+`suunto://MDS/Logs/<serial>/Syslogs` and `/Analytics/<serial>/Systemevents`
+are already in `docs/mds-resource-paths.txt`, unexplored. The system log
+those tools read is the same thing seen from the desktop side, so a watch
+log is reachable over our BLE link too, whenever it is worth the trouble.

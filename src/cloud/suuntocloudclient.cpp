@@ -511,9 +511,26 @@ void SuuntoCloudClient::downloadSuuntoPlusPlugin(const QString &sessionKey,
                                                   const QString &capabilities,
                                                   PluginDownloadCallback callback)
 {
-    const QString path = QStringLiteral("suuntoplus/features/plugins/%1?capabilities=%2")
-            .arg(QString::fromUtf8(QUrl::toPercentEncoding(id)),
-                  QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    fetchSuuntoPlusZip(QStringLiteral("suuntoplus/features/plugins/%1?capabilities=%2")
+                               .arg(QString::fromUtf8(QUrl::toPercentEncoding(id)),
+                                     QString::fromUtf8(QUrl::toPercentEncoding(capabilities))),
+                        sessionKey, callback);
+}
+
+void SuuntoCloudClient::downloadSuuntoPlusGuide(const QString &sessionKey,
+                                                 const QString &id,
+                                                 const QString &capabilities,
+                                                 PluginDownloadCallback callback)
+{
+    fetchSuuntoPlusZip(QStringLiteral("suuntoplus/guides/plugins/%1?capabilities=%2")
+                               .arg(QString::fromUtf8(QUrl::toPercentEncoding(id)),
+                                     QString::fromUtf8(QUrl::toPercentEncoding(capabilities))),
+                        sessionKey, callback);
+}
+
+void SuuntoCloudClient::fetchSuuntoPlusZip(const QString &path, const QString &sessionKey,
+                                            PluginDownloadCallback callback)
+{
     const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);
@@ -545,10 +562,22 @@ void SuuntoCloudClient::listSuuntoPlusFeatures(const QString &sessionKey,
 {
     // onlyMyLibrary=true is what the official app sends for the library
     // view; the whole catalogue is a different endpoint (store/sportsapps).
-    const QString path = QStringLiteral("suuntoplus/features/items?onlyMyLibrary=true"
-                                         "&variant=%1&capabilities=%2")
-            .arg(QString::fromUtf8(QUrl::toPercentEncoding(variant)),
-                  QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    fetchSuuntoPlusList(QStringLiteral("suuntoplus/features/items?onlyMyLibrary=true"
+                                        "&variant=%1&capabilities=%2")
+                                .arg(QString::fromUtf8(QUrl::toPercentEncoding(variant)),
+                                      QString::fromUtf8(QUrl::toPercentEncoding(capabilities))),
+                         sessionKey, callback);
+}
+
+void SuuntoCloudClient::listSuuntoPlusGuides(const QString &sessionKey,
+                                              SuuntoPlusListCallback callback)
+{
+    fetchSuuntoPlusList(QStringLiteral("suuntoplus/guides/items"), sessionKey, callback);
+}
+
+void SuuntoCloudClient::fetchSuuntoPlusList(const QString &path, const QString &sessionKey,
+                                             SuuntoPlusListCallback callback)
+{
     const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
 
     QNetworkReply *reply = m_network->get(request);

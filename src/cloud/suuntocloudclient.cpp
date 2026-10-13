@@ -749,7 +749,14 @@ void SuuntoCloudClient::removeFromStoreLibrary(const QString &sessionKey, const 
 {
     // The store's two plural path segments. Anything that is not a guide is
     // a sportsapp here, watch faces included - see StoreItem.
-    const QString segment = type == QStringLiteral("guide")
+    //
+    // Both words for a guide are accepted, because both callers are right:
+    // the store calls it a `guide` and the library listing calls the same
+    // thing a `sequence`, and a removal is offered from either page. The
+    // mapping belongs here rather than in one of them, where the other
+    // would eventually get it wrong and silently delete nothing.
+    const QString segment = (type == QStringLiteral("guide")
+                              || type == QStringLiteral("sequence"))
             ? QStringLiteral("guides")
             : QStringLiteral("sportsapps");
     const QString path = QStringLiteral("store/library/%1/%2")

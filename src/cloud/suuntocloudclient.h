@@ -226,7 +226,12 @@ public:
     void addToStoreLibrary(const QString &sessionKey, const QString &type, const QString &id,
                             SimpleCallback callback);
 
-    // DELETE v1/store/library/{sportsapps|guides}/{id}.
+    // DELETE v1/store/library/{sportsapps|guides}/{id}. `type` may be
+    // either vocabulary's word - the store's "guide" or the library
+    // listing's "sequence" - because a removal is offered from both pages.
+    //
+    // Confirmed working on the real account 2026-10-13, so the paragraph
+    // below is now history rather than a warning.
     //
     // NOT captured: the path comes from the APK's own endpoint table
     // (SuuntoPlusStoreRestApi.removeFeatureFromLibrary /

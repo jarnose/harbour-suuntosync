@@ -3755,6 +3755,11 @@ void AppController::changeStoreLibrary(const QString &id, bool add)
             emit storeChanged();
             emit errorOccurred(add ? tr("Added %1 to your library").arg(title)
                                     : tr("Removed %1 from your library").arg(title));
+            // And re-read the library, so the SuuntoPlus page shows the
+            // change without being asked. It costs a capabilities read and
+            // a directory listing over BLE, which is the only way to know
+            // the new item's installed state rather than assume it.
+            refreshSuuntoPlus();
         };
 
         if (add)
@@ -3815,6 +3820,58 @@ void AppController::installSuuntoPlusItem(const QString &id)
             m_cloudClient->downloadSuuntoPlusGuide(key, id, capabilities, downloaded);
         else
             m_cloudClient->downloadSuuntoPlusPlugin(key, id, capabilities, downloaded);
+    });
+}
+
+void AppController::removeSuuntoPlusFromLibrary(const QString &id)
+{
+    if (m_suuntoPlusBusy)
+        return;
+
+    const QVariantMap target = suuntoPlusEntry(m_suuntoPlusLibrary, id);
+    if (target.isEmpty()) {
+        emit errorOccurred(tr("%1 is not in the library").arg(id));
+        return;
+    }
+    // The library's own word for the kind. SuuntoCloudClient knows both
+    // vocabularies, so "sequence" reaches the guides path.
+    const QString type = target.value(QStringLiteral("type")).toString();
+    const QString name = target.value(QStringLiteral("name")).toString();
+
+    setSuuntoPlusBusy(true);
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, id, type, name](bool ok, const QByteArray &data, const QString &error) {
+        if (!ok) {
+            setSuuntoPlusBusy(false);
+            emit errorOccurred(tr("Could not read the session key: %1").arg(error));
+            return;
+        }
+        m_cloudClient->removeFromStoreLibrary(QString::fromUtf8(data), type, id,
+                [this, id, name](bool removeOk, const QString &removeError) {
+            setSuuntoPlusBusy(false);
+            if (!removeOk) {
+                emit errorOccurred(tr("Could not remove %1: %2").arg(name, removeError));
+                return;
+            }
+            // Dropped from the list here rather than re-read: exactly one
+            // item changed and the rest of the page - including every
+            // other item's installed state - is still right.
+            for (int i = 0; i < m_suuntoPlusLibrary.size(); ++i) {
+                if (m_suuntoPlusLibrary.at(i).toMap().value(QStringLiteral("id")).toString()
+                        == id) {
+                    m_suuntoPlusLibrary.removeAt(i);
+                    break;
+                }
+            }
+            if (m_storeItemsById.contains(id)) {
+                QVariantMap stored = m_storeItemsById.value(id).toMap();
+                stored.insert(QStringLiteral("inLibrary"), false);
+                m_storeItemsById.insert(id, stored);
+                emit storeChanged();
+            }
+            emit suuntoPlusChanged();
+            emit errorOccurred(tr("Removed %1 from your library").arg(name));
+        });
     });
 }
 

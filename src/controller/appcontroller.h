@@ -421,6 +421,18 @@ public:
     // undone by installing it again.
     Q_INVOKABLE void removeSuuntoPlusItem(const QString &id);
 
+    // Takes the item out of the account's library, from the library page
+    // rather than the store - the two pages reach the same endpoint, but
+    // only this one can name an item the store listing has never been
+    // asked about.
+    //
+    // It does not touch the watch. An item that is still installed when it
+    // leaves the library therefore stays on the watch while disappearing
+    // from this page, which is the same blind spot the watch's own extra
+    // files have: the page shows the library, and the watch holds whatever
+    // it holds. Remove it from the watch first to avoid that.
+    Q_INVOKABLE void removeSuuntoPlusFromLibrary(const QString &id);
+
     // The store, in two parts: the categories, and one category's items.
     // Both answer from what the last refresh left in memory - the whole
     // catalogue arrives in a single request, so there is nothing to fetch

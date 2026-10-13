@@ -650,8 +650,21 @@ filename rule therefore chose `<id>.wfa`, and the watch shows it. So the
 "carry the type verbatim" rule is measured, not reasoned - the one thing in
 this chain that a plausible-looking mapping would have broken.
 
-Still untested: `DELETE store/library/…`, the one call here that was never
-captured.
+`DELETE store/library/sportsapps/<id>` works too, which settles the one
+call here that was never captured - the path read out of the APK's endpoint
+table was right.
+
+Removing from the library is offered on both pages, and the two listings
+disagree about what a guide is called (`guide` in the store, `sequence` in
+the library), so `removeFromStoreLibrary()` accepts either word and picks
+the path segment itself. Putting that mapping in the caller would mean two
+callers, one of which would eventually delete nothing at all and report
+success.
+
+A library removal deliberately leaves the watch alone. So an item removed
+while still installed stays on the watch and stops being listed, which is
+the same blind spot the watch's own extra files already have - the page
+lists the library, and the watch holds whatever it holds.
 
 `addToWatch: true` is sent but is not what installs anything - the app
 pushes the file over BLE itself afterwards, which is exactly the division

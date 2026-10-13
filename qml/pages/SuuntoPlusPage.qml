@@ -162,6 +162,15 @@ Page {
                         text: qsTr("Remove from the watch")
                         onClicked: AppController.removeSuuntoPlusItem(modelData.id)
                     }
+                    // Deliberately not chained to the one above: this takes
+                    // the item out of the account's library and leaves the
+                    // watch alone, so an item removed while installed stays
+                    // on the watch - and stops being listed here, because
+                    // this page lists the library.
+                    MenuItem {
+                        text: qsTr("Remove from library")
+                        onClicked: AppController.removeSuuntoPlusFromLibrary(modelData.id)
+                    }
                 }
             }
         }

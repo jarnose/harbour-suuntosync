@@ -23,12 +23,23 @@
 //
 // The two sides are deliberately asymmetric:
 //
-//  - The application takes the lock when it attaches and holds it until it
-//    detaches, and **attaches whether or not it got it**. It is the side
-//    with a person waiting on it, and the daemon's own window is seconds.
-//  - The daemon attaches only while it holds the lock, for one send, and
-//    lets go immediately afterwards. So "the application is open" means
-//    notifications wait, which is the trade-off this design accepts.
+//  - Both sides now take the lock for one operation and let go. The
+//    application attaches when something it is asked to do needs the
+//    watch, holds the session for that chain of requests, and releases as
+//    soon as the last holder of it goes away - see
+//    AppController::withWatchSession(). The daemon does the same for one
+//    send.
+//  - The asymmetry that is left: the application **attaches whether or not
+//    it got the lock**, after waiting five seconds for it. It is the side
+//    with a person waiting on it, and a stuck daemon should not make the
+//    watch unusable from the app.
+//
+// This was not always so. The application used to attach on connect and
+// hold the session for as long as it ran, which meant "the application is
+// open" meant "notifications wait" - including while it sat in the
+// background, which on this platform is most of the time. Only a transfer
+// blocks a notification now, and that wait is seconds, because Whiteboard
+// is strictly one request at a time and nothing can change that.
 class WatchLink
 {
 public:

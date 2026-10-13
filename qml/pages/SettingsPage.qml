@@ -18,7 +18,10 @@ Page {
 
     Component.onCompleted: {
         refreshKnownWatches()
-        if (AppController.whiteboardReady)
+        // Asking attaches to the watch for the one read and lets go again,
+        // so this is gated on the watch being connected rather than on a
+        // session already being up - there is none, most of the time.
+        if (AppController.watchConnected)
             AppController.readWatchNotificationsEnabled()
     }
 
@@ -35,8 +38,8 @@ Page {
             page.watchNotifications = value
             page.watchNotificationsDetail = detail
         }
-        onWhiteboardReadyChanged: {
-            if (AppController.whiteboardReady)
+        onWatchConnectedChanged: {
+            if (AppController.watchConnected)
                 AppController.readWatchNotificationsEnabled()
             else
                 page.watchNotifications = -1
@@ -126,10 +129,9 @@ Page {
                 text: {
                     if (!AppController.watchPaired)
                         return qsTr("No watch paired")
-                    var state = AppController.whiteboardReady
+                    var state = AppController.watchConnected
                             ? qsTr("connected")
-                            : (AppController.watchConnected ? qsTr("connecting…")
-                                                             : qsTr("not connected"))
+                            : qsTr("not connected")
                     return AppController.pairedWatchName + " · " + state
                 }
                 wrapMode: Text.Wrap
@@ -220,7 +222,7 @@ Page {
                 // The one watch-side feature that needs no account: the
                 // assist-data endpoints take no credential at all.
                 x: Theme.horizontalPageMargin
-                visible: AppController.whiteboardReady
+                visible: AppController.watchConnected
                 enabled: !AppController.gpsUpdateInProgress
                 text: AppController.gpsUpdateInProgress
                       ? qsTr("Updating GPS data…")
@@ -231,7 +233,7 @@ Page {
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
-                visible: AppController.whiteboardReady
+                visible: AppController.watchConnected
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall

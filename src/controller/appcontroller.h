@@ -7,12 +7,14 @@
 #include "../notify/watchlink.h"
 
 #include <QSet>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
 #include <QStringList>
 #include <QVector>
 #include <functional>
+#include <memory>
 
 class TokenVault;
 class CloudAccountStore;
@@ -87,6 +89,19 @@ public:
     QString defaultMapTileUrl() const;
 
     bool isRecordsSyncInProgress() const { return m_recordsSyncInProgress; }
+    // A held Whiteboard session. The watch is attached while at least one
+    // of these is alive and let go as soon as the last one dies, so an
+    // operation holds the watch for exactly as long as its own chain of
+    // requests - and the notification daemon, which needs the watch for
+    // about a second per notification, gets it the rest of the time.
+    //
+    // It is a shared_ptr rather than a flag because every operation here is
+    // an asynchronous chain: carrying the session through the callbacks
+    // means the release cannot be forgotten on one of the exit paths, and
+    // forgetting it would block notifications for as long as the app ran -
+    // which is exactly the behaviour this replaces.
+    using WatchSession = std::shared_ptr<void>;
+
     bool isSuuntoPlusBusy() const { return m_suuntoPlusBusy; }
     bool isStoreBusy() const { return m_storeBusy; }
     qint64 recordsFetchedAt() const;
@@ -761,6 +776,34 @@ private:
     bool m_recordsSyncInProgress = false;
     bool m_suuntoPlusBusy = false;
     bool m_storeBusy = false;
+
+    // Weak on purpose: this does not keep the session alive, it only finds
+    // the one the holders share.
+    std::weak_ptr<void> m_watchSession;
+    // Operations waiting for an attach that is in flight.
+    QVector<std::function<void(const WatchSession &)>> m_watchSessionWaiters;
+    bool m_watchSessionAttaching = false;
+    // Tells one attempt's timeout from the next one's, so a late timer
+    // cannot fail the operations queued behind a later, healthy attach.
+    int m_watchSessionAttachGeneration = 0;
+    // How long an attach takes, measured rather than assumed: it is the
+    // whole cost of holding the watch per operation instead of for the run
+    // of the app, and a guess about it is exactly the kind that would never
+    // be checked.
+    QElapsedTimer m_watchAttachTimer;
+    // The operations whose span is a member flag rather than one chain of
+    // lambdas - a sync walks through several member functions, and its
+    // in-progress flag already has correct clear-on-every-exit-path
+    // behaviour, so the session rides along with the flag rather than
+    // getting a second, parallel set of bookkeeping to get wrong.
+    WatchSession m_workoutSyncSession;
+    WatchSession m_healthSyncSession;
+    WatchSession m_suuntoPlusSession;
+    WatchSession m_storeSession;
+    WatchSession m_gpsSession;
+    // The developer probes and the watch-settings reads: one at a time,
+    // each guarded by an in-flight flag that clears on every exit.
+    WatchSession m_probeSession;
     // The last refresh's answers. The library as the cloud gave it, and the
     // filenames the watch's directory held - matching one to the other is
     // what says "installed".
@@ -824,6 +867,25 @@ private:
     // chained cloud requests now, and the nesting had stopped being
     // readable.
     void readWatchPluginFiles();
+    // The second half of the two watch syncs: everything after the session
+    // is in hand. Split out so the entry point can be the one place that
+    // takes the session, rather than every branch of the chain below.
+    void startWatchWorkoutSync();
+    void startWatchHealthSync();
+
+    // Attaches to the watch if nothing holds a session, then runs
+    // `operation` with one. Refuses through errorOccurred() when no watch
+    // is connected, and reports an attach that fails or never completes the
+    // same way, in which case `operation` never runs.
+    void withWatchSession(const std::function<void(const WatchSession &)> &operation);
+    // The session every holder shares, created on demand.
+    WatchSession currentWatchSession();
+    // Detaches, if and only if nothing took a new session in the meantime.
+    // Deferred through the event loop by the session's own deleter: the
+    // last holder is usually a callback being destroyed inside the
+    // whiteboard client, and detaching from in there would pull the ground
+    // out from under the code doing the destroying.
+    void releaseIdleWatchSession();
     void setStoreBusy(bool busy);
     // Adding and removing differ by one call, so they share the rest: the
     // context, the item lookup, the error wording and the reload.

@@ -141,7 +141,7 @@ Page {
                 onClicked: AppController.syncCloudWorkouts()
             }
             MenuItem {
-                visible: AppController.whiteboardReady
+                visible: AppController.watchConnected
                 text: AppController.workoutSyncInProgress
                       ? qsTr("Syncing…") : qsTr("Sync from watch to phone")
                 enabled: !AppController.workoutSyncInProgress
@@ -401,7 +401,7 @@ Page {
         ViewPlaceholder {
             enabled: listView.count === 0
             text: qsTr("No workouts yet")
-            hintText: (AppController.cloudSignedIn || AppController.whiteboardReady)
+            hintText: (AppController.cloudSignedIn || AppController.watchConnected)
                       ? qsTr("Pull down and sync to fetch your workout history")
                       : qsTr("Pair a Suunto watch or sign in to your Suunto account to get started")
         }

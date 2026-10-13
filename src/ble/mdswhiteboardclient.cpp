@@ -168,6 +168,11 @@ void MdsWhiteboardClient::detach()
         emit readyChanged(false);
 }
 
+void MdsWhiteboardClient::forgetConnection()
+{
+    m_mtuDeviceAddress.clear();
+}
+
 void MdsWhiteboardClient::onDevicePropertiesChanged(const QString &interface,
                                                      const QVariantMap &changed,
                                                      const QStringList &invalidated)
@@ -390,9 +395,22 @@ constexpr int kMinWriteChunkSize = 20;
 
 void MdsWhiteboardClient::learnWriteChunkSize()
 {
-    m_writeChunkSize = kMinWriteChunkSize;
-    if (m_writeCharPath.isEmpty())
+    if (m_writeCharPath.isEmpty()) {
+        m_writeChunkSize = kMinWriteChunkSize;
         return;
+    }
+
+    // The MTU belongs to the *connection*, not to the session: nothing
+    // about attaching or detaching renegotiates it. So it is learned once
+    // per device and kept across sessions, which matters now that a
+    // session lasts one operation rather than the whole run of the app -
+    // asking again on every attach would mean an AcquireWrite every time
+    // somebody taps something, and whether that call can wedge BlueZ is
+    // the one thing about it this project has never established.
+    if (m_mtuDeviceAddress == m_deviceObjectPath && m_writeChunkSize > kMinWriteChunkSize)
+        return;
+
+    m_writeChunkSize = kMinWriteChunkSize;
 
     // This client wrote 20 bytes at a time from the day it was written, on
     // the reasoning that BlueZ would not negotiate more on its own. Measured
@@ -420,7 +438,8 @@ void MdsWhiteboardClient::learnWriteChunkSize()
         return;
     // WriteValue's payload is the MTU less the 3-byte ATT header.
     m_writeChunkSize = std::max(kMinWriteChunkSize, mtu - 3);
-    // Once per session, and it is the one number that decides whether a
+    m_mtuDeviceAddress = m_deviceObjectPath;
+    // Once per connection, and it is the one number that decides whether a
     // large write takes seconds or minutes.
     qWarning() << "ATT MTU" << mtu << "- writing" << m_writeChunkSize << "bytes at a time";
 }

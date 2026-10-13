@@ -50,6 +50,13 @@ public:
     void attachToDevice(const QString &deviceObjectPath);
     void detach();
 
+    // Throws away what was measured about the *connection* rather than the
+    // session - today that is the MTU. Call it when the watch disconnects:
+    // BlueZ renegotiates the MTU per connection, and keeping a larger one
+    // than the new link allows means oversized writes that fail silently,
+    // because the characteristic is write-without-response.
+    void forgetConnection();
+
     // Gated on the session handshake completing (see
     // Mds::literalSessionHandshakeRequest()'s doc comment), not just on the
     // GATT characteristics being found - a first attempt at this without
@@ -443,6 +450,10 @@ private:
     // than assumed - see learnWriteChunkSize(). 20 until a session says
     // otherwise, which is the BLE-mandated minimum and always safe.
     int m_writeChunkSize = 20;
+    // Which device the chunk size above was measured on, so a session that
+    // reattaches to the same watch does not ask BlueZ again. Cleared by a
+    // disconnect, not by detach() - see learnWriteChunkSize().
+    QString m_mtuDeviceAddress;
 
     Mds::Decoder m_decoder;
     uint16_t m_nextRequestId = 1;

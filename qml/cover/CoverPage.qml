@@ -242,7 +242,7 @@ CoverBackground {
 
     CoverActionList {
         id: syncAction
-        enabled: AppController.whiteboardReady && !AppController.workoutSyncInProgress
+        enabled: AppController.watchConnected && !AppController.workoutSyncInProgress
 
         CoverAction {
             iconSource: "image://theme/icon-cover-sync"

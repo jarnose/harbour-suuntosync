@@ -38,14 +38,35 @@ Page {
 
         delegate: ListItem {
             id: item
-            contentHeight: content.height + Theme.paddingMedium
+            contentHeight: Math.max(content.height + Theme.paddingMedium,
+                                     Theme.itemSizeLarge)
             enabled: !AppController.storeBusy
+
+            onClicked: pageStack.push(Qt.resolvedUrl("StoreItemPage.qml"),
+                                       { itemId: modelData.id })
+
+            // A watch face's icon is a render of the face itself, so this is
+            // a real preview rather than decoration. Decoded at the size it
+            // is drawn: the originals run to 140 KB and there is no reason
+            // to hold one at full size per visible row.
+            Image {
+                id: thumbnail
+                x: Theme.horizontalPageMargin
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconSizeLarge
+                height: Theme.iconSizeLarge
+                sourceSize.width: Theme.iconSizeLarge
+                sourceSize.height: Theme.iconSizeLarge
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                source: modelData.iconUrl
+            }
 
             Column {
                 id: content
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                y: Theme.paddingSmall
+                x: thumbnail.x + thumbnail.width + Theme.paddingMedium
+                width: parent.width - x - Theme.horizontalPageMargin
+                anchors.verticalCenter: parent.verticalCenter
 
                 Label {
                     width: parent.width

@@ -91,7 +91,24 @@ public:
         QString title;
         QString subTitle;
         QString description;
+        // A watch face's icon is a real render of the face on this watch:
+        // .../watchface-widgets/<id>/preview/<variant>.png, with the variant
+        // we sent in the request filling that last segment. A sports app's
+        // is a square icon and a guide's a hashed one. Both hosts serve
+        // these without any authentication, so an Image can load the url as
+        // it stands.
         QString iconUrl;
+        // The wide banner. V2 exists for the 53 watch faces and nothing
+        // else, so the preferred one is picked here rather than in the page.
+        QString bannerUrl;
+        // The long description, newline-separated plain text - not HTML,
+        // measured on both a watch face and an app. 157 of 207 sports apps
+        // and 12 of 23 guides have one, so a page must read without it.
+        QString richText;
+        QString ownerTitle;
+        QString version;
+        double avgRating = 0.0;
+        int reviews = 0;
         bool inLibrary = false;  // libraryStatus == "ADDED"
     };
 
@@ -205,8 +222,9 @@ public:
     // of them names (230 of them on this account). So browsing the store
     // costs exactly one request, and the per-item endpoint
     // (store/sportsapps/<id>, which spells the parameter `watchCapabilities`
-    // rather than `capabilities`) is only needed for the long description
-    // and the ratings, neither of which this reply carries.
+    // rather than `capabilities`) turns out to be needed for nothing at
+    // all: this reply already carries `richText`, `rating`, `owner`,
+    // `version` and both banner urls. It is left unimplemented.
     //
     // Both parameters are the same ones the library listing wants, and come
     // from the watch: the store answers a different catalogue for a

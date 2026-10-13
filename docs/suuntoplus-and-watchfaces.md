@@ -611,13 +611,44 @@ browse-and-add is captured end to end.
 | `GET v1/store/sportsapps/user/feedback/<id>` | that item's rating as the user left it |
 | `PUT v1/store/library` | adds to the library, 201 |
 
-**One request is the whole store.** `store/home` answers fourteen
+**One request is the whole store, pictures and all.** `store/home` answers fourteen
 categories *and* `items`: 230 complete records, each with `title`,
 `subTitle`, `description`, `iconUrl`, `type`, `libraryStatus`,
 `activities`, `readMoreUrl` and its own `categories`. A category carries
 only references (`types[].itemRefs[].id`), in the store's order, so
-browsing costs nothing after the first fetch. The per-item endpoint is only
-needed for the long description and the ratings.
+browsing costs nothing after the first fetch. **The per-item endpoint turns
+out to be needed for nothing at all** and is not implemented: `items`
+already carries `richText`, `rating`, `owner`, `version` and both banner
+urls.
+
+The images are the nicest part of this reply:
+
+| field | sports app | watch face | guide |
+|---|---|---|---|
+| `iconUrl` | `feature-icons/<id>.png` | `watchface-widgets/<id>/preview/<variant>.png` | `guide-icons/<hash>.png` |
+| `tileBannerUrl` | `feature-banners/<id>.png` | `watchface-widgets/<id>/banner/<variant>.png` | - |
+| `tileBannerV2Url` | - | `…/banner/<variant>_v2.png` | - |
+
+A watch face's icon is therefore **a render of that face on this watch** -
+the last path segment is the `variant` the request sent, so the preview
+already matches the model and nothing has to be built on our side. Both
+hosts serve these with no authentication at all (checked: 200, `image/png`,
+`cache-control: public, max-age=2592000`), so a QML `Image` loads the url as
+it stands. Azure's blob host answers `application/octet-stream` for a PNG,
+which does not matter - Qt sniffs the bytes.
+
+`richText` is plain text with newlines, not markup, measured on both an app
+and a watch face. 157 of 207 sports apps and 12 of 23 guides have one, so a
+page has to read without it; `description` is the short line every item
+carries. `tileBannerV2Url` appears on exactly 53 items, which is exactly the
+watch-face count.
+
+Because those CDNs ask to be cached for thirty days, the QML engine gets a
+`QNetworkDiskCache` under `QStandardPaths::CacheLocation` - without one, the
+engine's network stack has no cache and every visit to the store would
+re-download a 74 KB render per watch face. That path is inside what Sailjail
+grants: the app has been writing `map-tiles/` and other files there all
+along.
 
 Three things in it are traps:
 

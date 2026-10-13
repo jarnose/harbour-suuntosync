@@ -220,6 +220,7 @@ add_custom_target(distfiles
         qml/pages/SuuntoPlusPage.qml
         qml/pages/StorePage.qml
         qml/pages/StoreCategoryPage.qml
+        qml/pages/StoreItemPage.qml
         qml/pages/SettingsPage.qml
         rpm/harbour-suuntosync.spec
         daemon/suuntosync-notifyd.spec

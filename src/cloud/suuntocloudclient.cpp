@@ -682,6 +682,16 @@ void SuuntoCloudClient::fetchStoreHome(const QString &sessionKey, const QString 
             item.subTitle = object.value(QStringLiteral("subTitle")).toString().trimmed();
             item.description = object.value(QStringLiteral("description")).toString();
             item.iconUrl = object.value(QStringLiteral("iconUrl")).toString();
+            item.bannerUrl = object.value(QStringLiteral("tileBannerV2Url")).toString();
+            if (item.bannerUrl.isEmpty())
+                item.bannerUrl = object.value(QStringLiteral("tileBannerUrl")).toString();
+            item.richText = object.value(QStringLiteral("richText")).toString();
+            item.ownerTitle = object.value(QStringLiteral("owner")).toObject()
+                    .value(QStringLiteral("title")).toString();
+            item.version = object.value(QStringLiteral("version")).toString();
+            const QJsonObject rating = object.value(QStringLiteral("rating")).toObject();
+            item.avgRating = rating.value(QStringLiteral("avgRating")).toDouble();
+            item.reviews = rating.value(QStringLiteral("reviews")).toInt();
             item.inLibrary = object.value(QStringLiteral("libraryStatus")).toString()
                     == QStringLiteral("ADDED");
             if (!item.id.isEmpty())

@@ -14,6 +14,45 @@
 #include "map/mapcanvas.h"
 
 #include <QtQml>
+#include <QNetworkAccessManager>
+#include <QNetworkDiskCache>
+#include <QQmlNetworkAccessManagerFactory>
+#include <QStandardPaths>
+#include <QDir>
+
+namespace {
+
+// The store's preview images come from two CDNs that serve them without
+// authentication, so an `Image` in QML loads them directly - but the QML
+// engine's own network stack has no cache, which would mean re-downloading
+// a 74 KB watch-face render every time the store is opened. Both hosts ask
+// to be cached (`cache-control: public, max-age=2592000`), so this honours
+// that: a disk cache under QStandardPaths::CacheLocation, which is inside
+// what Sailjail grants.
+//
+// The factory has to outlive the engine, so it is declared before the view
+// in main() - destruction runs in reverse.
+class CachingNetworkFactory : public QQmlNetworkAccessManagerFactory
+{
+public:
+    QNetworkAccessManager *create(QObject *parent) override
+    {
+        QNetworkAccessManager *manager = new QNetworkAccessManager(parent);
+        const QString directory =
+                QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                + QStringLiteral("/images");
+        QDir().mkpath(directory);
+        QNetworkDiskCache *cache = new QNetworkDiskCache(manager);
+        cache->setCacheDirectory(directory);
+        // Enough for the whole catalogue's thumbnails several times over,
+        // and small enough not to matter on a phone.
+        cache->setMaximumCacheSize(20 * 1024 * 1024);
+        manager->setCache(cache);
+        return manager;
+    }
+};
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -43,7 +82,10 @@ int main(int argc, char *argv[])
     // src/map/mapcanvas.h and docs/base-map.md.
     qmlRegisterType<MapCanvas>("io.github.jarnose.suuntosync", 1, 0, "MapCanvas");
 
+    CachingNetworkFactory networkFactory;
+
     QScopedPointer<QQuickView> view(SailfishApp::createView());
+    view->engine()->setNetworkAccessManagerFactory(&networkFactory);
 
     AppController controller;
     view->rootContext()->setContextProperty(QStringLiteral("AppController"), &controller);

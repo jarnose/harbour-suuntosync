@@ -440,9 +440,16 @@ public:
     // per category.
     //
     // A category row carries `id`, `title` and `count`. An item row carries
-    // `id`, `type`, `title`, `subTitle`, `description` and `inLibrary`.
+    // `id`, `type`, `title`, `subTitle`, `description`, `iconUrl`,
+    // `bannerUrl`, `richText`, `owner`, `version`, `avgRating`, `reviews`
+    // and `inLibrary` - everything either page shows, because the single
+    // store request answers all of it and there is no second fetch.
     Q_INVOKABLE QVariantList storeCategories() const;
     Q_INVOKABLE QVariantList storeItems(const QString &categoryId) const;
+
+    // One item, by id. For the item page, which re-reads after an add or a
+    // removal rather than holding the snapshot it was pushed with.
+    Q_INVOKABLE QVariantMap storeItem(const QString &id) const;
 
     // Fetches the catalogue. Needs the watch, because the store answers a
     // different catalogue per model, and an account.

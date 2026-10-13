@@ -3633,6 +3633,11 @@ QVariantList AppController::storeCategories() const
     return m_storeCategories;
 }
 
+QVariantMap AppController::storeItem(const QString &id) const
+{
+    return m_storeItemsById.value(id).toMap();
+}
+
 QVariantList AppController::storeItems(const QString &categoryId) const
 {
     QVariantList out;
@@ -3689,6 +3694,13 @@ void AppController::refreshStore()
                 entry.insert(QStringLiteral("title"), item.title);
                 entry.insert(QStringLiteral("subTitle"), item.subTitle);
                 entry.insert(QStringLiteral("description"), item.description);
+                entry.insert(QStringLiteral("iconUrl"), item.iconUrl);
+                entry.insert(QStringLiteral("bannerUrl"), item.bannerUrl);
+                entry.insert(QStringLiteral("richText"), item.richText);
+                entry.insert(QStringLiteral("owner"), item.ownerTitle);
+                entry.insert(QStringLiteral("version"), item.version);
+                entry.insert(QStringLiteral("avgRating"), item.avgRating);
+                entry.insert(QStringLiteral("reviews"), item.reviews);
                 entry.insert(QStringLiteral("inLibrary"), item.inLibrary);
                 m_storeItemsById.insert(item.id, entry);
             }

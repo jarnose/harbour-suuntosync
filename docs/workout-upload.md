@@ -1045,6 +1045,29 @@ page shows a cadence, so there is no unit convention here to be consistent
 with, and 0.79 Hz is 47 of something per minute whose name depends on the
 sport.
 
-A watch-read workout's laps have none of these. They are built from the
-lap *marker* events in `/Data`, which carry a time and a type and nothing
-else, so the extra line is simply empty there.
+A watch-read workout's laps get two of those four, derived. The watch sends
+no per-lap figures at all - those laps are the stretches between *marker*
+events, which carry a time and a type and nothing else - but the samples
+are there:
+
+- **Average speed** is the lap's distance over its duration, and that is
+  not an approximation of the cloud's number but the same definition: for
+  the lap of 1000 m in 1076 s, distance over duration is 0.929 m/s and the
+  cloud's `Speed.Avg` is 0.929.
+- **Average heart rate** is the plain mean of the samples inside the lap.
+  Which mean the cloud uses was the open question, and the cloud's own
+  response answered it: computed both ways over its 2664 one-second HR
+  samples, the sample mean and the time-weighted mean agreed with its own
+  `HR.Avg` to within 0.1 bpm on all six laps. At one sample a second there
+  is nothing to choose between them, so the simpler one is right.
+
+The other two stay out. **Energy** is in no sample, and apportioning the
+workout's total by time would be inventing a figure. **Ascent** could come
+off the altitude series, but this project's 2 m hysteresis already lands
+about 10% from the watch's own whole-workout figure, and inside a lap of a
+few hundred metres that error is proportionally worse.
+
+Both unit conversions go through `toDisplayUnits()` rather than being
+multiplied at the call site: hertz to bpm and joules to kcal live in that
+one function, and a second copy of those factors is a second place to get
+them wrong.

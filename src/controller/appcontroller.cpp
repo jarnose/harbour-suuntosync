@@ -426,12 +426,17 @@ QByteArray buildCloudLapsJson(const QByteArray &body)
             // Measured on a real walk - HR 1.29 Hz is 77 bpm, and the three
             // auto-laps' 333688 + 281771.7 + 230274 J come to the 202 kcal
             // the whole workout reports.
-            lap.insert(QStringLiteral("avgHeartRate"), average("HR") * 60.0);
+            // Through toDisplayUnits(), not by multiplying here: hertz to
+            // bpm and joules to kcal are that function's job, and a second
+            // copy of those factors is a second place to get them wrong.
+            lap.insert(QStringLiteral("avgHeartRate"),
+                        toDisplayUnits(QStringLiteral("HR"), average("HR")).value);
             lap.insert(QStringLiteral("avgSpeed"), average("Speed"));
             lap.insert(QStringLiteral("ascent"),
                         window.value(QStringLiteral("Ascent")).toDouble());
             lap.insert(QStringLiteral("energy"),
-                        window.value(QStringLiteral("Energy")).toDouble() / 4184.0);
+                        toDisplayUnits(QStringLiteral("Energy"),
+                                        window.value(QStringLiteral("Energy")).toDouble()).value);
             if (type == QStringLiteral("Autolap"))
                 automaticLaps.append(lap);
             else
@@ -557,6 +562,15 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed,
 {
     struct Marker { int type; int64_t timeMs; double distance; };
     std::vector<Marker> markers;
+    // Heart rate per sample, kept so each lap can carry its own average.
+    // The watch sends no per-lap figures at all - these laps are the
+    // stretches between marker events - but the samples are there, and the
+    // cloud's own lap averages turn out to be the plain mean of exactly
+    // these readings: computed both ways against a real workout's 2664
+    // one-second samples, the sample mean and the time-weighted mean agreed
+    // with the cloud's own HR.Avg to within 0.1 bpm on all six of its laps.
+    // At one sample a second there is nothing to choose between them.
+    std::vector<std::pair<int64_t, double>> heartRates;
     double distance = 0;
     int64_t firstTimeMs = 0;
     int64_t lastTimeMs = 0;
@@ -571,12 +585,41 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed,
         }
         if (name == QLatin1String("Sample.Distance"))
             distance = reading.value;
+        else if (name == QLatin1String("Sample.HR") && reading.value > 0)
+            heartRates.push_back({ reading.timeMs, reading.value });
         else if (name == QLatin1String("Sample.Events.Array.Lap.Type"))
             markers.push_back({ static_cast<int>(reading.value), reading.timeMs, distance });
     });
 
     if (markers.empty())
         return QByteArray();
+
+    // Average speed is the lap's distance over its duration, which is not
+    // an approximation of the cloud's figure but the same definition: the
+    // cloud reported 0.929 m/s for a lap of 1000 m in 1076 s. Heart rate is
+    // the mean of the samples inside the lap. Energy and ascent are left
+    // alone - energy is in no sample at all, and a per-lap ascent off the
+    // altitude series would carry the whole of this project's 2 m
+    // hysteresis error inside a few hundred metres.
+    auto addDerived = [&heartRates](QJsonObject *lap, int64_t from, int64_t to,
+                                     double metres) {
+        const double seconds = (to - from) / 1000.0;
+        if (seconds > 0 && metres > 0)
+            lap->insert(QStringLiteral("avgSpeed"), metres / seconds);
+
+        double sum = 0;
+        int count = 0;
+        for (const std::pair<int64_t, double> &reading : heartRates) {
+            if (reading.first < from || reading.first > to)
+                continue;
+            sum += reading.second;
+            ++count;
+        }
+        if (count > 0) {
+            lap->insert(QStringLiteral("avgHeartRate"),
+                         toDisplayUnits(QStringLiteral("HR"), sum / count).value);
+        }
+    };
 
     QJsonArray laps;
     int64_t fromTime = firstTimeMs;
@@ -593,6 +636,7 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed,
         lap.insert(QStringLiteral("type"), lapTypeName(marker.type));
         lap.insert(QStringLiteral("durationSeconds"), (marker.timeMs - fromTime) / 1000.0);
         lap.insert(QStringLiteral("distanceMeters"), marker.distance - fromDistance);
+        addDerived(&lap, fromTime, marker.timeMs, marker.distance - fromDistance);
         laps.append(lap);
         fromTime = marker.timeMs;
         fromDistance = marker.distance;
@@ -606,6 +650,7 @@ QByteArray buildLapsJson(const std::vector<uint8_t> &compressed,
         lap.insert(QStringLiteral("type"), QStringLiteral("End"));
         lap.insert(QStringLiteral("durationSeconds"), (lastTimeMs - fromTime) / 1000.0);
         lap.insert(QStringLiteral("distanceMeters"), distance - fromDistance);
+        addDerived(&lap, fromTime, lastTimeMs, distance - fromDistance);
         laps.append(lap);
     }
 

@@ -598,8 +598,12 @@ public:
     // `durationSeconds` and `distanceMeters`, where type is the reason the
     // lap ended (manual, auto-lap by distance, interval...). A cloud
     // workout's laps carry `avgSpeed`, `avgHeartRate`, `ascent` and
-    // `energy` as well; a watch-read one cannot, because those laps are
-    // built from marker events that carry a time and a type.
+    // `energy` as well. A watch-read one carries the first two, derived
+    // from its own samples - the marker events it builds laps from hold a
+    // time and a type and nothing else - and deliberately not the other
+    // two: energy is in no sample, and a per-lap ascent would carry the
+    // whole of this project's altitude hysteresis error inside a few
+    // hundred metres.
     //
     // Deliberately not a fixed list of fields: this returns whatever the
     // stored JSON holds, so a field added where the laps are built reaches

@@ -539,13 +539,14 @@ to get backwards:
   as not installed - silently, and with the correct-looking explanation
   that the user simply has not installed it.
 
-What is inferred rather than observed: that a guide zip staged as
-`<id>.zip` is renamed to `<id>.gui` by the watch, the way a watch face's
-becomes `.wfa` and an app's `.fea`. The watch picks the extension itself,
-and nothing in the install frames names it, so this follows from the
-mechanism rather than from a captured guide install. If it is wrong, the
-install reports success and the next directory read still shows the guide
-as absent - a visible failure, not a silent one.
+The last column is measured for all three kinds now. A guide staged as
+`<id>.zip` really is renamed to `<id>.gui` by the watch, the way a watch
+face's becomes `.wfa` and an app's `.fea`: this was an inference from the
+mechanism when it was written - the watch picks the extension itself and no
+install frame names it - and it was settled the same day by deleting the
+guide from the watch and installing it again, which the page then reported
+as on the watch. The library also went from fifteen items to sixteen, which
+is the guide listing joining the features one correctly.
 
 The grouping is a `SectionHeader` drawn by the delegate wherever the kind
 changes from one row to the next, with the list sorted by kind and then by

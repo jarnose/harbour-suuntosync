@@ -78,6 +78,7 @@ Page {
     function reloadDetails() {
         details = workoutKey.length > 0 ? AppController.workoutDetails(workoutKey) : []
         series = workoutKey.length > 0 ? AppController.workoutSeries(workoutKey) : []
+        laps = workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
         canUpload = workoutKey.length > 0 && AppController.canUploadWorkout(workoutKey)
         canDelete = workoutKey.length > 0 && AppController.canDeleteWorkout(workoutKey)
 
@@ -179,7 +180,11 @@ Page {
     // reason details isn't: a cloud workout's curves only exist after the
     // pull-down fetch below has run.
     property var series: []
-    property var laps: workoutKey.length > 0 ? AppController.workoutLaps(workoutKey) : []
+    // Set in reloadDetails(), not bound. As a binding on workoutKey it was
+    // evaluated once and never again, so laps that arrived with a download
+    // did not appear until the page was reopened - the key does not change
+    // when the store does.
+    property var laps: []
     property bool detailsExpanded: false
 
     // The same track in real degrees, which the map item projects itself
@@ -263,12 +268,9 @@ Page {
         PullDownMenu {
             busy: AppController.cloudSamplesInProgress
 
-            // Only offered where it can actually do something: a watch
-            // workout already arrives with its curves, and once a cloud
-            // workout's have been downloaded there's nothing to repeat.
-            // The download is several megabytes, which is exactly why this
-            // is a deliberate tap rather than something the page does on
-            // its own when opened.
+            // The download is several megabytes, which is why it is a
+            // deliberate tap rather than something the page does when
+            // opened.
             MenuItem {
                 // Only for a watch-synced workout the cloud hasn't taken
                 // yet. Deliberately a separate tap rather than part of the
@@ -279,9 +281,18 @@ Page {
                 onClicked: AppController.uploadWorkoutToCloud(page.workoutKey)
             }
             MenuItem {
-                text: qsTr("Download sample data")
-                visible: page.source !== "ble" && page.series.length === 0
-                         && page.workoutKey.length > 0
+                // Offered even when the curves are already here. This used
+                // to hide itself once they were, on the reasoning that
+                // there was nothing left to repeat - which stopped being
+                // true when the laps turned up in the same response. A
+                // workout downloaded before that landed keeps its curves
+                // and has no laps, and hiding the one action that would
+                // fetch them made that permanent. The label says which
+                // case it is, because of the size.
+                text: page.series.length === 0
+                      ? qsTr("Download sample data")
+                      : qsTr("Download sample data again")
+                visible: page.source !== "ble" && page.workoutKey.length > 0
                 onClicked: AppController.loadCloudSamples(page.workoutKey)
             }
             MenuItem {

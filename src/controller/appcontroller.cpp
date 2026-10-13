@@ -369,7 +369,16 @@ QByteArray buildCloudLapsJson(const QByteArray &body)
             root.value(QStringLiteral("Summary")).toObject()
                 .value(QStringLiteral("Samples")).toArray();
 
-    QJsonArray laps;
+    // Two lists, not one. The cloud's summary carries the auto-laps and the
+    // manual laps as *separate complete partitions* of the same workout -
+    // measured on a 2830 m walk, where three auto-laps summed to 2830 m and
+    // 2663 s and the three manual ones did too - and the file interleaves
+    // them by time. Emitting them in that order gives a table with two rows
+    // numbered 1, two numbered 2, and twice the real distance down the
+    // column. Grouped, each run of rows is one whole partition and the type
+    // column says which.
+    QJsonArray automaticLaps;
+    QJsonArray manualLaps;
     int automatic = 0;
     int manual = 0;
     for (const QJsonValue &sampleValue : samples) {
@@ -402,9 +411,16 @@ QByteArray buildCloudLapsJson(const QByteArray &body)
                         window.value(QStringLiteral("Duration")).toDouble());
             lap.insert(QStringLiteral("distanceMeters"),
                         window.value(QStringLiteral("Distance")).toDouble());
-            laps.append(lap);
+            if (type == QStringLiteral("Autolap"))
+                automaticLaps.append(lap);
+            else
+                manualLaps.append(lap);
         }
     }
+
+    QJsonArray laps = automaticLaps;
+    for (const QJsonValue &lap : manualLaps)
+        laps.append(lap);
 
     return laps.isEmpty() ? QByteArray() : QJsonDocument(laps).toJson(QJsonDocument::Compact);
 }

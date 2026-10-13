@@ -1002,3 +1002,30 @@ the local offset where the official app writes `+00:00`. local64 carries its
 own offset and `Sbem::decodeLocal64` folds it away, so writing it back
 exactly needs that offset kept. The upload is accepted as it is. The fields
 the official writes as null and this omits are likewise accepted.
+
+## Cloud laps are two partitions, not one (2026-10-13)
+
+`/v1/workouts/{key}/sml`'s `Summary.Samples[].Attributes["suunto/sml"].
+Windows[]` carries the laps, and `Type` separates them: `Autolap`, `Lap`,
+and `Activity`/`Move` for the whole workout, which the summary fields
+already have.
+
+The thing worth knowing is that **the auto-laps and the manual laps are each
+a complete partition of the same workout**, and the file interleaves them by
+time. Measured on a 2830 m walk recorded 2026-10-02: three auto-laps of
+1000, 1000 and 830 m summing to 2830 m and 2663.0 s, and three manual laps
+of 1349, 270 and 1211 m summing to the same 2830 m and 2663.1 s - against a
+`Header.Duration` of 2663.035 s. Each sample's `TimeISO8601` is the lap's
+*end*: 07:07:11.370 plus the first auto-lap's 1076 s lands on 07:25:07,
+which is exactly that sample's timestamp.
+
+So emitting them in file order gives a lap table with two rows numbered 1,
+two numbered 2, and twice the real distance down the column.
+`buildCloudLapsJson()` groups them - every auto-lap, then every manual one -
+so each run of rows is one whole partition and the existing type column says
+which.
+
+Units inside a `Window`, for whenever more than duration and distance is
+wanted from them: `HR` and `Cadence` are **hertz**, `Speed` metres per
+second, `Energy` **joules**, `Temperature` **kelvin**, `Distance` metres and
+`Duration` seconds. The same conventions as the rest of the cloud's SML.

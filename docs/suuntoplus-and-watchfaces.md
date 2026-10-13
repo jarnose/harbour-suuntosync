@@ -643,6 +643,14 @@ page has to read without it; `description` is the short line every item
 carries. `tileBannerV2Url` appears on exactly 53 items, which is exactly the
 watch-face count.
 
+Confirmed on the phone: the watch-face thumbnails are the faces themselves,
+the long descriptions render and scroll, and the half of the guides that
+carry neither a banner nor a `richText` - *7 Minute Workout v2* and *7 Yoga
+poses* in Training tools - show their icon and their short `description`
+with no empty owner-and-rating line. A guide never has a banner, so the
+item page falls back to the icon; the image block only disappears when
+neither loads.
+
 Because those CDNs ask to be cached for thirty days, the QML engine gets a
 `QNetworkDiskCache` under `QStandardPaths::CacheLocation` - without one, the
 engine's network stack has no cache and every visit to the store would

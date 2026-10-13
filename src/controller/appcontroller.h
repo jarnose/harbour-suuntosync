@@ -797,7 +797,6 @@ private:
     // behaviour, so the session rides along with the flag rather than
     // getting a second, parallel set of bookkeeping to get wrong.
     WatchSession m_workoutSyncSession;
-    WatchSession m_healthSyncSession;
     WatchSession m_suuntoPlusSession;
     WatchSession m_storeSession;
     WatchSession m_gpsSession;
@@ -834,11 +833,11 @@ private:
     // Chained after the sleep fetch - a separate resource, so a separate
     // request. Sleep having already succeeded, a failure here is reported
     // rather than failing the whole sync.
-    void fetchWatchRecovery();
+    void fetchWatchRecovery(const WatchSession &session);
     // Chained after recovery - a third resource again, and the one that
     // needed libmds.so to find at all. Same treatment: reported but not
     // fatal, since sleep and recovery have already landed by then.
-    void fetchWatchActivity();
+    void fetchWatchActivity(const WatchSession &session);
 
     // The connected watch's own SBEM field table, and the field offsets
     // resolved from it. Descriptor ids are per watch model, so decoding a
@@ -871,7 +870,12 @@ private:
     // is in hand. Split out so the entry point can be the one place that
     // takes the session, rather than every branch of the chain below.
     void startWatchWorkoutSync();
-    void startWatchHealthSync();
+    // The health sync is three resources read one after another, and its
+    // in-progress flag clears between them - so the session is a parameter
+    // here rather than riding with the flag. It did ride with the flag for
+    // one build, and the sleep step's own completion let go of the watch
+    // before recovery had asked for anything.
+    void startWatchHealthSync(const WatchSession &session);
 
     // Attaches to the watch if nothing holds a session, then runs
     // `operation` with one. Refuses through errorOccurred() when no watch

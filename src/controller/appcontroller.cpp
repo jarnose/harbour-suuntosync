@@ -2488,7 +2488,6 @@ void AppController::fetchHealthKindAt(int index, int fetched, const QStringList 
 {
     if (index >= kHealthKindCount) {
         m_healthSyncInProgress = false;
-        m_healthSyncSession.reset();
         emit healthSyncInProgressChanged();
         emit healthDataChanged();
         // Silent on full success, same as the workout syncs.
@@ -2773,14 +2772,13 @@ void AppController::syncWatchHealth()
     }
 
     withWatchSession([this](const WatchSession &session) {
-        m_healthSyncSession = session;
         m_healthSyncInProgress = true;
         emit healthSyncInProgressChanged();
-        startWatchHealthSync();
+        startWatchHealthSync(session);
     });
 }
 
-void AppController::startWatchHealthSync()
+void AppController::startWatchHealthSync(const WatchSession &session)
 {
 
     // Ask for everything newer than what is already stored, falling back to
@@ -2793,9 +2791,8 @@ void AppController::startWatchHealthSync()
     m_whiteboardClient->fetchTimelineFile(
             QStringLiteral("/Daily/Sleep/Timeline/Data"),
             QStringLiteral("mdsSlp.sbm"), since,
-            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+            [this, session](bool ok, const std::vector<uint8_t> &data, const QString &error) {
         m_healthSyncInProgress = false;
-        m_healthSyncSession.reset();
         emit healthSyncInProgressChanged();
 
         if (!ok) {
@@ -2843,11 +2840,11 @@ void AppController::startWatchHealthSync()
         // Recovery comes from a different resource and needs no rendered
         // file, so it is a separate fetch chained after this one rather
         // than part of the same reply.
-        fetchWatchRecovery();
+        fetchWatchRecovery(session);
     });
 }
 
-void AppController::fetchWatchRecovery()
+void AppController::fetchWatchRecovery(const WatchSession &session)
 {
     qint64 since = m_healthStore->newestTimestamp(QStringLiteral("recovery"));
     if (since == 0)
@@ -2858,13 +2855,13 @@ void AppController::fetchWatchRecovery()
 
     // Seconds, not milliseconds - see fetchRecoveryMoments().
     m_whiteboardClient->fetchRecoveryMoments(since / 1000,
-            [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+            [this, session](bool ok, const std::vector<uint8_t> &data, const QString &error) {
         if (!ok) {
             // Sleep already succeeded by this point, so this is reported
             // but not treated as a failed sync - and daily activity is a
             // third resource again, so it still gets its turn.
             emit errorOccurred(tr("Sleep synced. Recovery failed: %1").arg(error));
-            fetchWatchActivity();
+            fetchWatchActivity(session);
             return;
         }
 
@@ -2872,7 +2869,7 @@ void AppController::fetchWatchRecovery()
         if (samples.empty()) {
             emit errorOccurred(tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
                                 .arg(data.size()));
-            fetchWatchActivity();
+            fetchWatchActivity(session);
             return;
         }
 
@@ -2893,7 +2890,7 @@ void AppController::fetchWatchRecovery()
         QString storeError;
         if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save recovery data: %1").arg(storeError));
-            fetchWatchActivity();
+            fetchWatchActivity(session);
             return;
         }
         emit healthDataChanged();
@@ -2901,11 +2898,11 @@ void AppController::fetchWatchRecovery()
         // Daily activity: a third resource, a third mechanism. Chained
         // rather than fired alongside, because the whiteboard link takes
         // one request at a time.
-        fetchWatchActivity();
+        fetchWatchActivity(session);
     });
 }
 
-void AppController::fetchWatchActivity()
+void AppController::fetchWatchActivity(const WatchSession &session)
 {
     qint64 since = m_healthStore->newestTimestamp(QStringLiteral("activity"));
     if (since == 0)
@@ -2922,10 +2919,9 @@ void AppController::fetchWatchActivity()
     // it: the official app multiplies its own NewerThan by 1000 before
     // this fetch. See docs/watch-push-resources.md.
     m_whiteboardClient->fetchActivityTrend(since,
-            [this](bool ok, const std::vector<ActivityTrend::Sample> &samples,
+            [this, session](bool ok, const std::vector<ActivityTrend::Sample> &samples,
                     const QString &error) {
         m_healthSyncInProgress = false;
-        m_healthSyncSession.reset();
         emit healthSyncInProgressChanged();
 
         if (!ok) {
@@ -2997,7 +2993,6 @@ void AppController::uploadHealthKindAt(int index, int sent, const QStringList &f
 {
     if (index >= kHealthKindCount) {
         m_healthSyncInProgress = false;
-        m_healthSyncSession.reset();
         emit healthSyncInProgressChanged();
         emit healthDataChanged();
         if (!failures.isEmpty()) {

@@ -4,6 +4,43 @@ A native Sailfish OS app (C++/QML, Silica) that talks to a Suunto watch
 over Bluetooth LE and to the Suunto cloud over HTTPS — without the official
 Android app in the loop.
 
+## Installing
+
+Unsigned RPMs for Sailfish OS 5.1.0.11, aarch64 and armv7hl, are attached
+to every release:
+**[latest release](https://github.com/jarnose/harbour-suuntosync/releases/latest)**.
+Take aarch64 for any current device; armv7hl is for the older ones and is
+built blind, since there is none here to test on.
+
+Two packages, and the second is optional:
+
+| package | what it is |
+|---|---|
+| `harbour-suuntosync` | the application. It needs nothing else — every feature below is in it. |
+| `suuntosync-notifyd` | forwards the phone's own notifications to the watch. Install the application first — this one depends on it. |
+
+Installing a local package needs **developer mode** (Settings → Developer
+tools), because it goes through `devel-su`:
+
+```
+devel-su pkcon install-local -y harbour-suuntosync-1.4.0-1.aarch64.rpm
+devel-su pkcon install-local -y suuntosync-notifyd-1.4.0-1.aarch64.rpm
+```
+
+`pkcon` will say the package is untrusted. It is right: these are CI
+builds signed by nobody, not Store packages. `-y` accepts that; leave it
+off to be asked.
+
+Two things before the app is useful:
+
+- **Pair the watch in Settings → Bluetooth first.** The app connects to a
+  watch the system has already bonded and deliberately runs no pairing
+  agent of its own, so a watch that Sailfish has never paired will not
+  appear.
+- **A Suunto account** is needed for anything cloud-side — the workout
+  list, health upload, SuuntoPlus. Reading workouts, sleep and settings
+  off the watch, and writing GPS assist data to it, need no account at all.
+
 ## What works
 
 Confirmed on real hardware, not just in tests:
@@ -66,8 +103,8 @@ Confirmed on real hardware, not just in tests:
   a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever
   watch is connected (`/Logbook/byId/<id>/Descriptors`) rather than
   compiled in. See `docs/sbem-chunk-map.md`.
-- **Two watches at once.** Both are remembered and switched from the
-  pull-down menu or Settings, which matters because they decode
+- **Two watches at once.** Both are remembered and switched in Settings,
+  which matters because they decode
   differently: each one's field table is kept per address, so switching back
   does not mean fetching it again. The daemon follows the switch, and
   Settings can forget a watch outright.
@@ -176,6 +213,38 @@ Confirmed on real hardware, not just in tests:
   and every field was cross-checked against the cloud's own entries for the
   same buckets.
 
+- **SuuntoPlus apps, watch faces and guides** — browsed, added to the
+  account's library, installed on the watch and removed again, with no
+  Android app anywhere in it. The library page groups the three kinds under
+  their own headings and says which ones the watch has.
+
+  Where "the watch has it" comes from is the part that cost a long evening.
+  The watch's own `/Plugin/List` resource reports less than is installed —
+  fifteen names where the directory held seventeen files, the official
+  app's own pushes missing from it — so the answer is read from the
+  plugin *directory* instead. Each kind is named differently in there: an
+  app is `<pluginId>.fea`, a watch face `<id>.wfa` and a guide `<id>.gui`,
+  and all three were confirmed by deleting one and installing it again
+  rather than by reading a success code.
+
+  Guides needed a second listing: the cloud never answers a `sequence`
+  from the apps-and-faces endpoint, so a guide sitting on this watch was
+  invisible in the app until that was found.
+
+  The **store** is one request. It answers fourteen categories and, in the
+  same reply, the full record of 230 items — pictures and descriptions
+  included — so browsing costs nothing after the first fetch and the
+  per-item endpoint is not used at all. A watch face's preview is a render
+  of that face *on this watch*: the image url carries the variant the watch
+  reported about itself. Adding an item puts it in the library and
+  installing it is a separate step, which is the division the official app
+  makes too.
+
+  One trap is worth naming because a tidy-looking fix would break it: the
+  store calls a watch face a `sportsapp` and the library calls the same
+  thing a `watchface`. The type is carried verbatim and never mapped. See
+  `docs/suuntoplus-and-watchfaces.md`.
+
 ## What doesn't, yet
 
 - **The watch's media controls.** Both watches ask the *phone* for
@@ -212,6 +281,7 @@ dex. `docs/` carries the results:
 | `workout-upload.md` | the cloud's multipart upload, and the health API |
 | `watch-push-resources.md` | sleep and activity timeline files, GPS ephemeris, weather |
 | `notifications.md` | the ANCS-over-Whiteboard payload, the encoder, and the daemon that feeds it |
+| `suuntoplus-and-watchfaces.md` | installing apps, watch faces and guides over BLE, and the store behind them |
 | `sml-schema-descriptors.md` | the field schema the watch hands out about itself |
 | `activity-types.md` | both activity-id vocabularies, the watch's and the cloud's |
 | `base-map.md` | why a base map needs a vector-tile decoder on Sailfish, and the one tile source that can be a default |
@@ -283,7 +353,7 @@ for a background process to leave a trail.
 
 Most golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See
-`tests/README.md`. CI runs the ten suites that need none; the rest run on the
+`tests/README.md`. CI runs the eleven suites that need none; the rest run on the
 machine the captures live on. The newer ones are written to be in the first
 group where they can be: the vector-tile suite builds a tile byte by byte and
 inlines it as hex, so its exact checks run everywhere and only its feature

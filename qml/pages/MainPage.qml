@@ -53,22 +53,6 @@ Page {
 
     property string lastError: ""
 
-    // The other remembered watch, when there is exactly one - which is the
-    // case that deserves a one-tap switch. With none there is nothing to
-    // offer, and with several the choice belongs in Settings rather than in
-    // a pull-down entry that would have to name all of them.
-    property var otherWatch: null
-
-    function refreshOtherWatch() {
-        var known = AppController.knownWatches()
-        var others = []
-        for (var i = 0; i < known.length; ++i) {
-            if (!known[i].active)
-                others.push(known[i])
-        }
-        otherWatch = others.length === 1 ? others[0] : null
-    }
-
     // Both id vocabularies, complete, extracted from the official Android
     // app's own ActivityMapping enum - see docs/activity-types.md. The two
     // are genuinely different (Cycling is 4 on the watch and 2 in the
@@ -87,7 +71,6 @@ Page {
         AppController.loadCachedWorkouts()
         refreshPending()
         refreshMonth()
-        refreshOtherWatch()
     }
 
     // Health is the one page that is useful without an account and without
@@ -115,7 +98,6 @@ Page {
     Connections {
         target: AppController
         onErrorOccurred: page.lastError = message
-        onPairedWatchChanged: page.refreshOtherWatch()
     }
 
     SilicaListView {
@@ -147,15 +129,6 @@ Page {
                 visible: AppController.cloudSignedIn
                 text: qsTr("SuuntoPlus")
                 onClicked: pageStack.push(Qt.resolvedUrl("SuuntoPlusPage.qml"))
-            }
-            MenuItem {
-                // Two watches in the house means switching between them is
-                // a routine thing, not a setup step, so it belongs here
-                // rather than three taps deep in the pairing page.
-                visible: page.otherWatch !== null
-                text: page.otherWatch
-                      ? qsTr("Switch to %1").arg(page.otherWatch.name) : ""
-                onClicked: AppController.switchToWatch(page.otherWatch.address)
             }
             // The three transfers, named by direction. "Sync workouts" and
             // "Sync from watch" said nothing about which way data moved,

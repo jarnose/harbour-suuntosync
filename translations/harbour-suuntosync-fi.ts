@@ -967,123 +967,118 @@ löytyy - %2 tavua
         <translation>%1 min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="83"/>
+        <location filename="../qml/pages/MainPage.qml" line="67"/>
         <source>%1h %2min</source>
         <translation>%1 h %2 min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="83"/>
+        <location filename="../qml/pages/MainPage.qml" line="67"/>
         <source>%1min</source>
         <translation>%1 min</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="130"/>
+        <location filename="../qml/pages/MainPage.qml" line="112"/>
         <source>Settings</source>
         <translation>Asetukset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="139"/>
+        <location filename="../qml/pages/MainPage.qml" line="121"/>
         <source>Records</source>
         <translation>Ennätykset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="148"/>
+        <location filename="../qml/pages/MainPage.qml" line="130"/>
         <source>SuuntoPlus</source>
         <translation>SuuntoPlus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="157"/>
-        <source>Switch to %1</source>
-        <translation>Vaihda kelloon %1</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/MainPage.qml" line="166"/>
-        <location filename="../qml/pages/MainPage.qml" line="173"/>
+        <location filename="../qml/pages/MainPage.qml" line="139"/>
+        <location filename="../qml/pages/MainPage.qml" line="146"/>
         <source>Syncing…</source>
         <translation>Synkronoidaan…</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="166"/>
+        <location filename="../qml/pages/MainPage.qml" line="139"/>
         <source>Sync workouts from cloud</source>
         <translation>Synkronoi harjoitukset pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="173"/>
+        <location filename="../qml/pages/MainPage.qml" line="146"/>
         <source>Sync from watch to phone</source>
         <translation>Synkronoi kellosta puhelimeen</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="182"/>
+        <location filename="../qml/pages/MainPage.qml" line="155"/>
         <source>Send %1 workouts from phone to cloud</source>
         <translation>Lähetä %1 harjoitusta puhelimesta pilveen</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="213"/>
+        <location filename="../qml/pages/MainPage.qml" line="186"/>
         <source>%1 · Connected</source>
         <translation>%1 · Yhdistetty</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="214"/>
+        <location filename="../qml/pages/MainPage.qml" line="187"/>
         <source>%1 · Not connected</source>
         <translation>%1 · Ei yhteyttä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="224"/>
+        <location filename="../qml/pages/MainPage.qml" line="197"/>
         <source>Signed in as %1</source>
         <translation>Kirjautuneena: %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="249"/>
+        <location filename="../qml/pages/MainPage.qml" line="222"/>
         <source>this month</source>
         <translation>tässä kuussa</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="271"/>
+        <location filename="../qml/pages/MainPage.qml" line="244"/>
         <source>session</source>
         <translation>harjoitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="271"/>
+        <location filename="../qml/pages/MainPage.qml" line="244"/>
         <source>sessions</source>
         <translation>harjoitusta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="294"/>
+        <location filename="../qml/pages/MainPage.qml" line="267"/>
         <source>Fitness</source>
         <translation>Kunto</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="295"/>
+        <location filename="../qml/pages/MainPage.qml" line="268"/>
         <source>Fatigue</source>
         <translation>Rasitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="299"/>
+        <location filename="../qml/pages/MainPage.qml" line="272"/>
         <source>Form</source>
         <translation>Vire</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="355"/>
+        <location filename="../qml/pages/MainPage.qml" line="328"/>
         <source>watch</source>
         <translation>kello</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="397"/>
+        <location filename="../qml/pages/MainPage.qml" line="370"/>
         <source>%1 km · %2</source>
         <translation>%1 km · %2</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="430"/>
+        <location filename="../qml/pages/MainPage.qml" line="403"/>
         <source>No workouts yet</source>
         <translation>Ei vielä harjoituksia</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="432"/>
+        <location filename="../qml/pages/MainPage.qml" line="405"/>
         <source>Pull down and sync to fetch your workout history</source>
         <translation>Vedä alas ja synkronoi hakeaksesi harjoitushistorian</translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="433"/>
+        <location filename="../qml/pages/MainPage.qml" line="406"/>
         <source>Pair a Suunto watch or sign in to your Suunto account to get started</source>
         <translation>Parita Suunto-kello tai kirjaudu Suunto-tilille aloittaaksesi</translation>
     </message>
@@ -1576,82 +1571,27 @@ löytyy - %2 tavua
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/PairingPage.qml" line="218"/>
-        <source>Test Whiteboard (GET /Logbook/Entries)</source>
-        <translation>Testaa yhteyskanava (GET /Logbook/Entries)</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="228"/>
-        <source>Test capabilities</source>
-        <translation>Testaa kyvykkyydet</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="238"/>
-        <source>Test plugin list</source>
-        <translation>Testaa liitännäislista</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="248"/>
-        <source>Test SuuntoPlus library</source>
-        <translation>Testaa SuuntoPlus-kirjasto</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="258"/>
-        <source>Test plugin download</source>
-        <translation>Testaa liitännäisen lataus</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="268"/>
-        <source>Install ZoneSense on the watch</source>
-        <translation>Asenna ZoneSense kelloon</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="278"/>
-        <source>List the zapp directory</source>
-        <translation>Listaa zapp-hakemisto</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="288"/>
-        <source>Delete ZoneSense from the watch</source>
-        <translation>Poista ZoneSense kellosta</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="297"/>
-        <source>Test /Entries shortcut</source>
-        <translation>Testaa /Entries-oikotie</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="305"/>
-        <source>Fetch sleep timeline</source>
-        <translation>Hae uniaikajana</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="316"/>
-        <source>Fetch activity trend</source>
-        <translation>Hae aktiivisuustrendi</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/PairingPage.qml" line="344"/>
+        <location filename="../qml/pages/PairingPage.qml" line="236"/>
         <source>Paired · Connected</source>
         <translation>Paritettu · Yhdistetty</translation>
     </message>
     <message>
-        <location filename="../qml/pages/PairingPage.qml" line="344"/>
+        <location filename="../qml/pages/PairingPage.qml" line="236"/>
         <source>Paired</source>
         <translation>Paritettu</translation>
     </message>
     <message>
-        <location filename="../qml/pages/PairingPage.qml" line="345"/>
+        <location filename="../qml/pages/PairingPage.qml" line="237"/>
         <source>Not paired - pair it in Settings &gt; Bluetooth first</source>
         <translation>Ei paritettu – parita ensin Asetukset &gt; Bluetooth</translation>
     </message>
     <message>
-        <location filename="../qml/pages/PairingPage.qml" line="358"/>
+        <location filename="../qml/pages/PairingPage.qml" line="250"/>
         <source>No Suunto watch found yet</source>
         <translation>Suunto-kelloa ei vielä löytynyt</translation>
     </message>
     <message>
-        <location filename="../qml/pages/PairingPage.qml" line="359"/>
+        <location filename="../qml/pages/PairingPage.qml" line="251"/>
         <source>Make sure the watch is on and nearby, and paired in Settings &gt; Bluetooth</source>
         <translation>Varmista että kello on päällä ja lähellä, ja paritettu Asetukset &gt; Bluetooth -valikossa</translation>
     </message>
@@ -2217,7 +2157,7 @@ löytyy - %2 tavua
     </message>
     <message>
         <location filename="../qml/pages/WorkoutDetailPage.qml" line="216"/>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="541"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="532"/>
         <source>%1 km</source>
         <translation>%1 km</translation>
     </message>
@@ -2345,73 +2285,68 @@ löytyy - %2 tavua
         <translation>Lataa näytedata</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="292"/>
-        <source>Save the raw sample data</source>
-        <translation>Tallenna raaka näytedata</translation>
-    </message>
-    <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="309"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="300"/>
         <source>Delete this workout</source>
         <translation>Poista tämä harjoitus</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="312"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="303"/>
         <source>Deleting the phone&apos;s copy</source>
         <translation>Poistetaan puhelimen kopio</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="326"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="317"/>
         <source>%1 · from watch</source>
         <translation>%1 · kellosta</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="328"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="319"/>
         <source>%1 · from Suunto cloud</source>
         <translation>%1 · Suunto-pilvestä</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="471"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="462"/>
         <source>Tap the track to open the area in a map app</source>
         <translation>Napauta jälkeä avataksesi alueen karttasovelluksessa</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="516"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="507"/>
         <source>Laps</source>
         <translation>Kierrokset</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="662"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="653"/>
         <source>Recorded with</source>
         <translation>Tallennettu laitteella</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="682"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="673"/>
         <source>firmware %1</source>
         <translation>ohjelmisto %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="702"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="693"/>
         <source>Heart rate zones (bpm)</source>
         <translation>Sykealueet (bpm)</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="703"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="694"/>
         <source>Power zones (W)</source>
         <translation>Tehoalueet (W)</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="732"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="723"/>
         <source>Zone %1</source>
         <extracomment>%1 is a zone number, 1 to 5</extracomment>
         <translation>Alue %1</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="779"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="770"/>
         <source>Hide all recorded fields</source>
         <translation>Piilota kaikki kentät</translation>
     </message>
     <message>
-        <location filename="../qml/pages/WorkoutDetailPage.qml" line="780"/>
+        <location filename="../qml/pages/WorkoutDetailPage.qml" line="771"/>
         <source>All recorded fields (%1)</source>
         <translation>Kaikki tallennetut kentät (%1)</translation>
     </message>

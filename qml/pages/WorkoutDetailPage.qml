@@ -285,15 +285,6 @@ Page {
                 onClicked: AppController.loadCloudSamples(page.workoutKey)
             }
             MenuItem {
-                // The parser reads the curves and nothing else, so anything
-                // else in that JSON - the laps, for instance - can only be
-                // looked at by keeping a copy. The path is reported where
-                // the other watch-side results appear.
-                text: qsTr("Save the raw sample data")
-                visible: page.source !== "ble" && page.workoutKey.length > 0
-                onClicked: AppController.loadCloudSamples(page.workoutKey, true)
-            }
-            MenuItem {
                 // Only for a workout read off the watch that the cloud has
                 // not taken: a cloud workout would come back on the next
                 // sync, and one the cloud has taken is not this app's to

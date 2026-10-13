@@ -34,6 +34,15 @@
 //    with a person waiting on it, and a stuck daemon should not make the
 //    watch unusable from the app.
 //
+// **What an attach costs, measured on a Jolla Phone 2026 and a Race:**
+// 537 ms for the first one after launch and 91-105 ms for every one after
+// that. So taking the watch per operation is close to free, and there is
+// deliberately no idle timer holding the session "just in case" - the
+// first version of this change was going to have one, and the measurement
+// is what settled that it would have bought nothing but a longer wait for
+// notifications. The one-off half second is the GATT object enumeration
+// being cold.
+//
 // This was not always so. The application used to attach on connect and
 // hold the session for as long as it ran, which meant "the application is
 // open" meant "notifications wait" - including while it sat in the

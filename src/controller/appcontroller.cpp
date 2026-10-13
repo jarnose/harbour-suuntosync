@@ -950,8 +950,15 @@ AppController::AppController(QObject *parent)
         emit whiteboardReadyChanged();
 
         if (m_watchSessionAttaching && m_watchAttachTimer.isValid()) {
-            qWarning() << "watch session" << (ready ? "attached in" : "failed after")
-                        << m_watchAttachTimer.elapsed() << "ms";
+            // Into the probe log, not just qWarning(): journald on this
+            // device runs with Storage=volatile and has no user journal at
+            // all, so a qWarning() is a measurement nobody can read back.
+            const QString line = QStringLiteral("watch session %1 %2 ms")
+                    .arg(ready ? QStringLiteral("attached in")
+                                : QStringLiteral("failed after"))
+                    .arg(m_watchAttachTimer.elapsed());
+            qWarning().noquote() << line;
+            appendProbeLog(line);
         }
         m_watchSessionAttaching = false;
         ++m_watchSessionAttachGeneration;

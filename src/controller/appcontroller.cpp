@@ -1050,6 +1050,25 @@ void AppController::onDeviceUpdated(const BluezAdapter::Device &device)
     // notification daemon the entire time the app was open. The session is
     // taken per operation now, by withWatchSession(); being connected is
     // what the UI gates on.
+    //
+    // One operation does start from here, and only if the setting says so:
+    // the workouts. "Sync when the watch connects" was a switch that was
+    // stored, shown and toggled and read by nothing at all - it has never
+    // done anything since it was added. It syncs the workouts and not the
+    // health data: that is the longer of the two, the health page has its
+    // own action for it, and a setting whose switch says "a sync" should
+    // not quietly mean two.
+    //
+    // A second's grace first. The watch reports Connected before BlueZ has
+    // resolved its services, and an attach that starts too early waits for
+    // them - which works, but means the first thing a connection does is
+    // sit on the watch while the daemon may have a notification for it.
+    if (device.connected && m_syncOnConnect) {
+        QTimer::singleShot(1000, this, [this]() {
+            if (m_watchConnected)
+                syncWatchWorkouts();
+        });
+    }
 }
 
 void AppController::onConnectFinished(const QString &objectPath, bool ok, const QString &error,

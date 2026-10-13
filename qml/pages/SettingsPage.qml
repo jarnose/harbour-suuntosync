@@ -242,10 +242,11 @@ Page {
             }
 
             TextSwitch {
-                text: qsTr("Sync when the watch connects")
+                text: qsTr("Sync workouts when the watch connects")
                 description: qsTr("Off by default: a sync is minutes of radio time, "
                                   + "and the watch coming into range isn't always a "
-                                  + "reason to start one.")
+                                  + "reason to start one. Health data is not included "
+                                  + "- the health page has its own action for that.")
                 checked: AppController.syncOnConnect
                 onClicked: AppController.syncOnConnect = checked
             }

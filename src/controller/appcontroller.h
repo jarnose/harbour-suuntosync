@@ -594,10 +594,19 @@ public:
     // there is nothing to do.
     Q_INVOKABLE int pendingWorkoutUploads() const;
 
-    // A BLE-synced workout's laps: { number, type, durationSeconds,
-    // distanceMeters }, where type is the watch's own reason for the marker
-    // (manual, auto-lap by distance, interval...). Empty when the workout
-    // has no lap markers, which is the common case for a plain outing.
+    // A workout's laps, as stored. Always `number`, `type`,
+    // `durationSeconds` and `distanceMeters`, where type is the reason the
+    // lap ended (manual, auto-lap by distance, interval...). A cloud
+    // workout's laps carry `avgSpeed`, `avgHeartRate`, `ascent` and
+    // `energy` as well; a watch-read one cannot, because those laps are
+    // built from marker events that carry a time and a type.
+    //
+    // Deliberately not a fixed list of fields: this returns whatever the
+    // stored JSON holds, so a field added where the laps are built reaches
+    // the page without a second edit here. See workoutLaps() itself.
+    //
+    // Empty when the workout has no lap markers, which is the common case
+    // for a plain outing.
     Q_INVOKABLE QVariantList workoutLaps(const QString &key) const;
 
     // This calendar month's training, the way Suunto's own app puts it:

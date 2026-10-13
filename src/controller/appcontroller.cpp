@@ -4051,15 +4051,14 @@ QVariantList AppController::workoutLaps(const QString &key) const
     const QJsonArray laps = QJsonDocument::fromJson(m_workoutStore->loadLaps(key)).array();
     QVariantList out;
     for (const QJsonValue &value : laps) {
-        const QJsonObject lap = value.toObject();
-        QVariantMap row;
-        row.insert(QStringLiteral("number"), lap.value(QStringLiteral("number")).toInt());
-        row.insert(QStringLiteral("type"), lap.value(QStringLiteral("type")).toString());
-        row.insert(QStringLiteral("durationSeconds"),
-                    lap.value(QStringLiteral("durationSeconds")).toDouble());
-        row.insert(QStringLiteral("distanceMeters"),
-                    lap.value(QStringLiteral("distanceMeters")).toDouble());
-        out.append(row);
+        // Whatever is stored, verbatim. This used to copy four named
+        // fields, which silently dropped the per-lap speed, heart rate,
+        // ascent and energy the moment they were written at the other end:
+        // the stored JSON had them, the page asked for them, and this
+        // accessor in between did not know about them. A whitelist here
+        // means every new field needs an edit in three places and fails
+        // quietly when it gets one in two.
+        out.append(value.toObject().toVariantMap());
     }
     return out;
 }

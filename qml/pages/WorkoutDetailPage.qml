@@ -216,6 +216,24 @@ Page {
                 : qsTr("%1min %2s").arg(m).arg(s)
     }
 
+    // What a cloud lap carries beyond duration and distance. The same units
+    // and the same "0 means absent" rule as statEntries(): km/h, bpm, kcal.
+    // A watch-read lap has none of these - its laps are built from the
+    // marker events, which carry a time and nothing else - so the line is
+    // simply empty there.
+    function lapExtras(lap) {
+        var parts = []
+        if (lap.avgSpeed > 0)
+            parts.push(qsTr("%1 km/h").arg((lap.avgSpeed * 3.6).toFixed(1)))
+        if (lap.avgHeartRate > 0)
+            parts.push(qsTr("%1 bpm").arg(lap.avgHeartRate.toFixed(0)))
+        if (lap.ascent > 0)
+            parts.push(qsTr("%1 m up").arg(lap.ascent.toFixed(0)))
+        if (lap.energy > 0)
+            parts.push(qsTr("%1 kcal").arg(lap.energy.toFixed(0)))
+        return parts.join(" · ")
+    }
+
     function statEntries() {
         var entries = [
             { label: qsTr("Distance"), value: qsTr("%1 km").arg((totalDistance / 1000).toFixed(2)) },
@@ -523,32 +541,48 @@ Page {
                 Repeater {
                     model: page.laps
 
-                    Row {
+                    Column {
                         x: Theme.horizontalPageMargin
                         width: page.width - 2 * x
-                        spacing: Theme.paddingMedium
+
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingMedium
+
+                            Label {
+                                width: parent.width * 0.12
+                                text: modelData.number
+                                color: Theme.secondaryColor
+                            }
+                            Label {
+                                width: parent.width * 0.3
+                                text: page.formatDuration(modelData.durationSeconds)
+                            }
+                            Label {
+                                width: parent.width * 0.28
+                                text: modelData.distanceMeters > 0
+                                      ? qsTr("%1 km").arg((modelData.distanceMeters / 1000).toFixed(2))
+                                      : ""
+                            }
+                            Label {
+                                width: parent.width * 0.3 - 3 * Theme.paddingMedium
+                                text: modelData.type
+                                color: Theme.secondaryColor
+                                font.pixelSize: Theme.fontSizeExtraSmall
+                                truncationMode: TruncationMode.Fade
+                            }
+                        }
 
                         Label {
-                            width: parent.width * 0.12
-                            text: modelData.number
-                            color: Theme.secondaryColor
-                        }
-                        Label {
-                            width: parent.width * 0.3
-                            text: page.formatDuration(modelData.durationSeconds)
-                        }
-                        Label {
-                            width: parent.width * 0.28
-                            text: modelData.distanceMeters > 0
-                                  ? qsTr("%1 km").arg((modelData.distanceMeters / 1000).toFixed(2))
-                                  : ""
-                        }
-                        Label {
-                            width: parent.width * 0.3 - 3 * Theme.paddingMedium
-                            text: modelData.type
-                            color: Theme.secondaryColor
+                            // Indented to the duration column, so the row
+                            // above still reads as the lap's own line.
+                            x: parent.width * 0.12
+                            width: parent.width - x
                             font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
                             truncationMode: TruncationMode.Fade
+                            visible: text !== ""
+                            text: page.lapExtras(modelData)
                         }
                     }
                 }

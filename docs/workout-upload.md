@@ -1025,7 +1025,26 @@ two numbered 2, and twice the real distance down the column.
 so each run of rows is one whole partition and the existing type column says
 which.
 
-Units inside a `Window`, for whenever more than duration and distance is
-wanted from them: `HR` and `Cadence` are **hertz**, `Speed` metres per
-second, `Energy` **joules**, `Temperature` **kelvin**, `Distance` metres and
-`Duration` seconds. The same conventions as the rest of the cloud's SML.
+Units inside a `Window`: `HR` and `Cadence` are **hertz**, `Speed` metres
+per second, `Energy` **joules**, `Temperature` **kelvin**, `Distance` metres
+and `Duration` seconds. The same conventions as the rest of the cloud's SML.
+
+Each of those fields except `Distance`, `Duration`, `Ascent` and `Energy`
+is a **one-element array of `{Avg, Max, Min}`**, and a reading the workout
+does not have is `null` inside it rather than the field being absent. Both
+read as 0, which is what the rest of the detail page already treats as "not
+recorded".
+
+A lap row now shows average speed, average heart rate, ascent and energy
+from this, converted to the page's own units - km/h, bpm, metres, kcal.
+Checked against the same walk: the first auto-lap's `Speed.Avg` 0.929 m/s
+is 3.3 km/h, its `HR.Avg` 1.29 Hz is 77 bpm, and the three auto-laps'
+333688 + 281771.7 + 230274 J come to 202 kcal, which is what the whole
+workout reports. `Cadence` is deliberately left out: nothing else on that
+page shows a cadence, so there is no unit convention here to be consistent
+with, and 0.79 Hz is 47 of something per minute whose name depends on the
+sport.
+
+A watch-read workout's laps have none of these. They are built from the
+lap *marker* events in `/Data`, which carry a time and a type and nothing
+else, so the extra line is simply empty there.

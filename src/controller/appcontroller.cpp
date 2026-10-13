@@ -404,6 +404,16 @@ QByteArray buildCloudLapsJson(const QByteArray &body)
                 continue;
             }
 
+            // "Avg" out of a one-element array of {Avg,Max,Min}, which is
+            // how the cloud's SML writes every one of these. A null reading
+            // and an absent field both come back 0, which is also how the
+            // rest of this page reads "not recorded" - the watch's own
+            // schema marks these nillable=0.
+            auto average = [&window](const char *field) {
+                return window.value(QLatin1String(field)).toArray().at(0).toObject()
+                        .value(QStringLiteral("Avg")).toDouble();
+            };
+
             QJsonObject lap;
             lap.insert(QStringLiteral("number"), number);
             lap.insert(QStringLiteral("type"), name);
@@ -411,6 +421,17 @@ QByteArray buildCloudLapsJson(const QByteArray &body)
                         window.value(QStringLiteral("Duration")).toDouble());
             lap.insert(QStringLiteral("distanceMeters"),
                         window.value(QStringLiteral("Distance")).toDouble());
+            // The rest of the window, in this page's units rather than the
+            // cloud's: heart rate arrives in hertz and energy in joules.
+            // Measured on a real walk - HR 1.29 Hz is 77 bpm, and the three
+            // auto-laps' 333688 + 281771.7 + 230274 J come to the 202 kcal
+            // the whole workout reports.
+            lap.insert(QStringLiteral("avgHeartRate"), average("HR") * 60.0);
+            lap.insert(QStringLiteral("avgSpeed"), average("Speed"));
+            lap.insert(QStringLiteral("ascent"),
+                        window.value(QStringLiteral("Ascent")).toDouble());
+            lap.insert(QStringLiteral("energy"),
+                        window.value(QStringLiteral("Energy")).toDouble() / 4184.0);
             if (type == QStringLiteral("Autolap"))
                 automaticLaps.append(lap);
             else

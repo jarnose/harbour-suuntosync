@@ -1,7 +1,7 @@
 // Qt-free test for the minimal ZIP writer.
 //
-//   g++ -std=c++17 ../src/cloud/zipwriter.cpp test_zipwriter.cpp -lz \
-//       -o /tmp/test_zipwriter && /tmp/test_zipwriter
+//   g++ -std=c++17 ../src/cloud/zipwriter.cpp test_zipwriter.cpp -lz -o /tmp/test_zipwriter
+//   /tmp/test_zipwriter
 //
 // The structural assertions are here; the real proof is that the archive
 // this writes to /tmp/test_zipwriter_out.zip is readable by an independent

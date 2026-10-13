@@ -1,11 +1,11 @@
 // Build and run:
-//   g++ -std=c++14 -o t test_capabilities.cpp ../src/ble/capabilities.cpp -I ../src && ./t
+//   g++ -std=c++14 -o t test_capabilities.cpp ../src/ble/capabilities.cpp && ./t
 //
 // The vector is the real first page of /Dev/Capabilities from the Suunto
 // Race, lifted out of btsnoop_watchface_ok_20261012.log - header included,
 // so the item count is checked against what the watch actually sent.
 
-#include "ble/capabilities.h"
+#include "../src/ble/capabilities.h"
 
 #include <cstdio>
 #include <string>

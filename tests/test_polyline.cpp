@@ -1,7 +1,7 @@
 // Qt-free test for the encoded-polyline decoder.
 //
-//   g++ -std=c++17 ../src/cloud/polyline.cpp test_polyline.cpp -o /tmp/test_polyline \
-//       && /tmp/test_polyline
+//   g++ -std=c++17 ../src/cloud/polyline.cpp test_polyline.cpp -o /tmp/test_polyline
+//   /tmp/test_polyline
 //
 // The first case is the format's own published example, which makes this a
 // real conformance check rather than a test written against the

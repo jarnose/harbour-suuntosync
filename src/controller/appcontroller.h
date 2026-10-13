@@ -6,6 +6,7 @@
 #include "../ble/pairedwatch.h"
 #include "../notify/watchlink.h"
 
+#include <QSet>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -53,6 +54,7 @@ class AppController : public QObject
     Q_PROPERTY(QString mapTileUrl READ mapTileUrl WRITE setMapTileUrl NOTIFY baseMapChanged)
     Q_PROPERTY(QString defaultMapTileUrl READ defaultMapTileUrl CONSTANT)
     Q_PROPERTY(bool recordsSyncInProgress READ isRecordsSyncInProgress NOTIFY recordsSyncInProgressChanged)
+    Q_PROPERTY(bool suuntoPlusBusy READ isSuuntoPlusBusy NOTIFY suuntoPlusBusyChanged)
     // Unix ms of the cached records' own fetch, 0 if never. The page shows
     // it, because an all-time best that is a month stale is still right and
     // saying when it was asked for beats implying it is live.
@@ -84,6 +86,7 @@ public:
     QString defaultMapTileUrl() const;
 
     bool isRecordsSyncInProgress() const { return m_recordsSyncInProgress; }
+    bool isSuuntoPlusBusy() const { return m_suuntoPlusBusy; }
     qint64 recordsFetchedAt() const;
 
     // One of "latest", "totals", "progress", "sleep" or "nothing" - what
@@ -386,6 +389,29 @@ public:
     // established - distances and durations yes, speeds and pace no. See
     // docs/workout-upload.md.
     Q_INVOKABLE QVariantList personalRecords() const;
+
+    // The account's SuuntoPlus library, each entry carrying whether the
+    // watch has it. Read from what the last refresh left in memory, so the
+    // page has something to draw before any request finishes.
+    //
+    // "installed" comes from the watch's *directory*, not from
+    // /Plugin/List: that resource lists less than what is there - fifteen
+    // names against seventeen files on this watch - and the official app's
+    // own pushes are missing from it too. See
+    // docs/suuntoplus-and-watchfaces.md.
+    Q_INVOKABLE QVariantList suuntoPlusItems() const;
+
+    // Reads the watch's capabilities, asks the cloud for this watch's
+    // library, and lists the watch's plugin directory. Needs both the watch
+    // and an account: the capability string decides what the cloud offers.
+    Q_INVOKABLE void refreshSuuntoPlus();
+
+    // Downloads one library item and installs it. `id` is the catalogue id.
+    Q_INVOKABLE void installSuuntoPlusItem(const QString &id);
+
+    // Deletes the installed file. The item stays in the library, so this is
+    // undone by installing it again.
+    Q_INVOKABLE void removeSuuntoPlusItem(const QString &id);
     Q_INVOKABLE void syncPersonalRecords();
 
     // The stored track as real degrees, one { latitude, longitude } per point,
@@ -565,6 +591,8 @@ signals:
     void baseMapChanged();
     void recordsSyncInProgressChanged();
     void personalRecordsChanged();
+    void suuntoPlusBusyChanged();
+    void suuntoPlusChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
@@ -668,6 +696,17 @@ private:
     bool m_baseMapEnabled = false;
     QString m_mapTileUrl;
     bool m_recordsSyncInProgress = false;
+    bool m_suuntoPlusBusy = false;
+    // The last refresh's answers. The library as the cloud gave it, and the
+    // filenames the watch's directory held - matching one to the other is
+    // what says "installed".
+    //
+    // Kept as variant maps rather than the client's own struct because this
+    // header only forward-declares SuuntoCloudClient, and it is what QML
+    // wants anyway. Keys: id, pluginId, name, description, type, version.
+    QVariantList m_suuntoPlusLibrary;
+    QSet<QString> m_suuntoPlusFiles;
+    QString m_suuntoPlusLocation;
     QString m_coverMode;
     bool m_syncOnConnect = false;
 
@@ -705,6 +744,16 @@ private:
     // logbook id (the resource is per workout but the table is not).
     // Calls `then` either way - a watch whose table cannot be read still
     // gets decoded with the built-in one, which is no worse than before.
+    // The file the watch keeps an item under: <id>.wfa for a watch face,
+    // <pluginId>.fea for a sports app. A guide is <id>.gui, but guides come
+    // from a different listing and are not in this library.
+    static QString suuntoPlusFileName(const QVariantMap &item);
+    void setSuuntoPlusBusy(bool busy);
+    // Runs `then` with the session key, the variant and the capability
+    // string - the three things every SuuntoPlus request needs.
+    void withSuuntoPlusContext(const std::function<void(const QString &key,
+                                                          const QString &variant,
+                                                          const QString &capabilities)> &then);
     void ensureDescriptors(const QString &logbookId, const std::function<void()> &then);
     // The store-only half, which needs no BLE and no callback. Called on
     // startup and whenever the paired watch changes, so that an upload or

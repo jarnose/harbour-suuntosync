@@ -3391,6 +3391,231 @@ QVariantMap recordRow(const QString &type, const QJsonObject &allTime, const QJs
 
 } // namespace
 
+QString AppController::suuntoPlusFileName(const QVariantMap &item)
+{
+    // Measured from the watch's own directory: eight .wfa named by catalogue
+    // id beside eight .fea named by pluginId. The staged .zip does not
+    // survive the install.
+    if (item.value(QStringLiteral("type")).toString() == QStringLiteral("watchface"))
+        return item.value(QStringLiteral("id")).toString() + QStringLiteral(".wfa");
+    return item.value(QStringLiteral("pluginId")).toString() + QStringLiteral(".fea");
+}
+
+namespace {
+// The library entry with this catalogue id, or an empty map.
+QVariantMap suuntoPlusEntry(const QVariantList &library, const QString &id)
+{
+    for (const QVariant &value : library) {
+        const QVariantMap item = value.toMap();
+        if (item.value(QStringLiteral("id")).toString() == id)
+            return item;
+    }
+    return QVariantMap();
+}
+} // namespace
+
+void AppController::setSuuntoPlusBusy(bool busy)
+{
+    if (busy == m_suuntoPlusBusy)
+        return;
+    m_suuntoPlusBusy = busy;
+    emit suuntoPlusBusyChanged();
+}
+
+QVariantList AppController::suuntoPlusItems() const
+{
+    QVariantList out;
+    for (const QVariant &value : m_suuntoPlusLibrary) {
+        QVariantMap entry = value.toMap();
+        entry.insert(QStringLiteral("isWatchFace"),
+                      entry.value(QStringLiteral("type")).toString()
+                              == QStringLiteral("watchface"));
+        entry.insert(QStringLiteral("installed"),
+                      m_suuntoPlusFiles.contains(suuntoPlusFileName(entry)));
+        out.append(entry);
+    }
+    return out;
+}
+
+void AppController::withSuuntoPlusContext(
+        const std::function<void(const QString &, const QString &, const QString &)> &then)
+{
+    m_whiteboardClient->fetchCapabilities(
+            [this, then](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        if (!ok) {
+            setSuuntoPlusBusy(false);
+            emit errorOccurred(tr("Capabilities read failed: %1").arg(error));
+            return;
+        }
+        const std::vector<std::string> caps = Capabilities::parse(payload);
+        const QString variant = variantFrom(caps);
+        if (variant.isEmpty()) {
+            setSuuntoPlusBusy(false);
+            emit errorOccurred(tr("No feat_simvariant_ in the watch's %1 capabilities")
+                                        .arg(caps.size()));
+            return;
+        }
+        const QString joined = QString::fromStdString(Capabilities::join(caps));
+        m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+                [this, then, variant, joined](bool secretOk, const QByteArray &data,
+                                               const QString &secretError) {
+            if (!secretOk) {
+                setSuuntoPlusBusy(false);
+                emit errorOccurred(tr("Could not read the session key: %1").arg(secretError));
+                return;
+            }
+            then(QString::fromUtf8(data), variant, joined);
+        });
+    });
+}
+
+void AppController::refreshSuuntoPlus()
+{
+    if (m_suuntoPlusBusy)
+        return;
+    if (!m_whiteboardReady) {
+        emit errorOccurred(tr("Connect the watch first."));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    setSuuntoPlusBusy(true);
+    withSuuntoPlusContext([this](const QString &key, const QString &variant,
+                                   const QString &capabilities) {
+        m_cloudClient->listSuuntoPlusFeatures(key, variant, capabilities,
+                [this](bool ok, const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
+                        const QString &error) {
+            if (!ok) {
+                setSuuntoPlusBusy(false);
+                emit errorOccurred(tr("Library listing failed: %1").arg(error));
+                return;
+            }
+            m_suuntoPlusLibrary.clear();
+            for (const SuuntoCloudClient::SuuntoPlusItem &item : items) {
+                QVariantMap entry;
+                entry.insert(QStringLiteral("id"), item.id);
+                entry.insert(QStringLiteral("pluginId"), item.pluginId);
+                entry.insert(QStringLiteral("name"), item.name);
+                entry.insert(QStringLiteral("description"), item.description);
+                entry.insert(QStringLiteral("type"), item.type);
+                entry.insert(QStringLiteral("version"), item.version);
+                m_suuntoPlusLibrary.append(entry);
+            }
+            // And now what the watch actually has. The directory, not
+            // /Plugin/List - see suuntoPlusItems().
+            m_whiteboardClient->fetchInstallLocation(
+                    [this](bool locOk, const QString &location, const QString &locError) {
+                if (!locOk) {
+                    setSuuntoPlusBusy(false);
+                    emit suuntoPlusChanged();
+                    emit errorOccurred(tr("Could not ask the watch where plugins go: %1")
+                                                .arg(locError));
+                    return;
+                }
+                m_suuntoPlusLocation = location;
+                m_whiteboardClient->listDirectory(location,
+                        [this](bool listOk, const std::vector<uint8_t> &body,
+                                const QString &listError) {
+                    setSuuntoPlusBusy(false);
+                    if (!listOk) {
+                        emit suuntoPlusChanged();
+                        emit errorOccurred(listError);
+                        return;
+                    }
+                    m_suuntoPlusFiles.clear();
+                    // The reply is JSON somewhere inside the body; the
+                    // filenames are all that is wanted from it.
+                    const QByteArray raw(reinterpret_cast<const char *>(body.data()),
+                                          static_cast<int>(body.size()));
+                    const int open = raw.indexOf('{');
+                    const int close = raw.lastIndexOf('}');
+                    if (open >= 0 && close > open) {
+                        const QJsonObject doc =
+                                QJsonDocument::fromJson(raw.mid(open, close - open + 1)).object();
+                        for (const QJsonValue &v :
+                                     doc.value(QStringLiteral("files")).toArray()) {
+                            m_suuntoPlusFiles.insert(v.toString());
+                        }
+                    }
+                    emit suuntoPlusChanged();
+                });
+            });
+        });
+    });
+}
+
+void AppController::installSuuntoPlusItem(const QString &id)
+{
+    if (m_suuntoPlusBusy || !m_whiteboardReady)
+        return;
+
+    const QVariantMap target = suuntoPlusEntry(m_suuntoPlusLibrary, id);
+    if (target.isEmpty()) {
+        emit errorOccurred(tr("%1 is not in the library").arg(id));
+        return;
+    }
+    const QString name = target.value(QStringLiteral("name")).toString();
+
+    setSuuntoPlusBusy(true);
+    withSuuntoPlusContext([this, target, id, name](const QString &key, const QString &,
+                                                     const QString &capabilities) {
+        m_cloudClient->downloadSuuntoPlusPlugin(key, id, capabilities,
+                [this, target, name](bool dlOk, const QByteArray &zip, const QString &dlError) {
+            if (!dlOk) {
+                setSuuntoPlusBusy(false);
+                emit errorOccurred(tr("Download of %1 failed: %2").arg(name, dlError));
+                return;
+            }
+            // The staged name is the installed name with .zip: the watch
+            // replaces it with .wfa or .fea itself.
+            const QString staged = suuntoPlusFileName(target).section(QLatin1Char('.'), 0, 0)
+                    + QStringLiteral(".zip");
+            m_whiteboardClient->installPlugin(staged, zip, nullptr,
+                    [this, name](bool instOk, const QString &instError) {
+                if (!instOk) {
+                    setSuuntoPlusBusy(false);
+                    emit errorOccurred(tr("Install of %1 failed: %2").arg(name, instError));
+                    return;
+                }
+                // Re-read rather than assume: the install reporting success
+                // is not evidence the file is there, which this project
+                // learned the long way.
+                setSuuntoPlusBusy(false);
+                emit errorOccurred(tr("Installed %1").arg(name));
+                refreshSuuntoPlus();
+            });
+        });
+    });
+}
+
+void AppController::removeSuuntoPlusItem(const QString &id)
+{
+    if (m_suuntoPlusBusy || !m_whiteboardReady)
+        return;
+
+    const QVariantMap target = suuntoPlusEntry(m_suuntoPlusLibrary, id);
+    if (target.isEmpty() || m_suuntoPlusLocation.isEmpty()) {
+        emit errorOccurred(tr("Refresh the list first."));
+        return;
+    }
+    const QString name = target.value(QStringLiteral("name")).toString();
+
+    setSuuntoPlusBusy(true);
+    const QString path = m_suuntoPlusLocation + QLatin1Char('/') + suuntoPlusFileName(target);
+    m_whiteboardClient->deleteFile(path, [this, name](bool ok, const QString &error) {
+        setSuuntoPlusBusy(false);
+        if (!ok) {
+            emit errorOccurred(error);
+            return;
+        }
+        emit errorOccurred(tr("Removed %1 from the watch").arg(name));
+        refreshSuuntoPlus();
+    });
+}
+
 QVariantList AppController::personalRecords() const
 {
     const QJsonArray groups =

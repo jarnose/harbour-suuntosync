@@ -440,3 +440,75 @@ to choose; the official app numbers them 1-18 because the session is new.
 
 There is precedent for replaying bytes nobody understands with the reason
 written down: `Mds::literalSessionHandshakeRequest()`.
+
+## The install works, and the oracle was wrong all along (2026-10-13)
+
+Proven by deletion and reinstallation, which is the only test that could
+separate our install from the official app's earlier push of the same
+package:
+
+```
+07:32:54  list b:/zapp   zzaeroen.fea present
+07:32:58  delete         zzaeroen.fea gone
+07:33:10  install
+07:33:32  list b:/zapp   zzaeroen.fea present again
+```
+
+So the zip is written, `/Plugin/Install` unpacks it and the watch registers
+the result. A SuuntoPlus sports app can be installed on a Suunto Race from
+Sailfish OS, with no Suunto app involved.
+
+### What the directory says
+
+```
+b:/zapp: {"dirs":["storage"],
+  "files":["storage.sbm","index.db","descript.sbm",
+           "zwwtch01.wfa", ... 8 × .wfa ...,
+           "zzbrnren.fea", ... 8 × .fea ...,
+           "fp03pfbd.gui"],
+  "more":0}
+```
+
+A watch face is installed as `<id>.wfa`, a sports app as
+`<pluginId>.fea`, a guide as `<id>.gui`. **No zip survives**: the staged
+file is consumed, which is also why the official sequence ends with a
+`FileDelete`. `index.db` and `descript.sbm` beside them are the watch's own
+registry.
+
+### /Plugin/List is not the installed list
+
+It named fifteen things while the directory held seventeen plugin files,
+with `"more":0` saying the listing was complete, and it omitted exactly
+`zzaeroen` and the guide `fp03pfbd` - through a reboot. The capture settles
+that this is not our doing: the official app pushed `/zapp/zzaeroen.zip`
+during the watch-face session and that name never appeared in its own
+`/Plugin/List` read either.
+
+So the plugin list is narrower than "what is installed" - the registry in
+`index.db` can disagree with the filesystem - and **a catalogue page has to
+read the directory, not the plugin list**, to say what is on the watch.
+
+### The cost of the wrong oracle, written down plainly
+
+Five rounds went into chasing an install that was working, because
+`/Plugin/List` was chosen as the measure of success without checking what it
+enumerates. Each round found a real defect and fixed it, and none of them
+was the failure:
+
+| fix | why it stands |
+|---|---|
+| `/Plugin/InstallAid` is called, and first | the watch names the directory, so the NG1/NG3 prefix never has to be guessed |
+| the write verb | counted across all nine registrations: `/Dev/FileSystem/*` is `03 80 01`, everything else `01 80 00` |
+| the MTU is 127 | measured; 124-byte writes instead of 20 |
+| the setup walks | verified byte-for-byte, and `FileDelete`'s is a *different* walk from the stream's - eight steps against sixteen |
+
+Two of my own conclusions had to be withdrawn on the way: that the install
+was working and the measurement lied (said on one observation, and the
+observation did not support it - a feature in the watch's menu can be
+firmware), and before that, that the plugin list was merely a stale cache.
+
+The lesson worth keeping is cheaper than any of it: **when the instrument
+and the system disagree, the instrument is a suspect too** - and here it was
+the only suspect never examined. The watch's own menu was free to look at
+from the first round, and the directory listing that finally settled it took
+an hour to write.

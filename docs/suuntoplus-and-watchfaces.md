@@ -641,6 +641,18 @@ Three things in it are traps:
   evidence of a missing header. Nothing in the app's request changed in
   between: same session key, same user-agent, no `x-totp`.
 
+### Confirmed on hardware the same day
+
+A watch face added from the store's watch-face category went into the
+library and onto the watch, in that order, with no manual step: the store
+accepted it as a `sportsapp`, the library listing answered `watchface`, the
+filename rule therefore chose `<id>.wfa`, and the watch shows it. So the
+"carry the type verbatim" rule is measured, not reasoned - the one thing in
+this chain that a plausible-looking mapping would have broken.
+
+Still untested: `DELETE store/library/…`, the one call here that was never
+captured.
+
 `addToWatch: true` is sent but is not what installs anything - the app
 pushes the file over BLE itself afterwards, which is exactly the division
 this app makes: the Store page adds to the library, and the SuuntoPlus page

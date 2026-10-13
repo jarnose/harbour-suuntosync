@@ -3488,29 +3488,39 @@ QVariantList AppController::suuntoPlusItems() const
 }
 
 void AppController::withSuuntoPlusContext(
-        const std::function<void(const QString &, const QString &, const QString &)> &then)
+        const std::function<void(const QString &, const QString &, const QString &)> &then,
+        const std::function<void()> &onFailure)
 {
+    // Whoever asked owns the busy flag, so a failure reports through
+    // onFailure rather than clearing one of them from in here. The store
+    // and the library page each have their own, and clearing the wrong one
+    // leaves a page spinning for ever.
+    const std::function<void()> failed = onFailure
+            ? onFailure
+            : std::function<void()>([this]() { setSuuntoPlusBusy(false); });
+
     m_whiteboardClient->fetchCapabilities(
-            [this, then](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+            [this, then, failed](bool ok, const std::vector<uint8_t> &payload,
+                                  const QString &error) {
         if (!ok) {
-            setSuuntoPlusBusy(false);
+            failed();
             emit errorOccurred(tr("Capabilities read failed: %1").arg(error));
             return;
         }
         const std::vector<std::string> caps = Capabilities::parse(payload);
         const QString variant = variantFrom(caps);
         if (variant.isEmpty()) {
-            setSuuntoPlusBusy(false);
+            failed();
             emit errorOccurred(tr("No feat_simvariant_ in the watch's %1 capabilities")
                                         .arg(caps.size()));
             return;
         }
         const QString joined = QString::fromStdString(Capabilities::join(caps));
         m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-                [this, then, variant, joined](bool secretOk, const QByteArray &data,
-                                               const QString &secretError) {
+                [this, then, failed, variant, joined](bool secretOk, const QByteArray &data,
+                                                        const QString &secretError) {
             if (!secretOk) {
-                setSuuntoPlusBusy(false);
+                failed();
                 emit errorOccurred(tr("Could not read the session key: %1").arg(secretError));
                 return;
             }
@@ -3607,6 +3617,150 @@ void AppController::readWatchPluginFiles()
             }
             emit suuntoPlusChanged();
         });
+    });
+}
+
+void AppController::setStoreBusy(bool busy)
+{
+    if (busy == m_storeBusy)
+        return;
+    m_storeBusy = busy;
+    emit storeBusyChanged();
+}
+
+QVariantList AppController::storeCategories() const
+{
+    return m_storeCategories;
+}
+
+QVariantList AppController::storeItems(const QString &categoryId) const
+{
+    QVariantList out;
+    for (const QVariant &value : m_storeCategories) {
+        const QVariantMap category = value.toMap();
+        if (category.value(QStringLiteral("id")).toString() != categoryId)
+            continue;
+        // Read back as a string list, the type it went in as - a QVariant
+        // round-trip through QVariantList would work and is one assumption
+        // more than this needs.
+        for (const QString &id :
+                     category.value(QStringLiteral("itemIds")).toStringList()) {
+            // A reference with no record behind it is dropped rather than
+            // shown empty. The catalogue is one reply, so this would mean
+            // the store contradicted itself inside a single response.
+            const QVariant item = m_storeItemsById.value(id);
+            if (item.isValid())
+                out.append(item);
+        }
+        break;
+    }
+    return out;
+}
+
+void AppController::refreshStore()
+{
+    if (m_storeBusy)
+        return;
+    if (!m_whiteboardReady) {
+        emit errorOccurred(tr("Connect the watch first."));
+        return;
+    }
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    setStoreBusy(true);
+    withSuuntoPlusContext([this](const QString &key, const QString &variant,
+                                   const QString &capabilities) {
+        m_cloudClient->fetchStoreHome(key, variant, capabilities,
+                [this](bool ok, const SuuntoCloudClient::StoreHome &home,
+                        const QString &error) {
+            setStoreBusy(false);
+            if (!ok) {
+                emit errorOccurred(tr("Could not read the store: %1").arg(error));
+                return;
+            }
+            m_storeItemsById.clear();
+            for (const SuuntoCloudClient::StoreItem &item : home.items) {
+                QVariantMap entry;
+                entry.insert(QStringLiteral("id"), item.id);
+                entry.insert(QStringLiteral("type"), item.type);
+                entry.insert(QStringLiteral("title"), item.title);
+                entry.insert(QStringLiteral("subTitle"), item.subTitle);
+                entry.insert(QStringLiteral("description"), item.description);
+                entry.insert(QStringLiteral("inLibrary"), item.inLibrary);
+                m_storeItemsById.insert(item.id, entry);
+            }
+            m_storeCategories.clear();
+            for (const SuuntoCloudClient::StoreCategory &category : home.categories) {
+                QVariantMap entry;
+                entry.insert(QStringLiteral("id"), category.id);
+                entry.insert(QStringLiteral("title"), category.title);
+                entry.insert(QStringLiteral("count"), category.itemIds.size());
+                entry.insert(QStringLiteral("itemIds"), category.itemIds);
+                m_storeCategories.append(entry);
+            }
+            emit storeChanged();
+        });
+    }, [this]() { setStoreBusy(false); });
+}
+
+void AppController::addStoreItem(const QString &id)
+{
+    changeStoreLibrary(id, true);
+}
+
+void AppController::removeStoreItem(const QString &id)
+{
+    changeStoreLibrary(id, false);
+}
+
+void AppController::changeStoreLibrary(const QString &id, bool add)
+{
+    if (m_storeBusy)
+        return;
+    const QVariantMap item = m_storeItemsById.value(id).toMap();
+    if (item.isEmpty()) {
+        emit errorOccurred(tr("%1 is not in the store listing").arg(id));
+        return;
+    }
+    // Verbatim, never mapped: the store calls a watch face a sportsapp.
+    const QString type = item.value(QStringLiteral("type")).toString();
+    const QString title = item.value(QStringLiteral("title")).toString();
+
+    setStoreBusy(true);
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, id, type, title, add](bool ok, const QByteArray &data,
+                                           const QString &error) {
+        if (!ok) {
+            setStoreBusy(false);
+            emit errorOccurred(tr("Could not read the session key: %1").arg(error));
+            return;
+        }
+        const QString key = QString::fromUtf8(data);
+        auto done = [this, id, title, add](bool changeOk, const QString &changeError) {
+            setStoreBusy(false);
+            if (!changeOk) {
+                emit errorOccurred(add ? tr("Could not add %1: %2").arg(title, changeError)
+                                        : tr("Could not remove %1: %2").arg(title, changeError));
+                return;
+            }
+            // The row is updated here rather than by re-reading the whole
+            // catalogue: one PUT does not change the other 229 items, and
+            // a refresh costs a capabilities read over BLE.
+            QVariantMap updated = m_storeItemsById.value(id).toMap();
+            updated.insert(QStringLiteral("inLibrary"), add);
+            m_storeItemsById.insert(id, updated);
+            emit storeChanged();
+            emit errorOccurred(add ? tr("Added %1 to your library").arg(title)
+                                    : tr("Removed %1 from your library").arg(title));
+        };
+
+        if (add)
+            m_cloudClient->addToStoreLibrary(key, type, id, done);
+        else
+            m_cloudClient->removeFromStoreLibrary(key, type, id, done);
     });
 }
 

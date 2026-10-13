@@ -598,3 +598,67 @@ Four things in it are still useful to us:
 are already in `docs/mds-resource-paths.txt`, unexplored. The system log
 those tools read is the same thing seen from the desktop side, so a watch
 log is reachable over our BLE link too, whenever it is worth the trouble.
+
+## The store (2026-10-13)
+
+Measured from `suunto-watchface-1613.flows`, where the official app's own
+browse-and-add is captured end to end.
+
+| call | what it gives |
+|---|---|
+| `GET v1/store/home?variant=…&capabilities=…` | the whole catalogue: `banners`, `categories`, `items` |
+| `GET v1/store/sportsapps/<id>?watchCapabilities=…` | one item's long `richText` and `rating` |
+| `GET v1/store/sportsapps/user/feedback/<id>` | that item's rating as the user left it |
+| `PUT v1/store/library` | adds to the library, 201 |
+
+**One request is the whole store.** `store/home` answers fourteen
+categories *and* `items`: 230 complete records, each with `title`,
+`subTitle`, `description`, `iconUrl`, `type`, `libraryStatus`,
+`activities`, `readMoreUrl` and its own `categories`. A category carries
+only references (`types[].itemRefs[].id`), in the store's order, so
+browsing costs nothing after the first fetch. The per-item endpoint is only
+needed for the long description and the ratings.
+
+Three things in it are traps:
+
+- **A watch face is a `sportsapp` in the store.** The `watchface`
+  *category* holds 53 refs and every one of them is typed `sportsapp`;
+  `items` contains only `sportsapp` (207) and `guide` (23), never a
+  `watchface`. The same item comes back from `suuntoplus/features/items` as
+  `type: "watchface"`. So the store's `type` is a transport word, not a
+  description, and the add must send it back verbatim: the captured app
+  added the watch face *Race Flow* with
+  `{"type":"sportsapp","id":"zwc05201","addToWatch":true}` and got a 201
+  whose payload says `"type":"sportsapp"` and `pluginId: zwc05201`. Mapping
+  it to `watchface` first is how an add would get refused. What the item
+  really is only becomes knowable from the library listing afterwards -
+  which is where our page gets its heading from, so nothing has to guess.
+- **The parameter is renamed between the two reads**: `capabilities` on
+  `store/home`, `watchCapabilities` on `store/sportsapps/<id>`.
+- **`store/home` answered 403 three times and then 200** to a byte-identical
+  request, within half a minute, during the capture. So a refusal from this
+  endpoint is worth retrying before it is worth believing - and it is not
+  evidence of a missing header. Nothing in the app's request changed in
+  between: same session key, same user-agent, no `x-totp`.
+
+`addToWatch: true` is sent but is not what installs anything - the app
+pushes the file over BLE itself afterwards, which is exactly the division
+this app makes: the Store page adds to the library, and the SuuntoPlus page
+installs from it.
+
+### Not captured, taken from the APK's endpoint table
+
+`DELETE store/library/sportsapps/<id>` and `.../guides/<id>`
+(`SuuntoPlusStoreRestApi.removeFeatureFromLibrary` /
+`removeGuideFromLibrary`) are implemented from
+`docs/app-api-surface.txt` rather than from the wire. If the path is wrong
+the item stays in the library and the next listing says so.
+
+Also in that table and deliberately left alone for now: `store/search`,
+`store/categories/<id>`, `store/guides`, `store/trainingplans/…`, and the
+whole `store/userWatchface*` family - a *separate* API
+(`OnlineWatchFaceRestAPI`, with `POST store/userWatchface/online`,
+`PATCH …/online/<id>` for add-to-watch and `GET
+store/userWatchface/plugins/<id>` for the file). That one is for the user's
+own custom and album watch faces, not for the Suunto-published `zwc…` ones
+the store's watch-face category lists.

@@ -41,6 +41,21 @@ QByteArray formUrlEncode(const QString &value)
     return encoded;
 }
 
+// The ASKO envelope's error, as a sentence, or an empty string when the
+// reply carries none. The code arrives as a string on some endpoints and a
+// number on others, which cost an afternoon once already.
+QString envelopeError(const QJsonObject &envelope)
+{
+    const QJsonValue error = envelope.value(QStringLiteral("error"));
+    if (error.isNull() || error.isUndefined())
+        return QString();
+    const QJsonObject object = error.toObject();
+    const QString code = object.value(QStringLiteral("code")).toString(
+            QString::number(object.value(QStringLiteral("code")).toInt()));
+    return QStringLiteral("%1: %2")
+            .arg(code, object.value(QStringLiteral("description")).toString());
+}
+
 } // namespace
 
 SuuntoCloudClient::SuuntoCloudClient(QObject *parent)
@@ -627,6 +642,134 @@ void SuuntoCloudClient::fetchSuuntoPlusList(const QString &path, const QString &
                 items.append(item);
         }
         callback(true, items, QString());
+    });
+}
+
+void SuuntoCloudClient::fetchStoreHome(const QString &sessionKey, const QString &variant,
+                                       const QString &capabilities,
+                                       StoreHomeCallback callback)
+{
+    const QString path = QStringLiteral("store/home?variant=%1&capabilities=%2")
+            .arg(QString::fromUtf8(QUrl::toPercentEncoding(variant)),
+                  QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    const QNetworkRequest request = authorizedRequest(kBaseUrl + path, sessionKey);
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            // This endpoint answered 403 three times in a row in the capture
+            // and then 200 to the identical request, so a refusal here is
+            // worth retrying before it is worth believing.
+            callback(false, StoreHome(), reply->errorString());
+            return;
+        }
+        const QJsonObject envelope = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString error = envelopeError(envelope);
+        if (!error.isEmpty()) {
+            callback(false, StoreHome(), tr("Server error %1").arg(error));
+            return;
+        }
+        const QJsonObject payload = envelope.value(QStringLiteral("payload")).toObject();
+
+        StoreHome home;
+        for (const QJsonValue &value : payload.value(QStringLiteral("items")).toArray()) {
+            const QJsonObject object = value.toObject();
+            StoreItem item;
+            item.id = object.value(QStringLiteral("id")).toString();
+            item.type = object.value(QStringLiteral("type")).toString();
+            item.title = object.value(QStringLiteral("title")).toString();
+            item.subTitle = object.value(QStringLiteral("subTitle")).toString().trimmed();
+            item.description = object.value(QStringLiteral("description")).toString();
+            item.iconUrl = object.value(QStringLiteral("iconUrl")).toString();
+            item.inLibrary = object.value(QStringLiteral("libraryStatus")).toString()
+                    == QStringLiteral("ADDED");
+            if (!item.id.isEmpty())
+                home.items.append(item);
+        }
+        for (const QJsonValue &value : payload.value(QStringLiteral("categories")).toArray()) {
+            const QJsonObject object = value.toObject();
+            StoreCategory category;
+            category.id = object.value(QStringLiteral("id")).toString();
+            category.title = object.value(QStringLiteral("title")).toString();
+            // The refs are grouped by type inside a category, and the groups
+            // are kept in the order the store gives them. A category's
+            // `type` says nothing about what the items are: the watch-face
+            // category's refs are all typed `sportsapp`.
+            for (const QJsonValue &group : object.value(QStringLiteral("types")).toArray()) {
+                for (const QJsonValue &ref :
+                             group.toObject().value(QStringLiteral("itemRefs")).toArray()) {
+                    const QString id = ref.toObject().value(QStringLiteral("id")).toString();
+                    if (!id.isEmpty())
+                        category.itemIds.append(id);
+                }
+            }
+            if (!category.itemIds.isEmpty())
+                home.categories.append(category);
+        }
+        callback(true, home, QString());
+    });
+}
+
+void SuuntoCloudClient::addToStoreLibrary(const QString &sessionKey, const QString &type,
+                                           const QString &id, SimpleCallback callback)
+{
+    QNetworkRequest request = authorizedRequest(kBaseUrl + QStringLiteral("store/library"),
+                                                 sessionKey);
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                       QStringLiteral("application/json; charset=UTF-8"));
+
+    QJsonObject body;
+    body.insert(QStringLiteral("type"), type);
+    body.insert(QStringLiteral("id"), id);
+    body.insert(QStringLiteral("addToWatch"), true);
+
+    QNetworkReply *reply =
+            m_network->put(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        const QByteArray answer = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, reply->errorString());
+            return;
+        }
+        // 201, with the added item as the payload. The envelope is checked
+        // all the same: this endpoint answers 200-with-an-error elsewhere.
+        const QString error = envelopeError(QJsonDocument::fromJson(answer).object());
+        if (!error.isEmpty()) {
+            callback(false, tr("Server error %1").arg(error));
+            return;
+        }
+        callback(true, QString());
+    });
+}
+
+void SuuntoCloudClient::removeFromStoreLibrary(const QString &sessionKey, const QString &type,
+                                                const QString &id, SimpleCallback callback)
+{
+    // The store's two plural path segments. Anything that is not a guide is
+    // a sportsapp here, watch faces included - see StoreItem.
+    const QString segment = type == QStringLiteral("guide")
+            ? QStringLiteral("guides")
+            : QStringLiteral("sportsapps");
+    const QString path = QStringLiteral("store/library/%1/%2")
+            .arg(segment, QString::fromUtf8(QUrl::toPercentEncoding(id)));
+
+    QNetworkReply *reply =
+            m_network->deleteResource(authorizedRequest(kBaseUrl + path, sessionKey));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        const QByteArray answer = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, reply->errorString());
+            return;
+        }
+        const QString error = envelopeError(QJsonDocument::fromJson(answer).object());
+        if (!error.isEmpty()) {
+            callback(false, tr("Server error %1").arg(error));
+            return;
+        }
+        callback(true, QString());
     });
 }
 

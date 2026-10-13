@@ -55,6 +55,7 @@ class AppController : public QObject
     Q_PROPERTY(QString defaultMapTileUrl READ defaultMapTileUrl CONSTANT)
     Q_PROPERTY(bool recordsSyncInProgress READ isRecordsSyncInProgress NOTIFY recordsSyncInProgressChanged)
     Q_PROPERTY(bool suuntoPlusBusy READ isSuuntoPlusBusy NOTIFY suuntoPlusBusyChanged)
+    Q_PROPERTY(bool storeBusy READ isStoreBusy NOTIFY storeBusyChanged)
     // Unix ms of the cached records' own fetch, 0 if never. The page shows
     // it, because an all-time best that is a month stale is still right and
     // saying when it was asked for beats implying it is live.
@@ -87,6 +88,7 @@ public:
 
     bool isRecordsSyncInProgress() const { return m_recordsSyncInProgress; }
     bool isSuuntoPlusBusy() const { return m_suuntoPlusBusy; }
+    bool isStoreBusy() const { return m_storeBusy; }
     qint64 recordsFetchedAt() const;
 
     // One of "latest", "totals", "progress", "sleep" or "nothing" - what
@@ -418,6 +420,26 @@ public:
     // Deletes the installed file. The item stays in the library, so this is
     // undone by installing it again.
     Q_INVOKABLE void removeSuuntoPlusItem(const QString &id);
+
+    // The store, in two parts: the categories, and one category's items.
+    // Both answer from what the last refresh left in memory - the whole
+    // catalogue arrives in a single request, so there is nothing to fetch
+    // per category.
+    //
+    // A category row carries `id`, `title` and `count`. An item row carries
+    // `id`, `type`, `title`, `subTitle`, `description` and `inLibrary`.
+    Q_INVOKABLE QVariantList storeCategories() const;
+    Q_INVOKABLE QVariantList storeItems(const QString &categoryId) const;
+
+    // Fetches the catalogue. Needs the watch, because the store answers a
+    // different catalogue per model, and an account.
+    Q_INVOKABLE void refreshStore();
+
+    // Adds the item to the account's library, or takes it out again. Adding
+    // does not put anything on the watch: the item appears on the SuuntoPlus
+    // page afterwards, and installing it from there is a separate step.
+    Q_INVOKABLE void addStoreItem(const QString &id);
+    Q_INVOKABLE void removeStoreItem(const QString &id);
     Q_INVOKABLE void syncPersonalRecords();
 
     // The stored track as real degrees, one { latitude, longitude } per point,
@@ -599,6 +621,8 @@ signals:
     void personalRecordsChanged();
     void suuntoPlusBusyChanged();
     void suuntoPlusChanged();
+    void storeBusyChanged();
+    void storeChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
@@ -703,6 +727,7 @@ private:
     QString m_mapTileUrl;
     bool m_recordsSyncInProgress = false;
     bool m_suuntoPlusBusy = false;
+    bool m_storeBusy = false;
     // The last refresh's answers. The library as the cloud gave it, and the
     // filenames the watch's directory held - matching one to the other is
     // what says "installed".
@@ -711,6 +736,11 @@ private:
     // header only forward-declares SuuntoCloudClient, and it is what QML
     // wants anyway. Keys: id, pluginId, name, description, type, version.
     QVariantList m_suuntoPlusLibrary;
+    // The catalogue, as the last refresh left it: the categories in the
+    // store's own order, and every item keyed by id, because a category
+    // holds references and several categories hold the same item.
+    QVariantList m_storeCategories;
+    QVariantMap m_storeItemsById;
     QSet<QString> m_suuntoPlusFiles;
     QString m_suuntoPlusLocation;
     QString m_coverMode;
@@ -761,11 +791,18 @@ private:
     // chained cloud requests now, and the nesting had stopped being
     // readable.
     void readWatchPluginFiles();
+    void setStoreBusy(bool busy);
+    // Adding and removing differ by one call, so they share the rest: the
+    // context, the item lookup, the error wording and the reload.
+    void changeStoreLibrary(const QString &id, bool add);
     // Runs `then` with the session key, the variant and the capability
     // string - the three things every SuuntoPlus request needs.
+    // `onFailure` clears whichever busy flag the caller set; omitted, it
+    // clears the SuuntoPlus one.
     void withSuuntoPlusContext(const std::function<void(const QString &key,
                                                           const QString &variant,
-                                                          const QString &capabilities)> &then);
+                                                          const QString &capabilities)> &then,
+                                const std::function<void()> &onFailure = nullptr);
     void ensureDescriptors(const QString &logbookId, const std::function<void()> &then);
     // The store-only half, which needs no BLE and no callback. Called on
     // startup and whenever the paired watch changes, so that an upload or

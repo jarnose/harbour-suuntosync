@@ -70,6 +70,10 @@ Page {
                 text: qsTr("Refresh")
                 onClicked: AppController.refreshSuuntoPlus()
             }
+            MenuItem {
+                text: qsTr("Store")
+                onClicked: pageStack.push(Qt.resolvedUrl("StorePage.qml"))
+            }
         }
 
         header: Column {

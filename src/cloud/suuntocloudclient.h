@@ -7,6 +7,7 @@
 #include <QNetworkRequest>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <functional>
 
@@ -75,6 +76,46 @@ public:
         bool enabled = false;
         qint64 modificationTime = 0;
     };
+
+    // One item of the SuuntoPlus store. The store's vocabulary is not the
+    // library's, and the difference is load-bearing: a watch face is a
+    // `sportsapp` here, with a `zwc…` id, and comes back from the library
+    // listing as a `watchface`. So `type` is carried verbatim and sent back
+    // verbatim - mapping it to what the library would call the same thing
+    // is how an add gets refused. Measured: the official app added the
+    // watch face "Race Flow" with {"type":"sportsapp","id":"zwc05201"}.
+    struct StoreItem
+    {
+        QString id;
+        QString type;        // "sportsapp" or "guide", the store's own word
+        QString title;
+        QString subTitle;
+        QString description;
+        QString iconUrl;
+        bool inLibrary = false;  // libraryStatus == "ADDED"
+    };
+
+    // One row of the store's front page: a title and the ids it holds, in
+    // the store's own order. The ids are references - the records they name
+    // are in StoreHome::items, which covers every category at once.
+    struct StoreCategory
+    {
+        QString id;
+        QString title;
+        QStringList itemIds;
+    };
+
+    struct StoreHome
+    {
+        QVector<StoreCategory> categories;
+        QVector<StoreItem> items;
+    };
+
+    // An answer with nothing in it but whether it worked.
+    using SimpleCallback = std::function<void(bool ok, const QString &error)>;
+
+    using StoreHomeCallback =
+            std::function<void(bool ok, const StoreHome &home, const QString &error)>;
 
     using SuuntoPlusListCallback =
             std::function<void(bool ok, const QVector<SuuntoPlusItem> &items,
@@ -158,6 +199,42 @@ public:
     void downloadSuuntoPlusGuide(const QString &sessionKey, const QString &id,
                                   const QString &capabilities,
                                   PluginDownloadCallback callback);
+
+    // GET v1/store/home - the whole catalogue in one request: fourteen
+    // categories and, in the same reply, the full record of every item any
+    // of them names (230 of them on this account). So browsing the store
+    // costs exactly one request, and the per-item endpoint
+    // (store/sportsapps/<id>, which spells the parameter `watchCapabilities`
+    // rather than `capabilities`) is only needed for the long description
+    // and the ratings, neither of which this reply carries.
+    //
+    // Both parameters are the same ones the library listing wants, and come
+    // from the watch: the store answers a different catalogue for a
+    // different model.
+    void fetchStoreHome(const QString &sessionKey, const QString &variant,
+                         const QString &capabilities, StoreHomeCallback callback);
+
+    // PUT v1/store/library with {"type":…,"id":…,"addToWatch":true} - what
+    // the official app sends, byte for byte, when a store item is added to
+    // the account's library. 201 on success. `type` is the store's own word
+    // for the item; see StoreItem.
+    //
+    // This only puts the item in the library. Getting it onto the watch is
+    // ours to do over BLE afterwards, whatever `addToWatch` means to the
+    // cloud - the official app sends true there and then pushes the file
+    // itself, so the flag is not what installs anything.
+    void addToStoreLibrary(const QString &sessionKey, const QString &type, const QString &id,
+                            SimpleCallback callback);
+
+    // DELETE v1/store/library/{sportsapps|guides}/{id}.
+    //
+    // NOT captured: the path comes from the APK's own endpoint table
+    // (SuuntoPlusStoreRestApi.removeFeatureFromLibrary /
+    // removeGuideFromLibrary), where every other store call in this file was
+    // read off the wire. If it is wrong the item simply stays in the
+    // library, which the next listing shows.
+    void removeFromStoreLibrary(const QString &sessionKey, const QString &type,
+                                 const QString &id, SimpleCallback callback);
 
     void listWorkouts(const QString &sessionKey, qint64 sinceMs, int limit, int offset,
                        WorkoutListCallback callback);
@@ -282,7 +359,6 @@ public:
                                                      const QString &error)>;
     void downloadEphemeris(int formatIndex, RawDownloadCallback callback);
 
-    using SimpleCallback = std::function<void(bool ok, const QString &error)>;
     void uploadHealthEntries(const QString &sessionKey, const QString &kind,
                               const QVector<HealthEntry> &entries, int offsetMinutes,
                               SimpleCallback callback);

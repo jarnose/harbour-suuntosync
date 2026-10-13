@@ -426,11 +426,12 @@ public:
     // only this one can name an item the store listing has never been
     // asked about.
     //
-    // It does not touch the watch. An item that is still installed when it
-    // leaves the library therefore stays on the watch while disappearing
-    // from this page, which is the same blind spot the watch's own extra
-    // files have: the page shows the library, and the watch holds whatever
-    // it holds. Remove it from the watch first to avoid that.
+    // It does not touch the watch, so the page only offers it for an item
+    // the watch does not have: otherwise the file would stay on the watch
+    // while the row vanished from a page that lists the library, which is
+    // the same blind spot the watch's own extra files have. The guard is in
+    // the menu rather than here, because the watch's directory is what
+    // decides it and the page already has that answer.
     Q_INVOKABLE void removeSuuntoPlusFromLibrary(const QString &id);
 
     // The store, in two parts: the categories, and one category's items.

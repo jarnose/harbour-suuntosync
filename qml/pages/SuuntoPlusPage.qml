@@ -162,12 +162,15 @@ Page {
                         text: qsTr("Remove from the watch")
                         onClicked: AppController.removeSuuntoPlusItem(modelData.id)
                     }
-                    // Deliberately not chained to the one above: this takes
-                    // the item out of the account's library and leaves the
-                    // watch alone, so an item removed while installed stays
-                    // on the watch - and stops being listed here, because
-                    // this page lists the library.
+                    // Only while the watch does not have it. This takes the
+                    // item out of the account's library and leaves the watch
+                    // alone, so offering it for an installed item would
+                    // leave the file on the watch while the row vanished
+                    // from this page - the page lists the library. Removing
+                    // from the watch first is then the only route, and the
+                    // two actions never both apply.
                     MenuItem {
+                        visible: !modelData.installed
                         text: qsTr("Remove from library")
                         onClicked: AppController.removeSuuntoPlusFromLibrary(modelData.id)
                     }

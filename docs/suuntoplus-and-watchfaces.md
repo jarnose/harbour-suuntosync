@@ -661,10 +661,13 @@ the path segment itself. Putting that mapping in the caller would mean two
 callers, one of which would eventually delete nothing at all and report
 success.
 
-A library removal deliberately leaves the watch alone. So an item removed
-while still installed stays on the watch and stops being listed, which is
-the same blind spot the watch's own extra files already have - the page
-lists the library, and the watch holds whatever it holds.
+A library removal deliberately leaves the watch alone, so the library page
+offers it only for an item the watch does not have. The three actions are
+therefore never ambiguous: an installed item can only be removed from the
+watch, and one that is not installed can be installed or dropped from the
+library. Offering both at once would let a file stay on the watch while its
+row vanished from a page that lists the library - the same blind spot the
+watch's own extra files already have.
 
 `addToWatch: true` is sent but is not what installs anything - the app
 pushes the file over BLE itself afterwards, which is exactly the division

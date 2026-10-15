@@ -1097,10 +1097,20 @@ Three decisions in it are worth stating:
 - **The sport is mapped by name, not by number.** FIT's sport enum and
   Suunto's SML ActivityType are different id spaces - cycling is 2 in one
   and 4 in the other - so the join goes through `Fit::sportKey()`'s stable
-  name ("cycling", "trail_running") and `docs/activity-types.md`. Anything
-  unmapped becomes 1, *Unspecified sport*, which is a real value in that
-  vocabulary rather than a sentinel. The id stored is the watch's, so the
-  list reads it from the same table a watch workout does.
+  name ("cycling", "trail_running") and `docs/activity-types.md`. The id
+  stored is the watch's, so the list reads it from the same table a watch
+  workout does.
+
+  **The first version of that table was written from memory and was wrong**
+  in a way nothing noticed until a real ride came through: six ids were for
+  the wrong sport (indoor cycling pointed at Nordic skiing) and six of
+  `sportKey()`'s own names were missing, so a ride the Edge reported as
+  sport 2 / sub-sport 28 - `e_biking` - filed itself as *Unspecified
+  sport*, and uploaded that way. The table is now in `src/fit/suuntosport.*`
+  with one entry for every string that function can return, and
+  `tests/test_fitsml.cpp` walks all twenty of them. The lesson is the dull
+  one: a mapping between two vocabularies has two ends, and reading one of
+  them off the screen is not the same as reading both out of the source.
 - **The duration is the timer, not the elapsed time.** A FIT file carries
   both, and the figure shown everywhere else here is the moving one - a
   watch workout's `Duration - PauseDuration`. One of the fixtures makes the

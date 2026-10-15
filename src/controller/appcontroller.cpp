@@ -45,6 +45,7 @@
 
 #include <algorithm>
 #include "../fit/activity.h"
+#include "../fit/suuntosport.h"
 
 #include <cmath>
 #include <map>
@@ -136,33 +137,6 @@ QString dbPath()
 // a header chunk that /Data doesn't carry at all. Ascent/descent are now
 // populated but are a ~10%-accurate derivation from the altitude series,
 // not the watch's own figures - see logbookdecoder.h.
-// A FIT sport, as the watch's own vocabulary numbers it.
-//
-// FIT's sport enum and Suunto's SML ActivityType are different id spaces
-// for the same sports, and the join is by name rather than by number -
-// `Fit::sportKey()` answers "cycling", "trail_running" and so on, and
-// docs/activity-types.md carries the watch's ids. Anything unmapped
-// becomes 1, "Unspecified sport", which is a real value in that vocabulary
-// rather than a sentinel.
-int watchActivityFromFitSport(const std::string &sportKey)
-{
-    static const std::map<std::string, int> kMap = {
-        { "cycling", 4 },          { "indoor_cycling", 22 },
-        { "mountain_biking", 16 }, { "road_biking", 4 },
-        { "running", 3 },          { "trail_running", 24 },
-        { "treadmill", 14 },       { "track_running", 3 },
-        { "walking", 12 },         { "hiking", 11 },
-        { "swimming", 6 },         { "open_water_swimming", 7 },
-        { "lap_swimming", 6 },     { "rowing", 15 },
-        { "training", 18 },        { "fitness_equipment", 18 },
-        { "cross_country_skiing", 8 }, { "alpine_skiing", 13 },
-        { "snowboarding", 30 },    { "paddling", 36 },
-        { "triathlon", 2 },        { "multisport", 2 },
-    };
-    const auto it = kMap.find(sportKey);
-    return it == kMap.end() ? 1 : it->second;
-}
-
 // The identifier that goes into an uploaded workout's `Source`, built from
 // what the file says about the device that wrote it: "garmin-3428415862"
 // for a real Edge, "suunto-23" for a Suunto's own FIT export with no
@@ -196,7 +170,7 @@ Workout workoutFromFit(const Fit::Activity &activity)
     Workout w;
     w.key = QStringLiteral("fit_%1").arg(static_cast<qint64>(s.startTime));
     w.source = QStringLiteral("fit");
-    w.activityId = watchActivityFromFitSport(Fit::sportKey(s.sport, s.subSport));
+    w.activityId = Fit::suuntoActivityId(Fit::sportKey(s.sport, s.subSport));
     w.startTime = static_cast<qint64>(s.startTime) * 1000;
     // The elapsed time spans the pauses and the timer does not; the figure
     // this project shows elsewhere is the moving one (a watch workout's
@@ -2753,20 +2727,28 @@ QByteArray AppController::buildUploadZip(const QString &key) const
     qint64 startTime = 0;
     qint64 stopTime = 0;
     int activityId = 0;
+    QString source;
     for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
         if (w.key == key) {
             startTime = w.startTime;
             stopTime = w.stopTime;
             activityId = w.activityId;
+            source = w.source;
             break;
         }
     }
 
     // An imported workout's stored "data" is the FIT file, not a /Data
-    // payload - the key's prefix is what says so, because the import is
-    // what wrote both. The two documents are the same shape either way;
-    // only what they are built from differs.
-    if (key.startsWith(QStringLiteral("fit_"))) {
+    // payload. The row's own source says which, rather than the key's
+    // prefix: the prefix test worked, but a cloud workout's key is a
+    // sixteen-character string the server picks, and one of the ones in
+    // this database already begins "fit" - "fiti5dkqv6ih1ugn". Only the
+    // underscore kept that apart, which is a thinner margin than a column
+    // that states the answer.
+    //
+    // The two documents are the same shape either way; only what they are
+    // built from differs.
+    if (source == QStringLiteral("fit")) {
         const std::vector<uint8_t> raw(
                 reinterpret_cast<const uint8_t *>(data.constData()),
                 reinterpret_cast<const uint8_t *>(data.constData()) + data.size());

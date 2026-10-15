@@ -16,6 +16,7 @@
 
 #include "cloud/smljson.h"
 #include "fit/activity.h"
+#include "fit/suuntosport.h"
 
 #include <cctype>
 #include <cstdio>
@@ -81,8 +82,44 @@ Fit::Activity sampleActivity()
 
 } // namespace
 
+// Every sport FIT can report, as sportKey() itself spells them - read out
+// of that function, not remembered. The first table of these was written
+// from memory and had six wrong ids and six missing names, which filed a
+// real e-bike ride as "Unspecified sport".
+void checkSportMap()
+{
+    struct Case { const char *key; int expected; };
+    static const Case kCases[] = {
+        { "running", 3 },             { "trail_running", 82 },
+        { "treadmill_running", 93 },  { "cycling", 4 },
+        { "indoor_cycling", 17 },     { "mountain_biking", 5 },
+        { "gravel_cycling", 7 },      { "cyclocross", 107 },
+        { "hand_cycling", 108 },      { "e_biking", 105 },
+        { "track_cycling", 4 },       { "walking", 12 },
+        { "hiking", 96 },             { "swimming", 6 },
+        { "rowing", 15 },             { "cross_country_skiing", 22 },
+        { "alpine_skiing", 20 },      { "training", 18 },
+        { "fitness_equipment", 18 },  { "other", 1 },
+    };
+    for (const Case &c : kCases) {
+        const int got = Fit::suuntoActivityId(c.key);
+        check(got == c.expected,
+              std::string(c.key) + " -> " + std::to_string(c.expected)
+                      + (got == c.expected ? "" : ", got " + std::to_string(got)));
+    }
+
+    // And the real file that caught this: an Edge Explore 2 reports a ride
+    // as sport 2, sub-sport 28, which sportKey() calls e_biking.
+    check(Fit::sportKey(2, 28) == "e_biking", "sport 2/28 is an e-bike ride");
+    check(Fit::suuntoActivityId(Fit::sportKey(2, 28)) == 105, "and files as E-biking");
+    check(Fit::suuntoActivityId(Fit::sportKey(2, -1)) == 4, "a plain ride files as Cycling");
+    check(Fit::suuntoActivityId("no_such_sport") == 1, "an unknown sport is Unspecified");
+}
+
 int main()
 {
+    checkSportMap();
+
     const Fit::Activity activity = sampleActivity();
     const std::string samples =
             SmlJson::buildFitSamples(activity, "garmin-3428415862", 180);

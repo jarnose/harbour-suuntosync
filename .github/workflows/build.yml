@@ -58,6 +58,7 @@ jobs:
                                  ../src/ble/sbemtable.cpp ../src/ble/sbemdescriptors.cpp \
                                  ../src/ble/sbemlayout.cpp ../src/fit/activity.cpp \
                                  ../src/fit/fitdecoder.cpp ../src/fit/fitcrc.cpp \
+                                 ../src/fit/suuntosport.cpp \
                                  /tmp/heatshrink.o
 
       # Catches the class of mistake that produced a blank screen once: a

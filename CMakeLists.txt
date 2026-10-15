@@ -132,6 +132,7 @@ add_executable(harbour-suuntosync
     src/fit/fitdecoder.cpp
     src/fit/activity.cpp
     src/fit/fitcrc.cpp
+    src/fit/suuntosport.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/store/workoutsummary.cpp

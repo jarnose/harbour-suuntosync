@@ -1071,3 +1071,48 @@ Both unit conversions go through `toDisplayUnits()` rather than being
 multiplied at the call site: hertz to bpm and joules to kcal live in that
 one function, and a second copy of those factors is a second place to get
 them wrong.
+
+## Importing a FIT file (2026-10-15)
+
+A workout can also come from a file. `harbour-edgesync` - the same
+workspace, the same author - downloads a Garmin Edge's rides over BLE and
+writes them out as the original FIT, and a Garmin Connect or Strava export
+is the same format.
+
+The decoder is **copied** from that app (`src/fit/`, plus its CRC-16), not
+reimplemented: FIT is FIT, and nothing in it is Edge-specific. Both copies
+now exist, which is a cost worth naming - a fix in one belongs in the
+other, and the header comments say so.
+
+What the import does with a file:
+
+| from the file | into |
+|---|---|
+| `session` summary | the workout row, key `fit_<start time in seconds>` |
+| `record` messages | the route, and the charts |
+| `lap` messages | the laps, typed `FIT` |
+
+Three decisions in it are worth stating:
+
+- **The sport is mapped by name, not by number.** FIT's sport enum and
+  Suunto's SML ActivityType are different id spaces - cycling is 2 in one
+  and 4 in the other - so the join goes through `Fit::sportKey()`'s stable
+  name ("cycling", "trail_running") and `docs/activity-types.md`. Anything
+  unmapped becomes 1, *Unspecified sport*, which is a real value in that
+  vocabulary rather than a sentinel. The id stored is the watch's, so the
+  list reads it from the same table a watch workout does.
+- **The duration is the timer, not the elapsed time.** A FIT file carries
+  both, and the figure shown everywhere else here is the moving one - a
+  watch workout's `Duration - PauseDuration`. One of the fixtures makes the
+  difference plain: 4736 s elapsed against 2300 s of timer.
+- **The key is the start time**, so importing the same file twice
+  overwrites rather than duplicates, and a cloud copy of the same outing
+  stays its own row the way a watch-read one does. A file with no start
+  time is refused rather than keyed by the clock at import.
+
+The units the charts want are the watch's, not the file's: heart rate and
+cadence go in as hertz and temperature as kelvin, because
+`seriesJsonFromSamples()` applies `toDisplayUnits()` on the way out.
+
+Reading the file needs the `Documents` Sailjail permission, verified on the
+device to exist and to whitelist `${HOME}/Documents`.

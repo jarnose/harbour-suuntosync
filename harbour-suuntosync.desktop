@@ -19,4 +19,7 @@ ApplicationName=suuntosync
 # notifications, needed for Phase 7's phone->watch bridge, is deliberately
 # NOT listed yet - Phase 0c hasn't confirmed such a permission/capability
 # exists for a sandboxed app at all. Add it here once 0c's answer is in.
-Permissions=Internet;Bluetooth;Secrets
+# Documents: reading a FIT file to import, from ~/Documents (which is
+# where harbour-edgesync exports them). Verified on-device that
+# Documents.permission exists and whitelists ${HOME}/Documents.
+Permissions=Internet;Bluetooth;Secrets;Documents

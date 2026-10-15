@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import "ActivityTypes.js" as ActivityTypes
 
 Page {
@@ -100,6 +101,19 @@ Page {
         onErrorOccurred: page.lastError = message
     }
 
+    Component {
+        id: fitPicker
+
+        FilePickerPage {
+            nameFilters: ["*.fit", "*.FIT"]
+            title: qsTr("Choose a FIT file")
+            onSelectedContentPropertiesChanged: {
+                if (selectedContentProperties)
+                    AppController.importFitFile(selectedContentProperties.filePath)
+            }
+        }
+    }
+
     SilicaListView {
         id: listView
         anchors.fill: parent
@@ -146,6 +160,13 @@ Page {
                       ? qsTr("Syncing…") : qsTr("Sync from watch to phone")
                 enabled: !AppController.workoutSyncInProgress
                 onClicked: AppController.syncWatchWorkouts()
+            }
+            MenuItem {
+                // A FIT file from anywhere - Edge Sync writes them to
+                // ~/Documents/EdgeSync, and a Garmin Connect or Strava
+                // export is the same format.
+                text: qsTr("Import a FIT file")
+                onClicked: pageStack.push(fitPicker)
             }
             MenuItem {
                 // Hidden when there is nothing waiting rather than offered
@@ -330,6 +351,17 @@ Page {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         anchors.verticalCenter: parent.verticalCenter
                     }
+                    // An imported file is a third origin, and it matters
+                    // which: this one was recorded by something that is not
+                    // the watch at all, so its fields are whatever that
+                    // device wrote and the cloud has it only if we sent it.
+                    Label {
+                        visible: model.source === "fit"
+                        text: qsTr("imported")
+                        color: Theme.secondaryHighlightColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                     // Whether the cloud has this one. Only watch workouts
                     // get the marker: a cloud workout is in the cloud by
                     // definition, so the question only arises here.
@@ -342,7 +374,7 @@ Page {
                     Item {
                         width: cloudIcon.width
                         height: cloudIcon.height
-                        visible: model.source === "ble"
+                        visible: model.source === "ble" || model.source === "fit"
                         anchors.verticalCenter: parent.verticalCenter
 
                         Image {

@@ -256,7 +256,10 @@ var cloudNames = {
 // source is the Workout.source column: "ble" for a workout fetched straight
 // from the watch, anything else for a cloud-synced one.
 function name(id, source) {
-    var table = (source === "ble") ? watchNames : cloudNames
+    // An imported FIT file's sport is mapped into the watch's vocabulary
+    // when it is filed, so it reads from the same table - see
+    // watchActivityFromFitSport().
+    var table = (source === "ble" || source === "fit") ? watchNames : cloudNames
     var found = table[id]
     return found !== undefined ? found : "Activity " + id
 }

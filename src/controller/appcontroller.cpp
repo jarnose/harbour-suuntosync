@@ -34,6 +34,8 @@
 #include <QJsonObject>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QUrl>
 #include <QDateTime>
 #include <QLocale>
 #include <QTimer>
@@ -42,6 +44,8 @@
 #include <QTextStream>
 
 #include <algorithm>
+#include "../fit/activity.h"
+
 #include <cmath>
 #include <map>
 #include <cstring>
@@ -132,6 +136,152 @@ QString dbPath()
 // a header chunk that /Data doesn't carry at all. Ascent/descent are now
 // populated but are a ~10%-accurate derivation from the altitude series,
 // not the watch's own figures - see logbookdecoder.h.
+// A FIT sport, as the watch's own vocabulary numbers it.
+//
+// FIT's sport enum and Suunto's SML ActivityType are different id spaces
+// for the same sports, and the join is by name rather than by number -
+// `Fit::sportKey()` answers "cycling", "trail_running" and so on, and
+// docs/activity-types.md carries the watch's ids. Anything unmapped
+// becomes 1, "Unspecified sport", which is a real value in that vocabulary
+// rather than a sentinel.
+int watchActivityFromFitSport(const std::string &sportKey)
+{
+    static const std::map<std::string, int> kMap = {
+        { "cycling", 4 },          { "indoor_cycling", 22 },
+        { "mountain_biking", 16 }, { "road_biking", 4 },
+        { "running", 3 },          { "trail_running", 24 },
+        { "treadmill", 14 },       { "track_running", 3 },
+        { "walking", 12 },         { "hiking", 11 },
+        { "swimming", 6 },         { "open_water_swimming", 7 },
+        { "lap_swimming", 6 },     { "rowing", 15 },
+        { "training", 18 },        { "fitness_equipment", 18 },
+        { "cross_country_skiing", 8 }, { "alpine_skiing", 13 },
+        { "snowboarding", 30 },    { "paddling", 36 },
+        { "triathlon", 2 },        { "multisport", 2 },
+    };
+    const auto it = kMap.find(sportKey);
+    return it == kMap.end() ? 1 : it->second;
+}
+
+// The identifier that goes into an uploaded workout's `Source`, built from
+// what the file says about the device that wrote it: "garmin-3428415862"
+// for a real Edge, "suunto-23" for a Suunto's own FIT export with no
+// serial in it. Truthful by construction - the alternative, borrowing the
+// paired watch's serial, would file somebody else's ride as that watch's.
+std::string fitSourceName(const Fit::Summary &summary)
+{
+    // FIT manufacturer ids: 1 is Garmin, 23 is Suunto. Only the two that
+    // have turned up here are named; anything else keeps its number, which
+    // is still a stable identifier.
+    std::string maker;
+    switch (summary.manufacturer) {
+    case 1:  maker = "garmin"; break;
+    case 23: maker = "suunto"; break;
+    default: maker = "fit" + std::to_string(summary.manufacturer); break;
+    }
+    const uint32_t id = summary.serial != 0 ? summary.serial
+                                             : static_cast<uint32_t>(summary.product);
+    return maker + "-" + std::to_string(id);
+}
+
+// The workout row for an imported file.
+//
+// The key is the start time in seconds, in its own "fit_" namespace: the
+// same ride imported twice overwrites itself rather than appearing twice,
+// and a cloud copy of the same outing stays a separate row the way a
+// watch-read one does.
+Workout workoutFromFit(const Fit::Activity &activity)
+{
+    const Fit::Summary &s = activity.summary;
+    Workout w;
+    w.key = QStringLiteral("fit_%1").arg(static_cast<qint64>(s.startTime));
+    w.source = QStringLiteral("fit");
+    w.activityId = watchActivityFromFitSport(Fit::sportKey(s.sport, s.subSport));
+    w.startTime = static_cast<qint64>(s.startTime) * 1000;
+    // The elapsed time spans the pauses and the timer does not; the figure
+    // this project shows elsewhere is the moving one (a watch workout's
+    // Duration - PauseDuration), so the timer is what matches it.
+    const double seconds = !std::isnan(s.timer) ? s.timer
+                                                 : (!std::isnan(s.elapsed) ? s.elapsed : 0.0);
+    w.totalTime = seconds;
+    w.stopTime = w.startTime + static_cast<qint64>((!std::isnan(s.elapsed) ? s.elapsed : seconds)
+                                                     * 1000.0);
+    if (!std::isnan(s.distance))
+        w.totalDistance = s.distance;
+    if (!std::isnan(s.maxSpeed))
+        w.maxSpeed = s.maxSpeed;
+    if (s.avgHeartRate > 0)
+        w.avgHeartRate = s.avgHeartRate;
+    if (s.maxHeartRate > 0)
+        w.maxHeartRate = s.maxHeartRate;
+    if (!std::isnan(s.ascent))
+        w.totalAscent = s.ascent;
+    if (!std::isnan(s.descent))
+        w.totalDescent = s.descent;
+    if (s.calories > 0)
+        w.energyConsumption = s.calories;
+    return w;
+}
+
+// Defined below, next to the chart code it belongs with.
+QByteArray seriesJsonFromSamples(const std::map<QString, std::vector<double>> &samples);
+
+// The charts, in the canonical units seriesJsonFromSamples() expects -
+// which are the watch's, not the file's: heart rate and cadence in hertz,
+// temperature in kelvin. A reading the device did not take is left out of
+// its series rather than filled with a zero.
+QByteArray fitSeriesJson(const Fit::Activity &activity)
+{
+    std::map<QString, std::vector<double>> samples;
+    for (const Fit::Sample &sample : activity.samples) {
+        if (sample.heartRate > 0)
+            samples[QStringLiteral("Sample.HR")].push_back(sample.heartRate / 60.0);
+        if (sample.cadence >= 0)
+            samples[QStringLiteral("Sample.Cadence")].push_back(sample.cadence / 60.0);
+        if (sample.power >= 0)
+            samples[QStringLiteral("Sample.Power")].push_back(sample.power);
+        if (!std::isnan(sample.altitude))
+            samples[QStringLiteral("Sample.Altitude")].push_back(sample.altitude);
+        if (!std::isnan(sample.speed))
+            samples[QStringLiteral("Sample.Speed")].push_back(sample.speed);
+        if (!std::isnan(sample.temperature))
+            samples[QStringLiteral("Sample.Temperature")].push_back(sample.temperature + 273.15);
+    }
+    return seriesJsonFromSamples(samples);
+}
+
+// The laps a FIT file states, rather than laps derived from markers: the
+// file carries them as their own messages with their own averages, so this
+// fills the same four fields a cloud lap does and two more besides.
+QByteArray fitLapsJson(const Fit::Activity &activity)
+{
+    QJsonArray laps;
+    int number = 0;
+    for (const Fit::Lap &lap : activity.laps) {
+        const double seconds = !std::isnan(lap.timer) ? lap.timer : lap.elapsed;
+        if (std::isnan(seconds))
+            continue;
+        QJsonObject out;
+        out.insert(QStringLiteral("number"), ++number);
+        // The file does not say why a lap ended, so this says where it came
+        // from instead of inventing a reason.
+        out.insert(QStringLiteral("type"), QStringLiteral("FIT"));
+        out.insert(QStringLiteral("durationSeconds"), seconds);
+        if (!std::isnan(lap.distance))
+            out.insert(QStringLiteral("distanceMeters"), lap.distance);
+        if (!std::isnan(lap.avgSpeed))
+            out.insert(QStringLiteral("avgSpeed"), lap.avgSpeed);
+        if (lap.avgHeartRate > 0)
+            out.insert(QStringLiteral("avgHeartRate"), lap.avgHeartRate);
+        if (!std::isnan(lap.ascent))
+            out.insert(QStringLiteral("ascent"), lap.ascent);
+        if (lap.calories > 0)
+            out.insert(QStringLiteral("energy"), lap.calories);
+        laps.append(out);
+    }
+    return laps.isEmpty() ? QByteArray() : QJsonDocument(laps).toJson(QJsonDocument::Compact);
+}
+
 Workout workoutFromDecoded(const QString &logbookId, const Logbook::DecodedWorkout &decoded)
 {
     Workout w;
@@ -3199,6 +3349,76 @@ QVariantList AppController::healthEntries(const QString &kind, int limit) const
         out.append(row);
     }
     return out;
+}
+
+void AppController::importFitFile(const QString &path)
+{
+    // Picked by the user through a FilePickerPage, so it arrives as a
+    // file:// URL as often as a path.
+    const QString local = path.startsWith(QStringLiteral("file://"))
+            ? QUrl(path).toLocalFile()
+            : path;
+
+    QFile file(local);
+    if (!file.open(QIODevice::ReadOnly)) {
+        emit errorOccurred(tr("Could not open %1: %2")
+                                    .arg(QFileInfo(local).fileName(), file.errorString()));
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    file.close();
+
+    std::vector<uint8_t> raw(reinterpret_cast<const uint8_t *>(bytes.constData()),
+                              reinterpret_cast<const uint8_t *>(bytes.constData())
+                                      + bytes.size());
+
+    Fit::Activity activity;
+    std::string decodeError;
+    if (!Fit::parseActivity(raw, activity, decodeError)) {
+        emit errorOccurred(tr("%1 is not a readable FIT activity: %2")
+                                    .arg(QFileInfo(local).fileName(),
+                                          QString::fromStdString(decodeError)));
+        return;
+    }
+    if (activity.summary.startTime == 0) {
+        // Without a start time there is no key, and a key made from the
+        // import's own clock would make the same file a new workout every
+        // time it was imported.
+        emit errorOccurred(tr("%1 carries no start time, so it cannot be filed.")
+                                    .arg(QFileInfo(local).fileName()));
+        return;
+    }
+
+    const Workout w = workoutFromFit(activity);
+    QString storeError;
+    if (!m_workoutStore->upsert(w, &storeError)) {
+        emit errorOccurred(tr("Could not save the imported workout: %1").arg(storeError));
+        return;
+    }
+
+    // The route, in the same packed form the watch's own track is stored
+    // in, so the map item and the detail page cannot tell the difference.
+    std::vector<Logbook::TrackPoint> track;
+    for (const Fit::Sample &sample : activity.samples) {
+        if (!sample.hasPosition())
+            continue;
+        track.push_back({ sample.lat, sample.lon });
+    }
+    if (!track.empty())
+        m_workoutStore->saveRoute(w.key, packTrack(track), nullptr);
+
+    const QByteArray series = fitSeriesJson(activity);
+    if (!series.isEmpty())
+        m_workoutStore->saveSeries(w.key, series, nullptr);
+    const QByteArray laps = fitLapsJson(activity);
+    if (!laps.isEmpty())
+        m_workoutStore->saveLaps(w.key, laps, nullptr);
+
+    loadCachedWorkouts();
+    emit errorOccurred(tr("Imported %1: %2 km, %3 samples")
+                                .arg(QFileInfo(local).fileName())
+                                .arg(w.totalDistance / 1000.0, 0, 'f', 2)
+                                .arg(activity.samples.size()));
 }
 
 void AppController::loadCachedWorkouts()

@@ -129,6 +129,9 @@ add_executable(harbour-suuntosync
     src/cloud/iso8601.cpp
     src/cloud/smljson.cpp
     src/cloud/zipwriter.cpp
+    src/fit/fitdecoder.cpp
+    src/fit/activity.cpp
+    src/fit/fitcrc.cpp
     src/cloud/suuntocloudclient.cpp
     src/store/workoutstore.cpp
     src/store/workoutsummary.cpp

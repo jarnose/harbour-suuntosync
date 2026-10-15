@@ -560,6 +560,18 @@ public:
     // is stored once rather than twice.
     Q_INVOKABLE void syncWatchHealth();
 
+    // Reads a FIT activity file and files it as a workout of its own, with
+    // its route, charts and the laps the file itself states. `path` may be
+    // a plain path or the file:// URL a FilePickerPage hands back.
+    //
+    // The key is "fit_<start time in seconds>", so importing the same file
+    // twice overwrites rather than duplicates - and a cloud copy of the
+    // same outing stays its own row, the way a watch-read one does.
+    //
+    // Synchronous: a five-hour ride is some 18 000 records and parses in
+    // well under a second, and there is nothing to wait for on a radio.
+    Q_INVOKABLE void importFitFile(const QString &path);
+
     // Pushes what the watch gave us up to the Suunto cloud - the other
     // direction from syncHealthData(). Only rows read over BLE are ever
     // sent; anything that came from the cloud is already there.

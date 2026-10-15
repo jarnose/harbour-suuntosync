@@ -1175,3 +1175,29 @@ would be worse than letting the cloud compute them from the samples.
 `tests/test_fitsml.cpp` builds the activity in code rather than decoding a
 file, because the decoder is tested in the app it came from and what is new
 here is the units. It runs in CI.
+
+### Exporting
+
+The workout page writes a workout out to `~/Documents/SuuntoSync`, beside
+what harbour-edgesync writes but under its own name, so it stays clear
+which app produced which file.
+
+What can be exported depends on what this app actually holds, and the menu
+asks before offering it:
+
+| | FIT | SML zip |
+|---|---|---|
+| imported | the original file, unchanged | built |
+| from the watch | - | built |
+| from the cloud | - | - |
+
+A watch workout cannot be written as FIT because that needs a FIT
+*encoder*, and this project has only a decoder. The cloud has an
+`exportFit` endpoint for its own copies - named in `tajchert/suuntool` -
+which has never been exercised here, so it is not offered rather than
+offered and broken.
+
+The SML export is deliberately `buildUploadZip()`'s own output rather than
+a second code path: what lands on disk is byte for byte what an upload
+would send, which is most of what makes it worth having - a refused upload
+can be inspected without a capture.

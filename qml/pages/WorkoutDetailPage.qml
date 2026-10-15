@@ -314,6 +314,25 @@ Page {
                 onClicked: AppController.loadCloudSamples(page.workoutKey)
             }
             MenuItem {
+                // The file this workout was imported from, unchanged. Only
+                // an import has one - a watch workout would need a FIT
+                // encoder, which this app does not have.
+                text: qsTr("Export the FIT file")
+                visible: page.workoutKey.length > 0
+                         && AppController.canExportFit(page.workoutKey)
+                onClicked: AppController.exportWorkoutFit(page.workoutKey,
+                                                           page.activityName)
+            }
+            MenuItem {
+                // Byte for byte what an upload would send, which is most of
+                // why it is worth having on disk.
+                text: qsTr("Export the SML zip")
+                visible: page.workoutKey.length > 0
+                         && AppController.canExportSml(page.workoutKey)
+                onClicked: AppController.exportWorkoutSml(page.workoutKey,
+                                                           page.activityName)
+            }
+            MenuItem {
                 // Only for a workout read off the watch that the cloud has
                 // not taken: a cloud workout would come back on the next
                 // sync, and one the cloud has taken is not this app's to

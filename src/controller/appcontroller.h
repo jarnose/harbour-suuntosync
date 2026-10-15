@@ -572,6 +572,28 @@ public:
     // well under a second, and there is nothing to wait for on a radio.
     Q_INVOKABLE void importFitFile(const QString &path);
 
+    // Writes a workout out to ~/Documents/SuuntoSync, and says where.
+    //
+    // What can be exported depends on where the workout came from, and the
+    // page asks before offering it:
+    //
+    //  - the **FIT file** only for an import, which is the only kind this
+    //    app has one of. A watch workout would need a FIT *encoder* and
+    //    there is none here; the cloud has an exportFit endpoint for its
+    //    own copies, which this project has never exercised.
+    //  - the **SML zip** for anything with stored sources - a watch
+    //    workout or an import - because that is what buildUploadZip()
+    //    makes, so what lands on disk is byte for byte what an upload
+    //    would send. That is most of why it is worth having.
+    //
+    // `label` is the display name the page already has for the activity;
+    // the vocabulary lives in QML, so it comes from there rather than
+    // being looked up again here.
+    Q_INVOKABLE bool canExportFit(const QString &key) const;
+    Q_INVOKABLE bool canExportSml(const QString &key) const;
+    Q_INVOKABLE void exportWorkoutFit(const QString &key, const QString &label);
+    Q_INVOKABLE void exportWorkoutSml(const QString &key, const QString &label);
+
     // Pushes what the watch gave us up to the Suunto cloud - the other
     // direction from syncHealthData(). Only rows read over BLE are ever
     // sent; anything that came from the cloud is already there.
@@ -878,6 +900,11 @@ private:
     // chained cloud requests now, and the nesting had stopped being
     // readable.
     void readWatchPluginFiles();
+    // Shared by the two exports: the directory, the name, the write and the
+    // one message that says where it went.
+    void writeExport(const QString &key, const QString &label, const QString &extension,
+                      const QByteArray &contents);
+    QString sourceOfWorkout(const QString &key) const;
     // The second half of the two watch syncs: everything after the session
     // is in hand. Split out so the entry point can be the one place that
     // takes the session, rather than every branch of the chain below.

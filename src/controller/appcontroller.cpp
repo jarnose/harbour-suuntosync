@@ -35,6 +35,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QDir>
+#include <QRegExp>
 #include <QUrl>
 #include <QDateTime>
 #include <QLocale>
@@ -2717,6 +2719,15 @@ bool AppController::canUploadWorkout(const QString &key) const
 // Rebuilds the upload payload from the stored raw /Data and /Summary.
 // Empty if this workout has none - which is the case for anything synced
 // before saveSmlSources() existed, and for a cloud workout.
+QString AppController::sourceOfWorkout(const QString &key) const
+{
+    for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
+        if (w.key == key)
+            return w.source;
+    }
+    return QString();
+}
+
 QByteArray AppController::buildUploadZip(const QString &key) const
 {
     QByteArray data, summary;
@@ -3443,6 +3454,88 @@ void AppController::importFitFile(const QString &path)
                                 .arg(QFileInfo(local).fileName())
                                 .arg(w.totalDistance / 1000.0, 0, 'f', 2)
                                 .arg(activity.samples.size()));
+}
+
+bool AppController::canExportFit(const QString &key) const
+{
+    QByteArray data;
+    // An import keeps the file itself; nothing else here has one.
+    return sourceOfWorkout(key) == QStringLiteral("fit")
+            && m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty();
+}
+
+bool AppController::canExportSml(const QString &key) const
+{
+    QByteArray data;
+    return m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty();
+}
+
+void AppController::exportWorkoutFit(const QString &key, const QString &label)
+{
+    QByteArray data;
+    if (!m_workoutStore->loadSmlSources(key, &data, nullptr) || data.isEmpty()) {
+        emit errorOccurred(tr("There is no FIT file stored for this workout."));
+        return;
+    }
+    writeExport(key, label, QStringLiteral("fit"), data);
+}
+
+void AppController::exportWorkoutSml(const QString &key, const QString &label)
+{
+    // Built, not stored - the same call the upload makes, so the file on
+    // disk is what would go to the cloud.
+    const QByteArray zip = buildUploadZip(key);
+    if (zip.isEmpty()) {
+        emit errorOccurred(tr("Nothing to export: this workout has no stored sources."));
+        return;
+    }
+    writeExport(key, label, QStringLiteral("sml.zip"), zip);
+}
+
+void AppController::writeExport(const QString &key, const QString &label,
+                                 const QString &extension, const QByteArray &contents)
+{
+    // Beside what harbour-edgesync writes, under its own name - the two
+    // apps export the same kinds of file and a shared directory would make
+    // it ambiguous which wrote what.
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+            + QStringLiteral("/SuuntoSync");
+    if (!QDir().mkpath(dir)) {
+        emit errorOccurred(tr("Could not create %1").arg(dir));
+        return;
+    }
+
+    // The activity and when it was, which is how a file is found again; the
+    // key goes on the end because two rides can start in the same minute
+    // and a silent overwrite is worse than a long name.
+    qint64 startTime = 0;
+    for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
+        if (w.key == key) {
+            startTime = w.startTime;
+            break;
+        }
+    }
+    QString stem = label.isEmpty() ? tr("Workout") : label;
+    stem.replace(QRegExp(QStringLiteral("[^A-Za-z0-9]+")), QStringLiteral("-"));
+    const QString when = startTime != 0
+            ? QDateTime::fromMSecsSinceEpoch(startTime).toString(QStringLiteral("yyyy-MM-dd_HHmm"))
+            : QStringLiteral("undated");
+    const QString path = QStringLiteral("%1/%2_%3_%4.%5")
+            .arg(dir, stem, when, key, extension);
+
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        emit errorOccurred(tr("Could not write %1: %2").arg(path, out.errorString()));
+        return;
+    }
+    const qint64 written = out.write(contents);
+    out.close();
+    if (written != contents.size()) {
+        emit errorOccurred(tr("Only %1 of %2 bytes reached %3")
+                                    .arg(written).arg(contents.size()).arg(path));
+        return;
+    }
+    emit errorOccurred(tr("Saved %1 kB to %2").arg(contents.size() / 1024).arg(path));
 }
 
 void AppController::loadCachedWorkouts()

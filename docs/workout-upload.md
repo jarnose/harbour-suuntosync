@@ -1116,3 +1116,52 @@ cadence go in as hertz and temperature as kelvin, because
 
 Reading the file needs the `Documents` Sailjail permission, verified on the
 device to exist and to whitelist `${HOME}/Documents`.
+
+### Uploading an imported workout
+
+The file itself is kept in the same column a watch workout's `/Data`
+payload lives in, and that is what puts an import in the upload queue:
+`keysPendingUpload()` asks for rows that have `data` and no cloud key, so
+an import appears in "send N workouts to the cloud" beside the others with
+nothing else to wire. `buildUploadZip()` tells the two apart by the key's
+prefix, which the import wrote itself.
+
+The two documents are the same shape either way; only what they are built
+from differs. `SmlJson::buildFitSamples()` and `buildFitSummary()` live in
+the same module as the watch-side builder on purpose - `formatNumber()` is
+locale-proof and was got right once, and a second number formatter is a
+second chance to send a decimal comma, which this project has already done.
+
+Checked against the real cloud document for the same kind of workout:
+
+| field | in | the real document, same place |
+|---|---|---|
+| `Latitude` | radians | 1.0730863 for a spot this prints as 1.0730867 |
+| `HR` | hertz | 1.35 for 81 bpm |
+| `Cadence` | hertz | |
+| `Temperature` | kelvin | |
+| `Energy` | joules | 132 kcal goes out as 552288 |
+| `Distance`, `Altitude` | metres | |
+| `Speed` | m/s | |
+
+Two decisions in the summary:
+
+- **`Duration` is the whole span and `PauseDuration` sits beside it**, the
+  way the watch states them - the cloud subtracts one from the other to get
+  the moving time, so sending the timer as `Duration` would hide the pauses
+  rather than report them. The workout row shown in this app keeps the
+  moving figure, which is what it shows everywhere else.
+- **`Device` says what the file says.** A watch upload puts the watch's own
+  name and serial there; borrowing those for a ride the watch never
+  recorded would file it as the watch's. An Edge ride goes up as
+  `garmin-<serial>`, named "Edge Explore 2".
+
+The Header is deliberately a dozen fields where a watch's own carries
+sixty. A minimal document is known to be accepted - an indoor workout with
+almost nothing in it uploaded cleanly while a richer one was being refused
+for an unrelated reason - and inventing figures the file does not state
+would be worse than letting the cloud compute them from the samples.
+
+`tests/test_fitsml.cpp` builds the activity in code rather than decoding a
+file, because the decoder is tested in the app it came from and what is new
+here is the units. It runs in CI.

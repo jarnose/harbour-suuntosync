@@ -2752,12 +2752,46 @@ QByteArray AppController::buildUploadZip(const QString &key) const
     // Timestamps come from the stored workout, not from "now".
     qint64 startTime = 0;
     qint64 stopTime = 0;
+    int activityId = 0;
     for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
         if (w.key == key) {
             startTime = w.startTime;
             stopTime = w.stopTime;
+            activityId = w.activityId;
             break;
         }
+    }
+
+    // An imported workout's stored "data" is the FIT file, not a /Data
+    // payload - the key's prefix is what says so, because the import is
+    // what wrote both. The two documents are the same shape either way;
+    // only what they are built from differs.
+    if (key.startsWith(QStringLiteral("fit_"))) {
+        const std::vector<uint8_t> raw(
+                reinterpret_cast<const uint8_t *>(data.constData()),
+                reinterpret_cast<const uint8_t *>(data.constData()) + data.size());
+        Fit::Activity activity;
+        std::string decodeError;
+        if (!Fit::parseActivity(raw, activity, decodeError))
+            return QByteArray();
+
+        const int offsetMinutes =
+                QDateTime::fromMSecsSinceEpoch(startTime).offsetFromUtc() / 60;
+        const std::string src = fitSourceName(activity.summary);
+        const std::string samples = SmlJson::buildFitSamples(activity, src, offsetMinutes);
+        const std::string header =
+                SmlJson::buildFitSummary(activity, src, offsetMinutes, activityId);
+
+        std::vector<ZipWriter::Entry> entries;
+        if (!samples.empty())
+            entries.push_back({ "samples.json", samples });
+        if (!header.empty())
+            entries.push_back({ "summary.json", header });
+        if (entries.empty())
+            return QByteArray();
+        const std::vector<uint8_t> zip = ZipWriter::build(entries);
+        return QByteArray(reinterpret_cast<const char *>(zip.data()),
+                           static_cast<int>(zip.size()));
     }
 
     const std::vector<uint8_t> dataVec(
@@ -3413,6 +3447,14 @@ void AppController::importFitFile(const QString &path)
     const QByteArray laps = fitLapsJson(activity);
     if (!laps.isEmpty())
         m_workoutStore->saveLaps(w.key, laps, nullptr);
+
+    // The file itself goes in the same column a watch workout's /Data
+    // payload does, and that is what puts an import in the upload queue:
+    // keysPendingUpload() asks for rows that have `data` and no cloud key,
+    // so it appears in "send N workouts to the cloud" beside the others
+    // with nothing else to wire. buildUploadZip() tells the two apart by
+    // the key's own prefix.
+    m_workoutStore->saveSmlSources(w.key, bytes, QByteArray(), nullptr);
 
     loadCachedWorkouts();
     emit errorOccurred(tr("Imported %1: %2 km, %3 samples")

@@ -1,5 +1,7 @@
 #include "smljson.h"
 
+#include "../fit/activity.h"
+
 #include "iso8601.h"
 #include "../ble/smldecoder.h"
 
@@ -439,6 +441,181 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
     out += "]}";
 
     return first ? std::string() : out;
+}
+
+namespace {
+
+// Degrees to radians: the cloud's position fields are radians, which cost
+// this project five rounds of a 523 once. See literalFor().
+constexpr double kDegreesToRadians = 3.14159265358979323846 / 180.0;
+
+// One "Key":value pair, or nothing at all when the file has no reading.
+// Absent and zero are different things: a rider can really be at 0 W.
+void addNumber(std::string *out, bool *first, const char *key, double value, int precision)
+{
+    if (!std::isfinite(value))
+        return;
+    if (!*first)
+        *out += ",";
+    *first = false;
+    *out += quote(key);
+    *out += ":";
+    *out += formatNumber(value, precision);
+}
+
+void addString(std::string *out, bool *first, const char *key, const std::string &value)
+{
+    if (value.empty())
+        return;
+    if (!*first)
+        *out += ",";
+    *first = false;
+    *out += quote(key);
+    *out += ":";
+    *out += quote(value);
+}
+
+} // namespace
+
+std::string buildFitSamples(const Fit::Activity &activity, const std::string &source,
+                             int offsetMinutes)
+{
+    std::string out = "{\"Samples\":[";
+    bool firstEntry = true;
+
+    for (const Fit::Sample &sample : activity.samples) {
+        if (sample.time == 0)
+            continue; // no clock, no entry - see buildDocument()
+
+        std::string fields;
+        bool firstField = true;
+        if (sample.hasPosition()) {
+            addNumber(&fields, &firstField, "Latitude", sample.lat * kDegreesToRadians, 17);
+            addNumber(&fields, &firstField, "Longitude", sample.lon * kDegreesToRadians, 17);
+        }
+        // The watch files a GPS fix's altitude separately from the
+        // barometric one, and a FIT record carries a single altitude. It
+        // goes in as Altitude, the barometric name, because that is the one
+        // the cloud charts.
+        addNumber(&fields, &firstField, "Altitude", sample.altitude, 1);
+        addNumber(&fields, &firstField, "Distance", sample.distance, 1);
+        addNumber(&fields, &firstField, "Speed", sample.speed, 2);
+        if (!std::isnan(sample.temperature))
+            addNumber(&fields, &firstField, "Temperature", sample.temperature + 273.15, 1);
+        if (sample.heartRate > 0)
+            addNumber(&fields, &firstField, "HR", sample.heartRate / 60.0, 3);
+        if (sample.cadence >= 0)
+            addNumber(&fields, &firstField, "Cadence", sample.cadence / 60.0, 3);
+        if (sample.power >= 0)
+            addNumber(&fields, &firstField, "Power", sample.power, 0);
+        if (firstField)
+            continue; // a record with a clock and nothing else
+
+        if (!firstEntry)
+            out += ",";
+        firstEntry = false;
+        out += "{\"Attributes\":{\"suunto/sml\":{\"Sample\":{";
+        out += fields;
+        out += "}}},\"Source\":";
+        out += quote(source);
+        out += ",\"TimeISO8601\":";
+        out += quote(Iso8601::formatLocal(sample.time * 1000, offsetMinutes));
+        out += "}";
+    }
+    out += "]}";
+    return firstEntry ? std::string() : out;
+}
+
+std::string buildFitSummary(const Fit::Activity &activity, const std::string &source,
+                             int offsetMinutes, int activityId)
+{
+    const Fit::Summary &s = activity.summary;
+    if (s.startTime == 0)
+        return std::string();
+
+    const int64_t startMs = static_cast<int64_t>(s.startTime) * 1000;
+    const double elapsed = std::isnan(s.elapsed) ? s.timer : s.elapsed;
+    const int64_t endMs = startMs + static_cast<int64_t>((std::isnan(elapsed) ? 0.0 : elapsed)
+                                                           * 1000.0);
+
+    std::string header;
+    bool first = true;
+    addNumber(&header, &first, "ActivityType", activityId, 0);
+    if (!first)
+        header += ",";
+    first = false;
+    header += quote("DateTime");
+    header += ":";
+    header += quote(Iso8601::formatLocal(startMs, offsetMinutes));
+
+    // Duration is the whole span and PauseDuration what the clock was
+    // stopped for, the way the watch states them - the cloud subtracts one
+    // from the other to get the moving time, so sending the timer as
+    // Duration would hide the pauses rather than report them.
+    addNumber(&header, &first, "Duration", elapsed, 3);
+    if (!std::isnan(s.elapsed) && !std::isnan(s.timer) && s.elapsed > s.timer)
+        addNumber(&header, &first, "PauseDuration", s.elapsed - s.timer, 3);
+    addNumber(&header, &first, "Distance", s.distance, 1);
+    addNumber(&header, &first, "Ascent", s.ascent, 1);
+    addNumber(&header, &first, "Descent", s.descent, 1);
+    // Joules. A FIT file counts kilocalories.
+    if (s.calories > 0)
+        addNumber(&header, &first, "Energy", s.calories * 4184.0, 1);
+    if (s.avgHeartRate > 0 || s.maxHeartRate > 0) {
+        if (!first)
+            header += ",";
+        first = false;
+        header += quote("HR");
+        header += ":{";
+        bool firstHr = true;
+        if (s.avgHeartRate > 0)
+            addNumber(&header, &firstHr, "Avg", s.avgHeartRate / 60.0, 3);
+        if (s.maxHeartRate > 0)
+            addNumber(&header, &firstHr, "Max", s.maxHeartRate / 60.0, 3);
+        header += "}";
+    }
+    if (!std::isnan(s.minAltitude) || !std::isnan(s.maxAltitude)) {
+        if (!first)
+            header += ",";
+        first = false;
+        header += quote("Altitude");
+        header += ":{";
+        bool firstAlt = true;
+        addNumber(&header, &firstAlt, "Max", s.maxAltitude, 1);
+        addNumber(&header, &firstAlt, "Min", s.minAltitude, 1);
+        header += "}";
+    }
+    // Which device really recorded it. The watch puts its own name and
+    // serial here; borrowing those for somebody else's ride would file the
+    // ride as the watch's, so this says what the file says.
+    {
+        std::string device;
+        bool firstDev = true;
+        addString(&device, &firstDev, "Name", s.productName);
+        addString(&device, &firstDev, "SerialNumber",
+                   s.serial != 0 ? std::to_string(s.serial) : std::string());
+        if (!firstDev) {
+            if (!first)
+                header += ",";
+            first = false;
+            header += quote("Device");
+            header += ":{";
+            header += device;
+            header += "}";
+        }
+    }
+    if (first)
+        return std::string();
+
+    std::string out = "{\"Samples\":[{\"Attributes\":{\"suunto/sml\":{\"Header\":{";
+    out += header;
+    out += "}}},\"Source\":";
+    out += quote(source);
+    out += ",\"TimeISO8601\":";
+    // The captured upload stamps summary.json at the end of the workout.
+    out += quote(Iso8601::formatLocal(endMs != startMs ? endMs : startMs, offsetMinutes));
+    out += "}]}";
+    return out;
 }
 
 } // namespace SmlJson

@@ -45,6 +45,20 @@ jobs:
           run workoutsummary    ../src/store/workoutsummary.cpp
           run suuntoauth        ../src/cloud/suuntoauth.cpp
           run zipwriter         ../src/cloud/zipwriter.cpp -lz
+          # The FIT decoder's own tests live in harbour-edgesync, where it
+          # was written; this one covers the units and the shape of the two
+          # documents an imported workout is uploaded as.
+          # The vendored heatshrink is C and does not compile as C++ (its
+          # malloc wrapper relies on the implicit void* conversion), so it
+          # goes in as an object built by the C compiler. smljson.cpp drags
+          # it in through the SBEM side it shares a translation unit with.
+          gcc -c -O1 ../src/ble/heatshrink/heatshrink_decoder.c -o /tmp/heatshrink.o
+          run fitsml            -I ../src ../src/cloud/smljson.cpp ../src/cloud/iso8601.cpp \
+                                 ../src/ble/smldecoder.cpp ../src/ble/sbemcontainer.cpp \
+                                 ../src/ble/sbemtable.cpp ../src/ble/sbemdescriptors.cpp \
+                                 ../src/ble/sbemlayout.cpp ../src/fit/activity.cpp \
+                                 ../src/fit/fitdecoder.cpp ../src/fit/fitcrc.cpp \
+                                 /tmp/heatshrink.o
 
       # Catches the class of mistake that produced a blank screen once: a
       # duplicate signal handler, which QML rejects at load time and which

@@ -33,6 +33,9 @@
 //
 // Qt-free, so it can be tested here against a real /Data fixture rather
 // than only on the phone.
+// Only referenced; src/fit/activity.h is included where these are built.
+namespace Fit { struct Activity; }
+
 namespace SmlJson {
 
 // `source` is the watch's own identifier, e.g. "suunto-2352D0000247" - the
@@ -58,5 +61,27 @@ std::string buildDocument(const std::vector<Sbem::Chunk> &chunks,
                            const SbemDescriptors::Table &table,
                            const std::string &source, int offsetMinutes,
                            int64_t fallbackTimeMs = 0);
+
+// The same two documents for a workout that came from a FIT file rather
+// than from a watch. Here rather than in a module of their own so that
+// `formatNumber()` - locale-proof, and the shape the capture showed -
+// stays one copy: a second number formatter is a second chance to send a
+// decimal comma, which this project has already done once.
+//
+// The field names and units are the watch's, because they are the cloud's:
+// position in radians, heart rate and cadence in hertz, temperature in
+// kelvin, energy in joules. `activityId` is the SML ActivityType the
+// import mapped the file's sport to.
+//
+// Deliberately a small subset of the sixty fields a watch's own Header
+// carries. A minimal document is known to be accepted - an indoor workout
+// with almost nothing in it uploaded cleanly while a richer one was being
+// refused for an unrelated reason - and inventing figures the file does
+// not state would be worse than leaving the cloud to compute them from the
+// samples.
+std::string buildFitSamples(const Fit::Activity &activity, const std::string &source,
+                             int offsetMinutes);
+std::string buildFitSummary(const Fit::Activity &activity, const std::string &source,
+                             int offsetMinutes, int activityId);
 
 } // namespace SmlJson

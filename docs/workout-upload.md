@@ -1280,3 +1280,20 @@ lose readings - 827 and 219 cases where one second holds the same field
 twice *with different values*, because the watch samples some fields faster
 than it stamps them. So the chunks stay separate, each carrying its own
 timestamp, which a FIT reader is content with.
+
+### Confirmed by a reader that is not ours (2026-10-15)
+
+A watch workout exported as FIT was imported into harbour-edgesync, sent to
+Garmin from there, and **displays correctly on connect.garmin.com**.
+
+That is the test the two local ones could not be: both the unit round trip
+and the five-file replay read the file back with *this project's own
+decoder*, so a field understood consistently wrongly at both ends would
+have passed them. Garmin's own reader has now accepted it.
+
+The file itself, read back off the phone: 7728 records, one lap, 4991 m,
+heart rate 99/147, 29 m of ascent, 217 kcal, manufacturer 23, sport
+cycling. Worth noting beside its imported twin of the same ride, six
+seconds apart in start time: the watch recorded it as *Cycling* and the
+Edge as *E-biking*, because the watch does not know about the motor. Both
+files state what their recorder knew.

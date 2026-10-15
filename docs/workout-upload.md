@@ -1208,3 +1208,56 @@ The SML export is deliberately `buildUploadZip()`'s own output rather than
 a second code path: what lands on disk is byte for byte what an upload
 would send, which is most of what makes it worth having - a refused upload
 can be inspected without a capture.
+
+## Writing FIT (2026-10-15)
+
+`src/fit/fitencoder.*` writes an activity file. Where each fact came from
+matters more than usual, because every one of them is a number that makes
+the file open nowhere if it is wrong:
+
+- **The container** - the 14-byte header, the definition and data record
+  headers, the base-type bytes, the invalid values - is what
+  `fitdecoder.cpp` already reads, so it is taken from code proven against
+  real Garmin and Suunto files rather than from a specification nobody here
+  has.
+- **The field numbers for `record`, `lap` and `session`** likewise come
+  from the decoder's own read functions. `session` numbers ascent and
+  descent 22 and 23 where `lap` numbers them 21 and 22 - the format's own
+  asymmetry, and the kind of thing that would have been copied wrong.
+- **`file_id` and `activity`**, which the decoder never reads, were read
+  out of `muktihari/fit`'s generated profile: in
+  `profile/mesgdef/file_id_gen.go` the fields are indexed by their own
+  numbers (`vals[0]` type, `vals[1]` manufacturer, `vals[3]`
+  serial_number, `vals[4]` time_created), and `activity_gen.go` the same
+  way (`vals[253]` timestamp, `vals[0]` total_timer_time, `vals[1]`
+  num_sessions, `vals[2]` type). Read as source, not as a summary of it.
+
+Every message of a kind shares one definition record and a missing reading
+is written as the base type's **invalid** value rather than omitted, which
+is how a fixed layout says "not recorded". The decoder already treats those
+as absent, so a gap survives a round trip as a gap.
+
+### The CRC, and a correction
+
+`muktihari/fit` resets its running checksum after a 14-byte header and sums
+the data alone; this project's decoder runs it over the header and the data
+together. Reading that, it looked as though the decoder had been wrong all
+along and nobody had noticed, since `crcOk` is computed and never read.
+
+**Measured on five real files, both rules give the same number.** Appending
+a block's own CRC leaves the running value at zero, which is exactly where
+the data section would otherwise start. The decoder is right, the reference
+is right, and the "bug" was mine for a minute.
+
+### Tested by round trip
+
+`tests/test_fitencoder.cpp` encodes an activity and reads it back with this
+project's own decoder, comparing every field: the units, the gaps, the
+sport, the CRC. The decoder is the proven half, so what it reads back is
+what other tools read.
+
+Run separately against the five real FIT files here - decode, re-encode,
+decode again - every sample, every lap and every summary field came back
+identical, with valid CRCs. The sizes differ either way (one fixed
+definition per message type is sometimes smaller than the original's
+several, sometimes larger) while the content does not.

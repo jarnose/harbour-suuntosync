@@ -1192,10 +1192,17 @@ asks before offering it:
 | from the cloud | - | - |
 
 A watch workout cannot be written as FIT because that needs a FIT
-*encoder*, and this project has only a decoder. The cloud has an
-`exportFit` endpoint for its own copies - named in `tajchert/suuntool` -
-which has never been exercised here, so it is not offered rather than
-offered and broken.
+*encoder*, and this project has only a decoder.
+
+A **cloud** workout is now offered, through
+`GET v1/workout/exportFit/<key>`. That path comes from `tajchert/suuntool`
+and from nowhere else: it is **not** among the 266 endpoints extracted from
+the official Android app, so the app never calls it and it is presumably
+what the website uses. The attempt is offered anyway because its failure is
+readable - and the answer is checked twice before it is called a success,
+once for the `.FIT` signature at offset 8 and once by decoding it into an
+activity with our own decoder. A 200 carrying an error page would otherwise
+land on disk as a .fit nobody can open.
 
 The SML export is deliberately `buildUploadZip()`'s own output rather than
 a second code path: what lands on disk is byte for byte what an upload

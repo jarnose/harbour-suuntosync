@@ -3458,9 +3458,16 @@ void AppController::importFitFile(const QString &path)
 
 bool AppController::canExportFit(const QString &key) const
 {
+    const QString source = sourceOfWorkout(key);
+    // An import keeps the file itself. A cloud workout has one up there -
+    // or so one endpoint in one third-party client says; the attempt is
+    // offered because its failure is readable, and a watch workout is not
+    // offered at all because writing FIT needs an encoder this project
+    // does not have.
+    if (source == QStringLiteral("cloud"))
+        return m_cloudAccount.isSignedIn();
     QByteArray data;
-    // An import keeps the file itself; nothing else here has one.
-    return sourceOfWorkout(key) == QStringLiteral("fit")
+    return source == QStringLiteral("fit")
             && m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty();
 }
 
@@ -3473,11 +3480,57 @@ bool AppController::canExportSml(const QString &key) const
 void AppController::exportWorkoutFit(const QString &key, const QString &label)
 {
     QByteArray data;
-    if (!m_workoutStore->loadSmlSources(key, &data, nullptr) || data.isEmpty()) {
+    if (m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty()
+            && sourceOfWorkout(key) == QStringLiteral("fit")) {
+        writeExport(key, label, QStringLiteral("fit"), data);
+        return;
+    }
+
+    if (sourceOfWorkout(key) != QStringLiteral("cloud")) {
         emit errorOccurred(tr("There is no FIT file stored for this workout."));
         return;
     }
-    writeExport(key, label, QStringLiteral("fit"), data);
+    if (m_fitExportInProgress)
+        return;
+    m_fitExportInProgress = true;
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, key, label](bool ok, const QByteArray &secret, const QString &vaultError) {
+        if (!ok) {
+            m_fitExportInProgress = false;
+            emit errorOccurred(tr("Could not read the stored session: %1").arg(vaultError));
+            return;
+        }
+        m_cloudClient->downloadWorkoutFit(QString::fromUtf8(secret), key,
+                [this, key, label](bool fitOk, const QByteArray &body, const QString &error) {
+            m_fitExportInProgress = false;
+            if (!fitOk) {
+                emit errorOccurred(tr("The cloud would not export this as FIT: %1").arg(error));
+                return;
+            }
+            // Decoded before it is called a success. The header check in
+            // the client says it is shaped like a FIT file; this says it is
+            // an activity with records in it, which is the thing that was
+            // actually wanted.
+            const std::vector<uint8_t> raw(
+                    reinterpret_cast<const uint8_t *>(body.constData()),
+                    reinterpret_cast<const uint8_t *>(body.constData()) + body.size());
+            Fit::Activity activity;
+            std::string decodeError;
+            if (!Fit::parseActivity(raw, activity, decodeError)) {
+                emit errorOccurred(tr("The cloud sent %1 bytes that are not a readable "
+                                       "activity: %2")
+                                            .arg(body.size())
+                                            .arg(QString::fromStdString(decodeError)));
+                return;
+            }
+            writeExport(key, label, QStringLiteral("fit"), body);
+            emit errorOccurred(tr("The cloud's own FIT: %1 samples, %2 laps, %3 km")
+                                        .arg(activity.samples.size())
+                                        .arg(activity.laps.size())
+                                        .arg(activity.summary.distance / 1000.0, 0, 'f', 2));
+        });
+    });
 }
 
 void AppController::exportWorkoutSml(const QString &key, const QString &label)

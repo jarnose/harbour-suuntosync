@@ -382,6 +382,18 @@ public:
                                                      const QString &error)>;
     void downloadEphemeris(int formatIndex, RawDownloadCallback callback);
 
+    // GET v1/workout/exportFit/<key> - the cloud's own FIT export of a
+    // workout it holds.
+    //
+    // **The path comes from `tajchert/suuntool` and from nowhere else.**
+    // It is not among the 266 endpoints extracted from the official
+    // Android app (docs/app-api-surface.txt), so the app never calls it -
+    // it is presumably what the website uses. Whether it answers at all,
+    // and whether this account may use it, is what the first call will
+    // say; the caller checks the bytes rather than trusting a 200.
+    void downloadWorkoutFit(const QString &sessionKey, const QString &workoutKey,
+                             RawDownloadCallback callback);
+
     void uploadHealthEntries(const QString &sessionKey, const QString &kind,
                               const QVector<HealthEntry> &entries, int offsetMinutes,
                               SimpleCallback callback);

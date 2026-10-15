@@ -837,6 +837,8 @@ private:
     // The developer probes and the watch-settings reads: one at a time,
     // each guarded by an in-flight flag that clears on every exit.
     WatchSession m_probeSession;
+    // One cloud FIT export at a time; it is a whole file over the network.
+    bool m_fitExportInProgress = false;
     // The last refresh's answers. The library as the cloud gave it, and the
     // filenames the watch's directory held - matching one to the other is
     // what says "installed".

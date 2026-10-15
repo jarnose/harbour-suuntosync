@@ -645,6 +645,41 @@ void SuuntoCloudClient::fetchSuuntoPlusList(const QString &path, const QString &
     });
 }
 
+void SuuntoCloudClient::downloadWorkoutFit(const QString &sessionKey,
+                                            const QString &workoutKey,
+                                            RawDownloadCallback callback)
+{
+    const QString path = QStringLiteral("workout/exportFit/%1")
+            .arg(QString::fromUtf8(QUrl::toPercentEncoding(workoutKey)));
+    QNetworkReply *reply = m_network->get(authorizedRequest(kBaseUrl + path, sessionKey));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        const QByteArray body = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            // The body is worth keeping in the message: an ASKO envelope
+            // says why, and an HTML page says this is not the API at all.
+            callback(false, QByteArray(),
+                     tr("%1 (%2 bytes: %3)")
+                             .arg(reply->errorString())
+                             .arg(body.size())
+                             .arg(QString::fromUtf8(body.left(200))));
+            return;
+        }
+        // A FIT file's header carries ".FIT" at offset 8. Checked rather
+        // than assumed, because this endpoint is not one the official app
+        // uses and a 200 carrying JSON would otherwise be written to disk
+        // as a .fit nobody can open.
+        if (body.size() < 14 || body.mid(8, 4) != QByteArray(".FIT")) {
+            callback(false, QByteArray(),
+                     tr("The answer is not a FIT file: %1 bytes starting %2")
+                             .arg(body.size())
+                             .arg(QString::fromUtf8(body.left(80))));
+            return;
+        }
+        callback(true, body, QString());
+    });
+}
+
 void SuuntoCloudClient::fetchStoreHome(const QString &sessionKey, const QString &variant,
                                        const QString &capabilities,
                                        StoreHomeCallback callback)

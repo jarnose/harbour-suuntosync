@@ -90,6 +90,11 @@ Confirmed on real hardware, not just in tests:
   Maps, which is the one map application here with a registered URI handler -
   it takes a single coordinate, so it shows the place and not the outing. See
   `docs/base-map.md`.
+- **A sync when the watch connects**, off by default, because a sync is
+  minutes of radio time and the watch coming into range is not always a
+  reason to start one. It syncs the workouts and not the health data: that
+  is the longer of the two and the health page has its own action, so a
+  switch that says "a sync" does not quietly mean two.
 - **A cover that shows one thing, chosen.** The latest workout, lifetime
   totals, fitness/fatigue/form, last night's sleep, or nothing — because
   there is no one right answer: somebody training for a distance wants the
@@ -110,7 +115,13 @@ Confirmed on real hardware, not just in tests:
   Settings can forget a watch outright.
 - **Workouts from the Suunto cloud**, with route, training metrics, sample
   data and laps — automatic and manual ones, which the cloud keeps as two
-  parallel partitions of the same workout rather than one sequence.
+  parallel partitions of the same workout rather than one sequence, so they
+  are shown grouped rather than interleaved: three auto-laps and three
+  manual ones of the same 2830 m walk are not six laps. Each lap carries
+  what the cloud states for it — average speed, average heart rate, ascent
+  and energy — and a watch-read lap carries the two of those its samples
+  can give. Which mean the cloud uses was settled by computing both ways
+  over its own 2664 one-second samples: the plain one, to within 0.1 bpm.
   A cloud workout also gets the analysis the official app shows for it:
   VO2max, fitness age, EPOC, peak training effect, recovery time, and the
   heart-rate and power zones with time spent in each. The zone boundaries come
@@ -186,6 +197,16 @@ Confirmed on real hardware, not just in tests:
   own only its own, with nothing under it. The daemon runs as a systemd user
   service that the package installs and starts.
 
+  **A notification arrives while the app is open.** It did not use to: the
+  application attached to the watch when it connected and held the session
+  until it quit, so having it open — including sitting in the background,
+  which on this platform is most of the time — kept the watch away from the
+  daemon. The session is taken per operation now and let go as soon as the
+  last holder of it goes away, which costs 537 ms for the first attach after
+  launch and 91–105 ms for every one after that, measured on the device. Only
+  a transfer blocks a notification now, and that wait is seconds, because
+  Whiteboard is strictly one request at a time and nothing can change that.
+
   **Both watch models take one.** Their requests differ by exactly five
   constants, which are per-firmware metadata rather than protocol — the same
   kind of difference as the SBEM descriptor ids — and both sets were
@@ -244,6 +265,33 @@ Confirmed on real hardware, not just in tests:
   store calls a watch face a `sportsapp` and the library calls the same
   thing a `watchface`. The type is carried verbatim and never mapped. See
   `docs/suuntoplus-and-watchfaces.md`.
+
+- **Workouts from a file, and out to one.** A FIT activity file can be
+  imported as a workout of its own — route, charts, and the laps the file
+  states — and uploaded to the Suunto cloud beside everything else. The
+  decoder is shared with [harbour-edgesync](https://github.com/jarnose/harbour-edgesync),
+  which downloads a Garmin Edge's rides over BLE and writes them out as FIT;
+  a Garmin Connect or Strava export is the same format.
+
+  The cloud accepted a ride whose `Source` is `garmin-<serial>` and gave it
+  a key, which answers the one question that could not be answered without
+  trying: it does not have to be a Suunto serial. An imported workout says
+  what recorded it rather than borrowing the paired watch's name for a ride
+  the watch never saw.
+
+  Exporting goes the other way for all three kinds of workout: an import
+  writes back the file it came from, a **watch** workout is written as FIT
+  by this project's own encoder, and a cloud workout is fetched as the
+  cloud's own export — through an endpoint that is not among the 266 in the
+  official app and answers anyway. The SML zip can be exported too, and it
+  is byte for byte what an upload would send, so a refused upload can be
+  read without a capture.
+
+  The encoder is checked three ways: a round trip through this project's
+  decoder, a replay of five real files that came back identical, and — the
+  one that counts, because the first two read the file back with the same
+  code that wrote it — a watch workout exported here, sent to Garmin, and
+  displaying correctly on connect.garmin.com.
 
 ## What doesn't, yet
 
@@ -353,7 +401,7 @@ for a background process to leave a trail.
 
 Most golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See
-`tests/README.md`. CI runs the eleven suites that need none; the rest run on the
+`tests/README.md`. CI runs the thirteen suites that need none; the rest run on the
 machine the captures live on. The newer ones are written to be in the first
 group where they can be: the vector-tile suite builds a tile byte by byte and
 inlines it as hex, so its exact checks run everywhere and only its feature

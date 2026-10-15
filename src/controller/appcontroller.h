@@ -907,6 +907,11 @@ private:
     void writeExport(const QString &key, const QString &label, const QString &extension,
                       const QByteArray &contents);
     QString sourceOfWorkout(const QString &key) const;
+    // A watch workout's stored payload, written as a FIT file: the samples
+    // from the payload itself and the summary from the row, because a
+    // watch workout's ascent, descent and energy are the watch's own
+    // arithmetic from /Summary rather than something to derive again.
+    QByteArray fitFromWatchWorkout(const QString &key, const QByteArray &payload) const;
     // The second half of the two watch syncs: everything after the session
     // is in hand. Split out so the entry point can be the one place that
     // takes the session, rather than every branch of the chain below.

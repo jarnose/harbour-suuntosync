@@ -1261,3 +1261,22 @@ decode again - every sample, every lap and every summary field came back
 identical, with valid CRCs. The sizes differ either way (one fixed
 definition per message type is sometimes smaller than the original's
 several, sometimes larger) while the content does not.
+
+### A watch workout as FIT
+
+`src/fit/watchactivity.*` turns a stored `/Data` payload into the shape the
+encoder writes, so "Export the FIT file" now works for a watch workout too.
+The samples come from the payload; the summary comes from the stored row,
+because a watch workout's ascent, descent and energy are the watch's own
+arithmetic out of `/Summary` rather than something worth deriving twice.
+The laps are the stored ones - the stretches between the watch's markers -
+with their start times as a running sum, since the stored form carries a
+duration and not a clock.
+
+**One record per chunk, and deliberately not one per second.** Merging by
+timestamp is tempting: it would give the shape a FIT file usually has and a
+quarter the records. Measured on the two real payloads here, it would also
+lose readings - 827 and 219 cases where one second holds the same field
+twice *with different values*, because the watch samples some fields faster
+than it stamps them. So the chunks stay separate, each carrying its own
+timestamp, which a FIT reader is content with.

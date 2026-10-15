@@ -48,6 +48,8 @@
 #include <algorithm>
 #include "../fit/activity.h"
 #include "../fit/suuntosport.h"
+#include "../fit/fitencoder.h"
+#include "../fit/watchactivity.h"
 
 #include <cmath>
 #include <map>
@@ -2719,6 +2721,104 @@ bool AppController::canUploadWorkout(const QString &key) const
 // Rebuilds the upload payload from the stored raw /Data and /Summary.
 // Empty if this workout has none - which is the case for anything synced
 // before saveSmlSources() existed, and for a cloud workout.
+QByteArray AppController::fitFromWatchWorkout(const QString &key,
+                                               const QByteArray &payload) const
+{
+    const std::vector<uint8_t> raw(
+            reinterpret_cast<const uint8_t *>(payload.constData()),
+            reinterpret_cast<const uint8_t *>(payload.constData()) + payload.size());
+
+    Fit::Activity activity;
+    try {
+        activity = Fit::activityFromWatchData(raw, m_descriptorTable);
+    } catch (const std::exception &) {
+        return QByteArray();
+    }
+    if (activity.samples.empty())
+        return QByteArray();
+
+    // The summary the app itself shows, rather than figures derived again
+    // from the samples: a watch workout's ascent, descent and energy come
+    // from its /Summary resource, which is the watch's own arithmetic and
+    // the thing worth carrying into the file.
+    Workout row;
+    for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
+        if (w.key == key) {
+            row = w;
+            break;
+        }
+    }
+    Fit::Summary &summary = activity.summary;
+    if (row.startTime != 0)
+        summary.startTime = row.startTime / 1000;
+    if (row.totalTime > 0) {
+        summary.timer = row.totalTime;
+        // The row keeps the moving time; the span to the last sample is
+        // the elapsed one, and saying they are equal would hide the pauses.
+        const double span = static_cast<double>(activity.samples.back().time
+                                                 - activity.samples.front().time);
+        summary.elapsed = std::max(span, row.totalTime);
+    }
+    if (row.totalDistance > 0)
+        summary.distance = row.totalDistance;
+    if (row.maxSpeed > 0)
+        summary.maxSpeed = row.maxSpeed;
+    if (row.avgHeartRate > 0)
+        summary.avgHeartRate = static_cast<int>(row.avgHeartRate);
+    if (row.maxHeartRate > 0)
+        summary.maxHeartRate = static_cast<int>(row.maxHeartRate);
+    if (row.totalAscent > 0)
+        summary.ascent = row.totalAscent;
+    if (row.totalDescent > 0)
+        summary.descent = row.totalDescent;
+    if (row.energyConsumption > 0)
+        summary.calories = static_cast<int>(row.energyConsumption);
+    // 23 is Suunto's own FIT manufacturer id, which is what the cloud
+    // writes into its exports of this watch's workouts. The product and
+    // the serial are left unstated rather than guessed.
+    summary.manufacturer = 23;
+    int sport = -1;
+    int subSport = -1;
+    if (Fit::fitSportFromSuunto(row.activityId, &sport, &subSport)) {
+        summary.sport = sport;
+        summary.subSport = subSport;
+    }
+
+    // The laps as stored, which for a watch workout are the stretches
+    // between its own markers. Their start times are the running sum: the
+    // stored form carries a duration and not a clock.
+    const QJsonArray laps = QJsonDocument::fromJson(m_workoutStore->loadLaps(key)).array();
+    int64_t at = summary.startTime;
+    for (const QJsonValue &value : laps) {
+        const QJsonObject object = value.toObject();
+        const double seconds = object.value(QStringLiteral("durationSeconds")).toDouble();
+        if (seconds <= 0)
+            continue;
+        Fit::Lap lap;
+        lap.startTime = at;
+        lap.elapsed = seconds;
+        lap.timer = seconds;
+        if (object.contains(QStringLiteral("distanceMeters")))
+            lap.distance = object.value(QStringLiteral("distanceMeters")).toDouble();
+        if (object.contains(QStringLiteral("avgSpeed")))
+            lap.avgSpeed = object.value(QStringLiteral("avgSpeed")).toDouble();
+        if (object.contains(QStringLiteral("avgHeartRate"))) {
+            lap.avgHeartRate =
+                    static_cast<int>(object.value(QStringLiteral("avgHeartRate")).toDouble());
+        }
+        if (object.contains(QStringLiteral("ascent")))
+            lap.ascent = object.value(QStringLiteral("ascent")).toDouble();
+        if (object.contains(QStringLiteral("energy")))
+            lap.calories = static_cast<int>(object.value(QStringLiteral("energy")).toDouble());
+        activity.laps.push_back(lap);
+        at += static_cast<int64_t>(seconds);
+    }
+
+    const std::vector<uint8_t> encoded = Fit::encodeActivity(activity);
+    return QByteArray(reinterpret_cast<const char *>(encoded.data()),
+                       static_cast<int>(encoded.size()));
+}
+
 QString AppController::sourceOfWorkout(const QString &key) const
 {
     for (const Workout &w : m_workoutStore->loadAll(nullptr)) {
@@ -3467,7 +3567,10 @@ bool AppController::canExportFit(const QString &key) const
     if (source == QStringLiteral("cloud"))
         return m_cloudAccount.isSignedIn();
     QByteArray data;
-    return source == QStringLiteral("fit")
+    // A watch workout is written from its stored payload now - see
+    // fitFromWatchWorkout() - so the only thing that cannot be exported
+    // as FIT is a cloud workout nobody is signed in for.
+    return (source == QStringLiteral("fit") || source == QStringLiteral("ble"))
             && m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty();
 }
 
@@ -3479,14 +3582,30 @@ bool AppController::canExportSml(const QString &key) const
 
 void AppController::exportWorkoutFit(const QString &key, const QString &label)
 {
+    const QString source = sourceOfWorkout(key);
     QByteArray data;
-    if (m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty()
-            && sourceOfWorkout(key) == QStringLiteral("fit")) {
+    const bool haveSources =
+            m_workoutStore->loadSmlSources(key, &data, nullptr) && !data.isEmpty();
+
+    // An import already is a FIT file; nothing to write but the bytes.
+    if (haveSources && source == QStringLiteral("fit")) {
         writeExport(key, label, QStringLiteral("fit"), data);
         return;
     }
 
-    if (sourceOfWorkout(key) != QStringLiteral("cloud")) {
+    // A watch workout is written from the payload the watch sent.
+    if (haveSources && source == QStringLiteral("ble")) {
+        const QByteArray encoded = fitFromWatchWorkout(key, data);
+        if (encoded.isEmpty()) {
+            emit errorOccurred(tr("This workout's stored data decoded to nothing, so there "
+                                   "is no FIT file to write."));
+            return;
+        }
+        writeExport(key, label, QStringLiteral("fit"), encoded);
+        return;
+    }
+
+    if (source != QStringLiteral("cloud")) {
         emit errorOccurred(tr("There is no FIT file stored for this workout."));
         return;
     }

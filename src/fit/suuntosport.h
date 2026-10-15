@@ -21,4 +21,10 @@ namespace Fit {
 // real value in that vocabulary rather than a sentinel.
 int suuntoActivityId(const std::string &sportKey);
 
+// The way back, for writing a FIT file from a watch workout: the sport and
+// sub-sport numbers a file states. False when the watch's activity has no
+// counterpart, in which case the file says nothing about the sport rather
+// than guessing one.
+bool fitSportFromSuunto(int activityId, int *sport, int *subSport);
+
 } // namespace Fit

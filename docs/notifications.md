@@ -2148,3 +2148,53 @@ small writes. Bringing it back needs either a way to release the channel -
 BlueZ offers none on `GattCharacteristic1`, the fd closing is the release -
 or a way to read the MTU that acquires nothing, which this BlueZ does not
 have.
+
+## The official app's own incoming call, captured on the S7 (2026-10-16)
+
+Taken on the rooted S7 with the SIM moved over, the watch paired to the
+official app, HCI snoop on from before the first connection: a full sync
+and then one incoming call. Saved as
+`btsnoop_s7_call_20261016.log` and `btsnoop_s7_sync_weather_20261016.log`
+in the private fixtures.
+
+**The official app sends category 1 and this watch takes it.** The alert
+vibrated, showed "saapuva puhelu" with the number, stayed on screen after
+the call was hung up and then became "Vastaamaton puhelu" by itself. So
+category 1 is not what crashes the watch, and the earlier claim here that
+no capture contained a call was wrong - one did, on an S24, and its
+findings were already in this file.
+
+What it actually sends, aligned against this project's own field order
+(the frame's leading id and type belong to the request envelope, not to the
+structure):
+
+| | official | ours |
+|---|---|---|
+| len | 0x64 | 0x65 |
+| tag, form | 0x14, 0x6a | 0x14, 0x6a |
+| modify, category, count, flags | 0, **1**, 1, 2 | 0, 1, 1, 2 |
+| date | present | present |
+| prologue (bytes 11-14) | `01 3b 01 00` | `01 1f 01 21` |
+| word at 28 | `39 00 00 04` | `00 00 00 01` |
+| bytes 43-71 | 28 bytes of data | zeroes |
+| appId | `com.android.phone` | ours |
+| title | the number | the caller, or the number |
+| message | a single space | the number, or "Incoming call" |
+| labels | none | one |
+
+So `form` **is** 0x6a here, which is what we send - the S24 capture's 0x00
+was a different phone and the note in this file about that byte stands as
+"not per device", now with a second value from the same model.
+
+The three real differences are the prologue, the word at 28, and a block of
+28 bytes we fill with zeroes. Their meaning is **not** established: the
+block is not aligned floats and not text, and `notificationcodec.h` has
+always described these as "optional metadata the older firmware does not
+populate" - values taken from captures older than this firmware.
+
+**The next experiment, and it is one experiment:** send category 1 with the
+official frame's prologue, word and block replayed verbatim. If the watch
+takes it, the crash was our constants and not the category, and the ring
+can have its icon and heading back. If it freezes, the constants are not
+it either and the category-0 workaround is the right place to stay. The
+cost of being wrong is a watch that needs the charger and both buttons.

@@ -20,6 +20,20 @@ const int kRetryMs = 5000;
 // surprised by what turns up on their wrist.
 const qint64 kMaxAgeMs = 120000;
 
+// How many times a *removal* is offered before giving up, which is far
+// fewer than a send gets. The evidence for that is in this project's own
+// logs twice over: a removal timed out ten times in a row and the eleventh
+// attempt was answered "The watch has no notification with that id" - the
+// watch had carried it out before the first timeout and simply never said
+// so - and both storms ended with the watch refusing even the session
+// handshake, which is the retries doing damage rather than catching up.
+//
+// Silence means something different here than it does for a send. A
+// notification nobody saw is a notification lost; a removal nobody
+// confirmed has most likely already happened, and the worst case is a
+// stale alert the wearer dismisses on the watch.
+const int kMaxRemovalAttempts = 2;
+
 // How many times one thing is offered to the watch before giving up on it.
 // A failure used to end the attempt, which cost a real notification every
 // time the link went quiet for ten seconds - and cost more than that for a
@@ -419,10 +433,17 @@ bool NotifierDaemon::requeue(const Pending &pending, const QString &what)
 {
     Pending again = pending;
     again.attempts = pending.attempts + 1;
-    if (again.attempts >= kMaxAttempts) {
+    const int limit = pending.kind == Pending::Remove ? kMaxRemovalAttempts : kMaxAttempts;
+    if (again.attempts >= limit) {
         qWarning().noquote() << QStringLiteral("giving up on %1 after %2 attempts")
                                         .arg(what)
                                         .arg(again.attempts);
+        if (pending.kind == Pending::Remove) {
+            // Worth saying out loud rather than leaving as a bare "giving
+            // up": the alert is probably already off the watch, and if it
+            // is not, it goes when the wearer dismisses it there.
+            qInfo() << "the watch may still be showing it; dismiss it there if so";
+        }
         return false;
     }
     qInfo().noquote() << QStringLiteral("retrying %1, attempt %2").arg(what).arg(again.attempts + 1);

@@ -1997,3 +1997,31 @@ current in-flight id. It is what made this visible, and nothing else in this
 class was observable from outside: a capture proves what the watch sent, not
 what we did with it. Bulk chunks are excluded — they are the one
 high-volume case and are counted elsewhere.
+
+## A removal gets two attempts, not sixteen (2026-10-16)
+
+Measured twice, in this project's own daemon log:
+
+- A removal timed out ten times in a row, and the eleventh attempt was
+  answered **"The watch has no notification with that id"**. The watch had
+  carried the removal out before the first timeout and simply never said
+  so.
+- Both storms ended with the watch refusing even the session handshake
+  (`TYPE=0x13` unacknowledged), after which nothing reached it until the
+  link recovered. The retries were doing damage, not catching up.
+
+The second one is why this matters beyond tidiness: hammering the removal
+path wedges the Whiteboard channel for *everything*, including the sends
+that do matter.
+
+So `kMaxRemovalAttempts` is 2 where `kMaxAttempts` stays 16, because
+silence means different things for the two. A notification nobody saw is a
+notification lost, and worth asking about again. A removal nobody confirmed
+has most likely already happened, and its worst case is a stale alert the
+wearer dismisses on the watch - which the log now says, rather than leaving
+a bare "giving up".
+
+Related, same day: the daemon lets go of the watch between attempts instead
+of pumping straight back into it. It used to hold the session for the whole
+storm - eighty seconds once - which is exactly the time the application
+spends waiting for its turn.

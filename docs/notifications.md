@@ -2034,6 +2034,11 @@ out, and within a minute the watch stopped acknowledging the session
 handshake. The last of them left the **watch frozen** - black screen, no
 button response.
 
+**How the watch came back**, since this is a state this software can put it
+in and the recovery is not obvious: on the charger, with the upper and
+lower buttons held down together for a moment. Measured on a Race, not
+taken from a manual.
+
 The counts say it was not the rate of attaching, which was the first
 suspicion: 15 October had 42 sessions, one removal failure and no wedges;
 16 October had 34 sessions, 28 removal failures and 7 wedges. Capping the

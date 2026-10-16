@@ -2224,8 +2224,37 @@ uninitialised memory in the official app's frame - its own label count
 reads as 1.1 billion - so the watch does not read it for this form, and
 imitating someone else's stale stack would be imitating noise.
 
-**If the watch takes this**, the crash was our constants, the ring gets its
-icon and heading back, and `raceCallProfile()` is the answer. **If it
-freezes again**, the constants were not it either: category 0 is what the
-watch demonstrably survives, and going back is `incomingCall()`'s category
-line plus restoring its label.
+**The watch took it.** Sent from the pairing page's notification test with
+the category set to Incoming call: phone icon, "Saapuva puhelu", the name,
+and the watch carried on working. Then with a real call, end to end - the
+alert arrived, and it **disappeared by itself** when the call ended, which
+is also the confirmation that dropping the ring's removal was right: the
+watch clears a call alert without being asked, exactly as the official app
+leaves it to.
+
+So the answer, after a day of wrong ones: **the crash was our constants,
+not the category.** Category 1 selects a firmware path that reads the
+prologue and the words at +24 and +28; ours came from captures older than
+this firmware, and that path read them. Every other category tolerates the
+old values, which is why nothing else ever crashed.
+
+### What the missed call says about those words
+
+The same capture's missed call, measured the same way:
+
+| | prologue | +24 | +28 | labels |
+|---|---|---|---|---|
+| ordinary notification (ours) | `01 1f 01 21` | 0 | 1 | one |
+| official missed call, category 2 | `01 1f 01 22` | 0 | 1 | one |
+| official incoming call, category 1 | `01 3b 01 00` | `00 39 00 00` | 4 | none |
+
+So the prologue is **not** a per-device constant, which is what this file
+used to assume: it varies by what the notification is. The official missed
+call differs from our ordinary notification in the prologue's last byte
+alone - 0x22 against 0x21 - and our category-2 notifications have been
+arriving all day without trouble, so that byte is not load-bearing the way
+the category-1 words are.
+
+Nothing is changed for category 2 on the strength of one byte and no
+symptom. It is written down because the next person to wonder what those
+words are should start here.

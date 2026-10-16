@@ -171,9 +171,10 @@ Ancs::Notification incomingCall(const std::string &caller, const std::string &nu
     // from captures older than this firmware. Ancs::encodeAdd() swaps in
     // raceCallProfile(), which replays what the official app sends.
     //
-    // **This is the experiment**, not a settled answer. If the watch
-    // freezes again the constants were not it either, and category 0 -
-    // which it demonstrably survives - is where this belongs.
+    // Confirmed on the watch the same evening, from the notification test
+    // and then with a real call: phone icon, "Saapuva puhelu", the name,
+    // the alert clearing itself when the call ended, and the watch still
+    // working afterwards. The crash was the constants, not the category.
     out.categoryId = Ancs::CategoryIncomingCall;
     out.date = nowSeconds;
     out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,

@@ -91,7 +91,13 @@ const Profile &baroProfile();
 // the watch three times on 2026-10-16, and the same watch takes the
 // official app's category-1 notification without complaint. The category
 // selects a path in the firmware that reads these words; the ordinary
-// values are from captures older than this firmware.
+// values are from captures older than this firmware. **Confirmed**: with
+// these three replayed, the same watch shows the call and keeps working.
+//
+// The prologue is therefore not a per-device constant, which this file
+// used to assume. The official app's missed call carries `01 1f 01 22`
+// where an ordinary notification has `01 1f 01 21`, so it varies by what
+// the notification is - see docs/notifications.md.
 //
 // Everything from +40 onward in the official frame is uninitialised memory
 // - its own label count reads as 1.1 billion - so the watch demonstrably

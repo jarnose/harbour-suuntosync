@@ -2044,6 +2044,7 @@ AppController::WatchSession AppController::currentWatchSession()
         QTimer::singleShot(0, this, [this]() { releaseIdleWatchSession(); });
     });
     m_watchSession = session;
+    m_watchSessionHeld.start();
     return session;
 }
 
@@ -2056,6 +2057,21 @@ void AppController::releaseIdleWatchSession()
         return;
     if (!m_whiteboardReady)
         return;
+
+    // How long the watch was held, beside the line that says it was taken.
+    // Without this, working out that a session had leaked took the daemon's
+    // log, this log, the lock file and the age of the app's own process -
+    // and the one number that would have said so immediately was how long
+    // the hold had lasted. An operation is hundreds of milliseconds; a leak
+    // is however long the app has been open.
+    if (m_watchSessionHeld.isValid()) {
+        const QString line = QStringLiteral("watch session released after %1 ms")
+                .arg(m_watchSessionHeld.elapsed());
+        qWarning().noquote() << line;
+        appendProbeLog(line);
+        m_watchSessionHeld.invalidate();
+    }
+
     m_whiteboardClient->detach();
     releaseWatchLink();
 }

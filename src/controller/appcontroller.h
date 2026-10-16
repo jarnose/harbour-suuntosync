@@ -825,6 +825,9 @@ private:
     // of the app, and a guess about it is exactly the kind that would never
     // be checked.
     QElapsedTimer m_watchAttachTimer;
+    // How long the current session has been held, so the log says that as
+    // well as how long it took to get - see releaseIdleWatchSession().
+    QElapsedTimer m_watchSessionHeld;
     // The operations whose span is a member flag rather than one chain of
     // lambdas - a sync walks through several member functions, and its
     // in-progress flag already has correct clear-on-every-exit-path

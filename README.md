@@ -207,6 +207,14 @@ Confirmed on real hardware, not just in tests:
   a transfer blocks a notification now, and that wait is seconds, because
   Whiteboard is strictly one request at a time and nothing can change that.
 
+  The app logs both when it takes the watch and how long it held it, beside
+  the daemon's own log. That is not decoration: the one bug this design has
+  had so far was a session held in a member variable that nothing was
+  obliged to release, so opening the settings page took the watch for the
+  rest of the run — and working that out took the daemon's log, the app's
+  log, the lock file and the age of the app's own process, when the hold
+  time alone would have said it. An operation is hundreds of milliseconds.
+
   **Both watch models take one.** Their requests differ by exactly five
   constants, which are per-firmware metadata rather than protocol — the same
   kind of difference as the SBEM descriptor ids — and both sets were

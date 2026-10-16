@@ -2095,6 +2095,14 @@ category, so the alert no longer announces itself as a call - the caller's
 name is the title and the number the line under it, which is what it
 carried anyway.
 
+**Confirmed the same evening.** With the ring going out as category 0 the
+watch took it and **did not crash** - the first clean confirmation of the
+day. The alert now reads: message icon, the caller's name, the number.
+Before it was the call icon, the words "saapuva puhelu" written by the
+watch itself, and the name. So the diagnosis holds in both directions: one
+byte, category 1, is the difference between a notification and a frozen
+watch, and the heading and icon are what the category buys.
+
 **What would reopen it:** a capture of the official app sending an incoming
 call. If it sends category 1 and the watch takes it, something else in our
 frame is wrong and this workaround is hiding it. If it does not send

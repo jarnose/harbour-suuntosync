@@ -2198,3 +2198,34 @@ takes it, the crash was our constants and not the category, and the ring
 can have its icon and heading back. If it freezes, the constants are not
 it either and the category-0 workaround is the right place to stay. The
 cost of being wrong is a watch that needs the charger and both buttons.
+
+### The experiment: category 1 with the official app's own constants
+
+Set up by building our frame for the same call the capture holds and
+diffing it against the wire. With `raceCallProfile()` and no label, the two
+are **102 bytes each and byte-identical up to +43** - every field the watch
+can plausibly read now matches:
+
+| | before | now |
+|---|---|---|
+| prologue | `01 1f 01 21` | `01 3b 01 00` |
+| word at +24 | `00 00 00 00` | `00 39 00 00` |
+| word at +28 | `01 00 00 00` | `04 00 00 00` |
+| labels | one | none |
+| length | 0x65 | 0x64, as the official frame |
+
+The last one needed a change of its own: the pool was padded to a
+four-byte boundary for the label array even when there was no label, which
+made the structure one byte longer than the official app's for the same
+strings. The padding is now only emitted when there is an array to align.
+
+From +44 onward the two still differ, and deliberately: that region is
+uninitialised memory in the official app's frame - its own label count
+reads as 1.1 billion - so the watch does not read it for this form, and
+imitating someone else's stale stack would be imitating noise.
+
+**If the watch takes this**, the crash was our constants, the ring gets its
+icon and heading back, and `raceCallProfile()` is the answer. **If it
+freezes again**, the constants were not it either: category 0 is what the
+watch demonstrably survives, and going back is `incomingCall()`'s category
+line plus restoring its label.

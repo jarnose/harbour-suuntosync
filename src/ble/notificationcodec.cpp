@@ -54,9 +54,16 @@ std::vector<uint8_t> encodeStructureBody(const Notification &n, const Profile &p
     const uint32_t messageOffset = kFixedPartSize + static_cast<uint32_t>(pool.size());
     appendString(pool, n.message);
 
-    // The label array is four-byte aligned relative to the body's start.
-    while ((kFixedPartSize + pool.size()) % 4 != 0)
-        pool.push_back(0);
+    // The label array is four-byte aligned relative to the body's start -
+    // but only when there is one. With no labels the padding is a byte
+    // nobody reads that lengthens the structure, and the official app's
+    // own label-less call does not have it: its length comes out one less
+    // than ours did for the same strings. For an experiment in imitating
+    // that frame exactly, one byte of difference is one variable too many.
+    if (!n.labels.empty()) {
+        while ((kFixedPartSize + pool.size()) % 4 != 0)
+            pool.push_back(0);
+    }
 
     const uint32_t labelArrayOffset = kFixedPartSize + static_cast<uint32_t>(pool.size());
     const size_t labelArrayAt = pool.size();
@@ -99,7 +106,7 @@ std::vector<uint8_t> encodeStructureBody(const Notification &n, const Profile &p
     appendU32(body, appIdOffset);
     appendU32(body, 1);
     appendU32(body, titleOffset);
-    appendU32(body, 0);
+    appendU32(body, profile.wordAt24);
     appendU32(body, profile.wordAt28);
     appendU32(body, 1);
     appendU32(body, messageOffset);
@@ -155,13 +162,21 @@ size_t encodedSize(const Notification &notification)
 
 const Profile &raceProfile()
 {
-    static const Profile profile = { 0x09, 0x6a, { 0x01, 0x1f, 0x01, 0x21 }, 1, 42 };
+    static const Profile profile = { 0x09, 0x6a, { 0x01, 0x1f, 0x01, 0x21 }, 0, 1, 42 };
     return profile;
 }
 
 const Profile &baroProfile()
 {
-    static const Profile profile = { 0x07, 0x00, { 0x01, 0x00, 0x00, 0x00 }, 0, 0 };
+    static const Profile profile = { 0x07, 0x00, { 0x01, 0x00, 0x00, 0x00 }, 0, 0, 0 };
+    return profile;
+}
+
+const Profile &raceCallProfile()
+{
+    // Verbatim from the official app's own incoming call - see the header.
+    static const Profile profile = { 0x09, 0x6a, { 0x01, 0x3b, 0x01, 0x00 },
+                                      0x00003900, 4, 42 };
     return profile;
 }
 
@@ -234,6 +249,13 @@ std::vector<uint8_t> encodeAdd(uint16_t requestId, const std::vector<uint8_t> &a
         throw std::invalid_argument(
                 "Ancs::encodeAdd: this watch's notification layout has not been captured");
     }
+    // An incoming call on a Race carries the constants the official app
+    // uses for one. They differ from an ordinary notification's in three
+    // words, the category selects the firmware path that reads them, and
+    // the ordinary values froze this watch three times. See
+    // raceCallProfile().
+    if (notification.categoryId == CategoryIncomingCall && profile == &raceProfile())
+        profile = &raceCallProfile();
     return encodeAdd(requestId, addAckBody, notification, *profile);
 }
 

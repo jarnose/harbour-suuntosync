@@ -65,9 +65,7 @@ int main()
     checkCategory("x-nemo.messaging.voicemail-SMS", Ancs::CategoryVoicemail);
     checkCategory("x-nemo.call.missed", Ancs::CategoryMissedCall);
     checkCategory("x-nemo.call.missed.group", Ancs::CategoryMissedCall);
-    // Category 0, not 1: category 1 freezes this watch. The mapping used
-    // to be the only way to reach it from a notification.
-    checkCategory("harbour-whisperfish-call", Ancs::CategoryOther);
+    checkCategory("harbour-whisperfish-call", Ancs::CategoryIncomingCall);
 
     // Anything unrecognised, including no category at all, is Other rather
     // than a guess.
@@ -148,12 +146,12 @@ int main()
     // rather than mapped; see NotificationRouter::incomingCall.
     const Ancs::Notification ring =
             NotificationRouter::incomingCall("", "+358401234567", 0xabcdu, 1791287147);
-    // Category 1 is what this used to send, and what froze the watch on
-    // 2026-10-16 - the frame differs from an accepted one by that byte
-    // alone. Nothing may reach it until a capture of the official app
-    // sending a call says the watch can take it.
-    check(ring.categoryId == Ancs::CategoryOther,
-          "an incoming call does not go out as category 1");
+    // Category 1, which the official app also sends - and which comes
+    // with raceCallProfile()'s constants rather than an ordinary
+    // notification's. See NotificationRouter::incomingCall.
+    check(ring.categoryId == Ancs::CategoryIncomingCall,
+          "an incoming call is category 1, as the official app sends it");
+    check(ring.labels.empty(), "and carries no label, as the official app's does not");
     check(ring.title == "+358401234567",
           "with no contact for the number, the number is the title");
     check(ring.message == "Incoming call", "and the message says what it is");
@@ -174,11 +172,12 @@ int main()
           "a name with no number falls back to saying what it is");
     check(ring.date == 1791287147u, "the date is the one passed in");
     check(ring.appId == "voicecall-ui", "attributed to the application that is actually ringing");
-    // Measured on the watch, not chosen: with no labels the structure's
-    // label-array offset points past its own end and the watch refuses the
-    // frame in silence. Every captured request has one.
-    check(ring.labels.size() == 1 && ring.labels.front().text == "Dismiss",
-          "one label, like every other notification and every capture");
+    // No label on a ring, as the official app's own incoming call carries
+    // none. The comment that used to be here said a label-less frame is
+    // refused in silence, measured - and the official app's label-less
+    // call is answered 200, so what was measured was the non-response
+    // pattern rather than the label. Ordinary notifications keep theirs.
+    check(ring.labels.empty(), "no label, as the official app's call has none");
     check(!ring.modifyExisting, "it is an add");
 
     // The id has to be stable for one call and different for the next, or a

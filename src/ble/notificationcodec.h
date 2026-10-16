@@ -71,12 +71,32 @@ struct Profile
     uint8_t structureTypeLow;
     uint8_t form;
     uint8_t prologue[4];
+    // The word at +24, which every capture up to 2026-10-16 had as zero -
+    // and the official app's own incoming call does not. See
+    // raceCallProfile().
+    uint32_t wordAt24;
     uint32_t wordAt28;
     uint32_t wordAt44;
 };
 
 const Profile &raceProfile();
 const Profile &baroProfile();
+
+// The constants the official app sends **for an incoming call** on a Race,
+// read off `btsnoop_s7_call_20261016.log`: prologue 01 3b 01 00 where an
+// ordinary notification has 01 1f 01 21, 0x3900 at +24 where that is
+// otherwise zero, and 4 at +28 where it is otherwise 1.
+//
+// Why this exists at all: a ring sent with the ordinary constants froze
+// the watch three times on 2026-10-16, and the same watch takes the
+// official app's category-1 notification without complaint. The category
+// selects a path in the firmware that reads these words; the ordinary
+// values are from captures older than this firmware.
+//
+// Everything from +40 onward in the official frame is uninitialised memory
+// - its own label count reads as 1.1 billion - so the watch demonstrably
+// does not read the tail for this form, and nothing there is imitated.
+const Profile &raceCallProfile();
 
 // Picks a profile from the handle the watch gave for .../Notification/Add.
 // Its third byte is the resource's own id on that firmware - 0x04 on a

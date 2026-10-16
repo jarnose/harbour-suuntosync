@@ -22,9 +22,7 @@ const Mapping kMappings[] = {
     { "im.received", Ancs::CategoryEmail },
     // Whisperfish registers its own categories, and its call one is the
     // only route to IncomingCall that needs no SIM.
-    // Category 0, not 1, for the same reason incomingCall() uses it: a
-    // ring sent as category 1 freezes this watch. See the comment there.
-    { "harbour-whisperfish-call", Ancs::CategoryOther },
+    { "harbour-whisperfish-call", Ancs::CategoryIncomingCall },
     { "harbour-whisperfish-message", Ancs::CategoryEmail },
 };
 
@@ -165,24 +163,18 @@ Ancs::Notification incomingCall(const std::string &caller, const std::string &nu
         out.title = blank(number) ? "Unknown caller" : number;
         out.message = "Incoming call";
     }
-    // **Deliberately not CategoryIncomingCall.** A ring sent as category 1
-    // froze this watch repeatedly on 2026-10-16 - black screen, no button
-    // response, recoverable only on the charger with both buttons held -
-    // and the frame that does it is one byte away from one the watch has
-    // accepted hundreds of times: 138 bytes, identical except byte 4, the
-    // category, 0x00 against 0x01. Nothing else in it changes.
+    // Category 1, as the official app sends it - confirmed on the wire in
+    // btsnoop_s7_call_20261016.log, where this watch takes one. What froze
+    // it three times on 2026-10-16 was almost certainly not the category
+    // but the three words an ordinary notification carries beside it: the
+    // category selects the firmware path that reads them, and ours came
+    // from captures older than this firmware. Ancs::encodeAdd() swaps in
+    // raceCallProfile(), which replays what the official app sends.
     //
-    // No capture of the official app contains an incoming call, in any of
-    // the three taken, so there is no evidence it ever sends category 1 at
-    // all - and the firmware's handling of a category its own app may
-    // never use is the obvious suspect for a crash.
-    //
-    // The cost of this workaround is that the watch writes its own heading
-    // from the category, so the alert no longer says it is a call: the
-    // caller's name is the title and the number (or "Incoming call") the
-    // line under it, which is what the message already carried. A frozen
-    // watch is the worse trade.
-    out.categoryId = Ancs::CategoryOther;
+    // **This is the experiment**, not a settled answer. If the watch
+    // freezes again the constants were not it either, and category 0 -
+    // which it demonstrably survives - is where this belongs.
+    out.categoryId = Ancs::CategoryIncomingCall;
     out.date = nowSeconds;
     out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,
                                                   out.appId);
@@ -200,9 +192,14 @@ Ancs::Notification incomingCall(const std::string &caller, const std::string &nu
     //
     // The reasoning was also inconsistent: that uncertainty applies to every
     // notification this sends, and they all carry the label.
-    Ancs::Label dismiss;
-    dismiss.text = "Dismiss";
-    out.labels.push_back(dismiss);
+    // **No label on a ring**, the other way this imitates the official
+    // app: its incoming call carries none. The paragraph above argued a
+    // label was needed because a label-less frame was refused three times,
+    // and docs/notifications.md later records that the official app's own
+    // label-less call is answered 200 - so those refusals were the
+    // non-response pattern, not the label. Everything from +40 onward in
+    // its frame is uninitialised memory, the label count included, so the
+    // watch does not read the label array for this form at all.
 
     Ancs::truncateToFit(out);
     return out;

@@ -2113,3 +2113,30 @@ They all carry `Bluez::kCallTimeoutMs` now. A healthy call answers in
 milliseconds; the chunk loop gives up on the first failure, so a dead watch
 costs one timeout rather than eight hundred. Making them asynchronous is
 the real answer and a much larger change; this bounds the damage.
+
+### "Write acquired", and the end of the MTU probe (2026-10-16)
+
+Every write started coming back **"Write acquired"**: BlueZ had marked the
+characteristic's write channel acquired and refused `WriteValue` for the
+rest of the connection. Disconnecting and reconnecting the watch clears it;
+nothing else does.
+
+We did that to ourselves. `learnWriteChunkSize()` called `AcquireWrite` to
+learn the real ATT MTU - 127, so 124-byte writes instead of the 20-byte
+floor, which is the difference between seconds and minutes on a
+hundred-kilobyte plugin. The comment there said the descriptor it hands
+back closes as soon as the reply goes out of scope, "so asking costs
+nothing", and `mdswirecodec.h` has carried "can AcquireWrite wedge BlueZ"
+as an open question since the day it was written.
+
+It can. A call that fails or times out is the likely mechanism: BlueZ
+processes the acquisition and writes the descriptor into a reply nobody
+reads, so nothing closes it. The watch froze several times today, which is
+exactly the condition that produces a failed call.
+
+So the probe is gone and the floor is the value again. It costs speed on a
+large write and nothing on the rest, because ordinary use is reads and
+small writes. Bringing it back needs either a way to release the channel -
+BlueZ offers none on `GattCharacteristic1`, the fd closing is the release -
+or a way to read the MTU that acquires nothing, which this BlueZ does not
+have.

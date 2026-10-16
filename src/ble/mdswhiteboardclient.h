@@ -450,10 +450,6 @@ private:
     // than assumed - see learnWriteChunkSize(). 20 until a session says
     // otherwise, which is the BLE-mandated minimum and always safe.
     int m_writeChunkSize = 20;
-    // Which device the chunk size above was measured on, so a session that
-    // reattaches to the same watch does not ask BlueZ again. Cleared by a
-    // disconnect, not by detach() - see learnWriteChunkSize().
-    QString m_mtuDeviceAddress;
 
     Mds::Decoder m_decoder;
     uint16_t m_nextRequestId = 1;

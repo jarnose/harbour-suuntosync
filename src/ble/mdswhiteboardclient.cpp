@@ -171,7 +171,10 @@ void MdsWhiteboardClient::detach()
 
 void MdsWhiteboardClient::forgetConnection()
 {
-    m_mtuDeviceAddress.clear();
+    // Nothing per-connection is cached any more - the MTU probe that
+    // needed it is gone, see learnWriteChunkSize() - but the hook stays:
+    // this is where anything learned about a connection rather than a
+    // session belongs.
 }
 
 void MdsWhiteboardClient::onDevicePropertiesChanged(const QString &interface,
@@ -398,54 +401,32 @@ constexpr int kMinWriteChunkSize = 20;
 
 void MdsWhiteboardClient::learnWriteChunkSize()
 {
-    if (m_writeCharPath.isEmpty()) {
-        m_writeChunkSize = kMinWriteChunkSize;
-        return;
-    }
-
-    // The MTU belongs to the *connection*, not to the session: nothing
-    // about attaching or detaching renegotiates it. So it is learned once
-    // per device and kept across sessions, which matters now that a
-    // session lasts one operation rather than the whole run of the app -
-    // asking again on every attach would mean an AcquireWrite every time
-    // somebody taps something, and whether that call can wedge BlueZ is
-    // the one thing about it this project has never established.
-    if (m_mtuDeviceAddress == m_deviceObjectPath && m_writeChunkSize > kMinWriteChunkSize)
-        return;
-
-    m_writeChunkSize = kMinWriteChunkSize;
-
-    // This client wrote 20 bytes at a time from the day it was written, on
-    // the reasoning that BlueZ would not negotiate more on its own. Measured
-    // on a Jolla Phone 2026 talking to a Race, that is wrong: the MTU is
-    // 127, the same value the captured Android session had, and the watch's
-    // own notifications already arrive 60 bytes at a time. At 20 bytes a
-    // 100 kB watch face would take some five thousand writes.
-    //
-    // There is no MTU property on GattCharacteristic1 in this BlueZ, and
-    // AcquireWrite is not even listed in the characteristic's introspection
-    // - but it works, and its reply's second argument is the MTU. The
+    // **AcquireWrite is no longer asked for.** It was, to learn the real
+    // ATT MTU - 127 on this phone and watch, so 124-byte writes instead of
+    // 20, which is the difference between seconds and minutes on a
+    // hundred-kilobyte plugin. The comment that used to live here said the
     // descriptor it hands back is closed as soon as the reply goes out of
-    // scope, and WriteAcquired reads false again afterwards, so asking costs
-    // nothing: the channel is not held and WriteValue keeps working.
-    QDBusInterface writeChar(kBluezService, m_writeCharPath, kCharInterface,
-                              QDBusConnection::systemBus());
-    writeChar.setTimeout(Bluez::kCallTimeoutMs);
-    const QDBusMessage reply = writeChar.call(QStringLiteral("AcquireWrite"),
-                                               QVariant::fromValue(QVariantMap()));
-    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2)
-        return;
-
-    bool parsed = false;
-    const int mtu = reply.arguments().at(1).toInt(&parsed);
-    if (!parsed || mtu <= 3)
-        return;
-    // WriteValue's payload is the MTU less the 3-byte ATT header.
-    m_writeChunkSize = std::max(kMinWriteChunkSize, mtu - 3);
-    m_mtuDeviceAddress = m_deviceObjectPath;
-    // Once per connection, and it is the one number that decides whether a
-    // large write takes seconds or minutes.
-    qWarning() << "ATT MTU" << mtu << "- writing" << m_writeChunkSize << "bytes at a time";
+    // scope and the channel is therefore not held, "so asking costs
+    // nothing". That was measured once, on a watch that answered.
+    //
+    // On 2026-10-16 the watch stopped answering several times, and
+    // afterwards every write came back **"Write acquired"**: BlueZ had
+    // marked the write channel acquired and refused WriteValue for the rest
+    // of the connection. A call that fails or times out is the likely
+    // mechanism - BlueZ can process the acquisition and write the
+    // descriptor into a reply nobody ever reads, so nothing closes it - and
+    // this file has carried the question "can AcquireWrite wedge BlueZ"
+    // as an open risk since the day it was written. It can.
+    //
+    // So the floor is the value again. It costs speed on a large write and
+    // nothing on everything else, because ordinary use is reads and small
+    // writes; and a slow install is better than a watch that cannot be
+    // written to at all until it is disconnected and reconnected.
+    //
+    // Anything that brings it back needs a way to release the channel - or
+    // a way to read the MTU that does not acquire anything, which this
+    // BlueZ does not offer on GattCharacteristic1.
+    m_writeChunkSize = kMinWriteChunkSize;
 }
 
 bool MdsWhiteboardClient::writeChunked(const std::vector<uint8_t> &framed, QString *error)

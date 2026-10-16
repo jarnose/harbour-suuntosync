@@ -2025,3 +2025,34 @@ Related, same day: the daemon lets go of the watch between attempts instead
 of pumping straight back into it. It used to hold the session for the whole
 storm - eighty seconds once - which is exactly the time the application
 spends waiting for its turn.
+
+## The ring is no longer taken off the watch (2026-10-16)
+
+Every bad episode of 2026-10-16 began the same way, seven times out of
+seven: a call ended, the daemon sent `Del` for the ring, the request timed
+out, and within a minute the watch stopped acknowledging the session
+handshake. The last of them left the **watch frozen** - black screen, no
+button response.
+
+The counts say it was not the rate of attaching, which was the first
+suspicion: 15 October had 42 sessions, one removal failure and no wedges;
+16 October had 34 sessions, 28 removal failures and 7 wedges. Capping the
+retries at two helped the symptom and not the cause - the final cluster
+wedged the watch after exactly two attempts.
+
+**And the removal was unnecessary.** The watch clears a call alert by
+itself after a moment, which Jarno confirmed by watching the official
+Android app do the same thing: the alert lingers briefly after the call is
+hung up and then goes. So this was asking the watch to do something it had
+already undertaken to do, down a path that has never been reliable - see
+`MdsWhiteboardClient`'s own comment about having to re-register it.
+
+So `onCallEnded()` no longer queues a removal. The missed call still arrives
+as its own notification, which is the record of it; what is gone is the
+attempt to clear the transient ring.
+
+`Del` is still used where the phone dismisses an ordinary notification
+(`onClosed()`), which is a real synchronisation and is not implicated: no
+wedge today followed one. If it turns out to misbehave the same way, the
+same reasoning applies and the same question arises - whether the official
+app sends `Del` at all, which a capture would answer.

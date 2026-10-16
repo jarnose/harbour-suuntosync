@@ -368,16 +368,27 @@ void NotifierDaemon::onCallEnded(const QString &callPath)
 {
     if (m_dryRun || !m_ringing.contains(callPath))
         return;
-    Pending pending;
-    pending.queuedAtMs = QDateTime::currentMSecsSinceEpoch();
-    pending.kind = Pending::Remove;
-    pending.removeId = m_ringing.take(callPath);
+
+    // The ring is **not** taken off the watch. It used to be, and that
+    // removal is the one thing every bad episode on 2026-10-16 began with:
+    // seven times out of seven the watch stopped answering the session
+    // handshake within a minute of a Del that had timed out, and the last
+    // of those left the watch frozen with a black screen that no button
+    // would wake.
+    //
+    // It is also unnecessary, which is what settled it. The watch clears a
+    // call alert by itself after a moment - Jarno watched the official
+    // Android app do exactly the same thing, the alert lingering briefly
+    // after the call was hung up - so this was asking the watch to do
+    // something it had already undertaken to do, down a path that has
+    // never been reliable (see MdsWhiteboardClient's own comment about
+    // re-registering it).
+    //
+    // The missed call still arrives as its own notification, which is the
+    // record of it; this was only the transient ring.
+    m_ringing.remove(callPath);
     if (m_ringing.isEmpty())
         m_ringTimeout->stop();
-    if (m_queue.size() >= kMaxQueued)
-        m_queue.removeFirst();
-    m_queue.append(pending);
-    pump();
 }
 
 void NotifierDaemon::requestRead(const QString &path)

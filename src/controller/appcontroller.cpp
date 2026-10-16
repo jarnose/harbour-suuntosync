@@ -1090,6 +1090,11 @@ AppController::AppController(QObject *parent)
         }
         m_watchSessionAttaching = false;
         ++m_watchSessionAttachGeneration;
+        // A readyChanged(false) while an attach was in flight is the same
+        // story as the timeout above: nothing holds a session, so nothing
+        // will release the lock unless this does.
+        if (!ready)
+            abandonWatchSession();
         if (m_watchSessionWaiters.isEmpty())
             return;
 
@@ -2048,6 +2053,18 @@ AppController::WatchSession AppController::currentWatchSession()
     return session;
 }
 
+void AppController::abandonWatchSession()
+{
+    // Only when nothing holds one. An attach that failed while a previous
+    // session is still alive - two operations overlapping - must not pull
+    // the watch out from under the one that is working.
+    if (!m_watchSession.expired())
+        return;
+    m_whiteboardClient->detach();
+    releaseWatchLink();
+    m_watchSessionHeld.invalidate();
+}
+
 void AppController::releaseIdleWatchSession()
 {
     // Somebody took a new session between the last holder dying and this
@@ -2105,6 +2122,17 @@ void AppController::withWatchSession(
         if (!m_watchSessionAttaching || generation != m_watchSessionAttachGeneration)
             return;
         m_watchSessionAttaching = false;
+        // Let the lock go. attachWhenLinkIsFree() takes it *before* the
+        // attach, and an attach that never finishes - which is what a
+        // wedged or frozen watch produces - used to leave it held for the
+        // rest of the run: no session token is ever created, so nothing
+        // was ever destroyed and releaseIdleWatchSession() never ran. The
+        // daemon then starved, logged "the other process is using the
+        // watch" by the minute, and gave up on notifications the watch
+        // never saw. Measured with /proc/locks: the application's pid
+        // holding an FLOCK on watch-link.lock with no session of any kind
+        // in its own log.
+        abandonWatchSession();
         if (m_watchSessionWaiters.isEmpty())
             return;
         m_watchSessionWaiters.clear();

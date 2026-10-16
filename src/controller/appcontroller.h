@@ -953,6 +953,12 @@ private:
     // whiteboard client, and detaching from in there would pull the ground
     // out from under the code doing the destroying.
     void releaseIdleWatchSession();
+    // Gives up the lock and whatever half-attached state there is, for the
+    // case no session token was ever created: an attach that failed or
+    // never answered. Without it the lock is held for the rest of the run
+    // and the notification daemon starves - which is what a frozen watch
+    // did on 2026-10-16.
+    void abandonWatchSession();
     void setStoreBusy(bool busy);
     // Adding and removing differ by one call, so they share the rest: the
     // context, the item lookup, the error wording and the reload.

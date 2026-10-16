@@ -57,6 +57,23 @@
 // something is *obliged* to clear it, which is why the two syncs pass it
 // as a parameter or tie it to a flag that clears on every exit.
 //
+// **The second way it has gone wrong**, the same day as the first: the
+// application takes the lock *before* it attaches, and an attach that
+// never finishes - which is what a wedged or frozen watch produces -
+// created no session token, so nothing was ever destroyed and nothing ever
+// released the lock. The daemon starved for the rest of the run, logging
+// "the other process is using the watch" by the minute and giving up on
+// notifications the watch never saw. From the outside it looked like the
+// watch had stopped alerting; the application's own log showed no session
+// at all, because none had been created.
+//
+// Found with /proc/locks - the application's pid holding an FLOCK on this
+// file with nothing in its log to match - after two wrong guesses, one of
+// which came from `pgrep -x` failing to match the kernel's truncated
+// process name and so reporting the application as not running at all.
+// AppController::abandonWatchSession() is the fix: the failure paths let
+// the lock go, because they are the ones with no token to do it for them.
+//
 // This was not always so. The application used to attach on connect and
 // hold the session for as long as it ran, which meant "the application is
 // open" meant "notifications wait" - including while it sat in the

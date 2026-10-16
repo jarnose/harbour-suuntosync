@@ -415,7 +415,7 @@ bool NotifierDaemon::watchIsConnected()
 // pump offers it again. At the head rather than the tail because order is
 // load-bearing: a removal that overtook its own arrival would take nothing
 // off the watch and then leave the notification on it for ever.
-void NotifierDaemon::requeue(const Pending &pending, const QString &what)
+bool NotifierDaemon::requeue(const Pending &pending, const QString &what)
 {
     Pending again = pending;
     again.attempts = pending.attempts + 1;
@@ -423,13 +423,14 @@ void NotifierDaemon::requeue(const Pending &pending, const QString &what)
         qWarning().noquote() << QStringLiteral("giving up on %1 after %2 attempts")
                                         .arg(what)
                                         .arg(again.attempts);
-        return;
+        return false;
     }
     qInfo().noquote() << QStringLiteral("retrying %1, attempt %2").arg(what).arg(again.attempts + 1);
     // The age check in pump() is the other bound, and the one that matters:
     // queuedAtMs is deliberately not refreshed here, so retrying cannot keep
     // something alive past the two minutes it is worth showing for.
     m_queue.prepend(again);
+    return true;
 }
 
 void NotifierDaemon::pump()
@@ -556,8 +557,21 @@ void NotifierDaemon::pump()
             // watch's answer - and the one that matters, "no notification
             // with that id", means it is already gone, which is what the
             // removal wanted.
-            if (!ok && !answered)
-                requeue(pending, QStringLiteral("removal of %1").arg(pending.removeId));
+            if (!ok && !answered
+                    && requeue(pending,
+                                QStringLiteral("removal of %1").arg(pending.removeId))) {
+                // Let the watch go between attempts rather than pumping
+                // straight back into it. Holding it across a retry storm
+                // kept it for as long as the attempts lasted - measured at
+                // eighty seconds once, ten failures of a removal the watch
+                // had already done - and that is exactly the time the
+                // application spends waiting for its own turn. The retry
+                // timer brings this back in five seconds with the lock free
+                // in between.
+                letGo();
+                m_retry->start();
+                return;
+            }
             pump();
         });
     } else {
@@ -571,9 +585,12 @@ void NotifierDaemon::pump()
                 qInfo() << "the watch took notification" << pending.add.notificationId;
             } else {
                 qWarning() << "sending failed:" << failure;
-                if (!answered) {
-                    requeue(pending, QStringLiteral("notification %1")
-                                             .arg(pending.add.notificationId));
+                if (!answered
+                        && requeue(pending, QStringLiteral("notification %1")
+                                                    .arg(pending.add.notificationId))) {
+                    letGo(); // see the removal path above
+                    m_retry->start();
+                    return;
                 }
             }
             pump();

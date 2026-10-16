@@ -102,7 +102,10 @@ private:
     // Pending &` in a parameter list would declare a *different* Pending at
     // namespace scope rather than referring to this one, and the definition
     // would then match nothing.
-    void requeue(const Pending &pending, const QString &what);
+    // True when the work went back on the queue, false when it has been
+    // offered enough times. The caller lets the watch go on a true: a
+    // retry that keeps the session holds it for the whole storm.
+    bool requeue(const Pending &pending, const QString &what);
 
     void reloadWatch();
 

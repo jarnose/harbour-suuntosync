@@ -755,7 +755,17 @@ private:
     // session and corrupts the framing. That showed up as "the watch didn't
     // acknowledge the session handshake", which is a true statement about a
     // self-inflicted problem.
-    void attachWhenLinkIsFree(const QString &objectPath, int attemptsLeft = 20);
+    // 250 ms apart, so the default is half a minute of waiting before the
+    // lock is ignored. It was five seconds, which was right when the
+    // application attached once per run and wrong as soon as it attached
+    // per operation: the daemon holds the watch for about a second per
+    // notification and longer when one is being retried, so five seconds
+    // ran out routinely - and barging in makes both processes notifying
+    // clients, which doubles every reply and wedges whichever handshake or
+    // paged read is in flight. Measured once at eighteen seconds for an
+    // attach that should take a tenth of that. Half a minute still covers
+    // the case the barge-in exists for, a daemon that is genuinely stuck.
+    void attachWhenLinkIsFree(const QString &objectPath, int attemptsLeft = 120);
     void releaseWatchLink();
 
     TokenVault *m_tokenVault;

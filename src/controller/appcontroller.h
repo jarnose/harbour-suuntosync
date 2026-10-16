@@ -834,9 +834,13 @@ private:
     WatchSession m_suuntoPlusSession;
     WatchSession m_storeSession;
     WatchSession m_gpsSession;
-    // The developer probes and the watch-settings reads: one at a time,
-    // each guarded by an in-flight flag that clears on every exit.
-    WatchSession m_probeSession;
+    // There is deliberately no session member for the probes and the
+    // watch-settings reads. There was one, assigned at the start of each
+    // and released where their in-flight flag cleared - and two of them
+    // have no flag, so opening the settings page took the watch and never
+    // gave it back, which blocked notifications for the rest of the run.
+    // A session belongs in the callback that needs it: a capture cannot be
+    // forgotten on a path nobody thought about.
     // One cloud FIT export at a time; it is a whole file over the network.
     bool m_fitExportInProgress = false;
     // The last refresh's answers. The library as the cloud gave it, and the

@@ -43,6 +43,20 @@
 // notifications. The one-off half second is the GATT object enumeration
 // being cold.
 //
+// **One way this has already gone wrong**, since the shape of the mistake
+// is the reusable part: the first version kept a session in a member
+// variable for the developer probes and the watch-settings reads, released
+// where their in-flight flag cleared. Two of those have no in-flight flag,
+// so opening the settings page - which reads the watch's notification
+// switch - took the watch and never gave it back, and notifications
+// stopped arriving for the rest of the run. The daemon's log said so
+// plainly ("waiting for the watch: the other process is using the watch",
+// for minutes) while the application looked perfectly healthy. A session
+// belongs in the callback that needs it, where the capture cannot be
+// forgotten on a path nobody thought about; a member only works where
+// something is *obliged* to clear it, which is why the two syncs pass it
+// as a parameter or tie it to a flag that clears on every exit.
+//
 // This was not always so. The application used to attach on connect and
 // hold the session for as long as it ran, which meant "the application is
 // open" meant "notifications wait" - including while it sat in the

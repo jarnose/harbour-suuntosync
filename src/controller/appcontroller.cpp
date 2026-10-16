@@ -1360,16 +1360,14 @@ QString variantFrom(const std::vector<std::string> &capabilities)
 void AppController::testDeleteZoneSense()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_whiteboardTestInFlight)
             return;
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->fetchInstallLocation(
-                [this](bool ok, const QString &location, const QString &error) {
+                [this, session](bool ok, const QString &location, const QString &error) {
             if (!ok) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("Could not ask the watch where plugins go: %1")
                                                    .arg(error));
                 return;
@@ -1379,18 +1377,16 @@ void AppController::testDeleteZoneSense()
             // and there is no .zip left in the directory at all.
             const QString target = location + QStringLiteral("/zzaeroen.fea");
             m_whiteboardClient->deleteFile(target,
-                    [this, location, target](bool delOk, const QString &delError) {
+                    [this, session, location, target](bool delOk, const QString &delError) {
                 if (!delOk) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     emit whiteboardTestResult(delError);
                     return;
                 }
                 m_whiteboardClient->listDirectory(location,
-                        [this, target](bool listOk, const std::vector<uint8_t> &body,
+                        [this, session, target](bool listOk, const std::vector<uint8_t> &body,
                                         const QString &listError) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     if (!listOk) {
                         emit whiteboardTestResult(tr("Deleted %1, but listing failed: %2")
                                                            .arg(target, listError));
@@ -1413,7 +1409,6 @@ void AppController::testDeleteZoneSense()
 void AppController::testListZappDirectory()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_whiteboardTestInFlight)
             return;
 
@@ -1421,19 +1416,17 @@ void AppController::testListZappDirectory()
         // Ask the watch where plugins go rather than assuming the prefix, then
         // list exactly that.
         m_whiteboardClient->fetchInstallLocation(
-                [this](bool ok, const QString &location, const QString &error) {
+                [this, session](bool ok, const QString &location, const QString &error) {
             if (!ok) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("Could not ask the watch where plugins go: %1")
                                                    .arg(error));
                 return;
             }
             m_whiteboardClient->listDirectory(location,
-                    [this, location](bool listOk, const std::vector<uint8_t> &body,
+                    [this, session, location](bool listOk, const std::vector<uint8_t> &body,
                                       const QString &listError) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 if (!listOk) {
                     emit whiteboardTestResult(listError);
                     return;
@@ -1468,7 +1461,6 @@ void AppController::testListZappDirectory()
 void AppController::testInstallPlugin()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (!m_cloudAccount.isSignedIn()) {
             emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
             return;
@@ -1478,10 +1470,9 @@ void AppController::testInstallPlugin()
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->fetchCapabilities(
-                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
             if (!ok) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
                 return;
             }
@@ -1490,11 +1481,10 @@ void AppController::testInstallPlugin()
             const QString joined = QString::fromStdString(Capabilities::join(caps));
 
             m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-                    [this, variant, joined](bool secretOk, const QByteArray &data,
+                    [this, session, variant, joined](bool secretOk, const QByteArray &data,
                                              const QString &secretError) {
                 if (!secretOk) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     emit whiteboardTestResult(tr("Could not read the session key: %1")
                                                        .arg(secretError));
                     return;
@@ -1502,13 +1492,12 @@ void AppController::testInstallPlugin()
                 const QString key = QString::fromUtf8(data);
                 const QString wanted = QStringLiteral("zzaero01");
                 m_cloudClient->listSuuntoPlusFeatures(key, variant, joined,
-                        [this, key, joined, wanted](
+                        [this, session, key, joined, wanted](
                                 bool listOk,
                                 const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
                                 const QString &listError) {
                     if (!listOk) {
                         m_whiteboardTestInFlight = false;
-                        m_probeSession.reset();
                         emit whiteboardTestResult(tr("Library listing failed: %1").arg(listError));
                         return;
                     }
@@ -1519,7 +1508,6 @@ void AppController::testInstallPlugin()
                     }
                     if (target.id.isEmpty()) {
                         m_whiteboardTestInFlight = false;
-                        m_probeSession.reset();
                         emit whiteboardTestResult(tr("%1 is not in the library").arg(wanted));
                         return;
                     }
@@ -1532,20 +1520,18 @@ void AppController::testInstallPlugin()
                             + QStringLiteral(".zip");
 
                     m_cloudClient->downloadSuuntoPlusPlugin(key, target.id, joined,
-                            [this, target, fileName](bool dlOk, const QByteArray &zip,
+                            [this, session, target, fileName](bool dlOk, const QByteArray &zip,
                                                       const QString &dlError) {
                         if (!dlOk) {
                             m_whiteboardTestInFlight = false;
-                            m_probeSession.reset();
                             emit whiteboardTestResult(tr("Download of %1 failed: %2")
                                                                .arg(target.id, dlError));
                             return;
                         }
                         const int size = zip.size();
                         m_whiteboardClient->installPlugin(fileName, zip, nullptr,
-                                [this, target, fileName, size](bool instOk, const QString &instError) {
+                                [this, session, target, fileName, size](bool instOk, const QString &instError) {
                             m_whiteboardTestInFlight = false;
-                            m_probeSession.reset();
                             if (!instOk) {
                                 emit whiteboardTestResult(tr("Install of %1 failed: %2")
                                                                    .arg(fileName, instError));
@@ -1570,7 +1556,6 @@ void AppController::testInstallPlugin()
 void AppController::testDownloadPlugin()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (!m_cloudAccount.isSignedIn()) {
             emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
             return;
@@ -1582,29 +1567,26 @@ void AppController::testDownloadPlugin()
         // The capability string is sent on the download too, the way the
         // official app sends it, so it has to be read first.
         m_whiteboardClient->fetchCapabilities(
-                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
             if (!ok) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
                 return;
             }
             const QString joined =
                     QString::fromStdString(Capabilities::join(Capabilities::parse(payload)));
             m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-                    [this, joined](bool secretOk, const QByteArray &data, const QString &secretError) {
+                    [this, session, joined](bool secretOk, const QByteArray &data, const QString &secretError) {
                 if (!secretOk) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     emit whiteboardTestResult(tr("Could not read the session key: %1")
                                                        .arg(secretError));
                     return;
                 }
                 const QString id = QStringLiteral("zzaero01");
                 m_cloudClient->downloadSuuntoPlusPlugin(QString::fromUtf8(data), id, joined,
-                        [this, id](bool dlOk, const QByteArray &zip, const QString &dlError) {
+                        [this, session, id](bool dlOk, const QByteArray &zip, const QString &dlError) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     if (!dlOk) {
                         emit whiteboardTestResult(tr("Download of %1 failed: %2")
                                                            .arg(id, dlError));
@@ -1624,7 +1606,6 @@ void AppController::testDownloadPlugin()
 void AppController::testSuuntoPlusLibrary()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (!m_cloudAccount.isSignedIn()) {
             emit whiteboardTestResult(tr("Sign in to the Suunto cloud first."));
             return;
@@ -1636,10 +1617,9 @@ void AppController::testSuuntoPlusLibrary()
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->fetchCapabilities(
-                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
             if (!ok) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
                 return;
             }
@@ -1647,7 +1627,6 @@ void AppController::testSuuntoPlusLibrary()
             const QString variant = variantFrom(caps);
             if (variant.isEmpty()) {
                 m_whiteboardTestInFlight = false;
-                m_probeSession.reset();
                 emit whiteboardTestResult(tr("No feat_simvariant_ in the watch's %1 "
                                               "capabilities").arg(caps.size()));
                 return;
@@ -1655,11 +1634,10 @@ void AppController::testSuuntoPlusLibrary()
             const QString joined = QString::fromStdString(Capabilities::join(caps));
 
             m_whiteboardClient->fetchPluginList(
-                    [this, variant, joined](bool listOk, const std::vector<uint8_t> &listPayload,
+                    [this, session, variant, joined](bool listOk, const std::vector<uint8_t> &listPayload,
                                              const QString &listError) {
                 if (!listOk) {
                     m_whiteboardTestInFlight = false;
-                    m_probeSession.reset();
                     emit whiteboardTestResult(tr("Plugin list read failed: %1").arg(listError));
                     return;
                 }
@@ -1668,21 +1646,19 @@ void AppController::testSuuntoPlusLibrary()
                     installed.insert(QString::fromStdString(plugin));
 
                 m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
-                        [this, variant, joined, installed](bool secretOk, const QByteArray &data,
+                        [this, session, variant, joined, installed](bool secretOk, const QByteArray &data,
                                                             const QString &secretError) {
                     if (!secretOk) {
                         m_whiteboardTestInFlight = false;
-                        m_probeSession.reset();
                         emit whiteboardTestResult(tr("Could not read the session key: %1")
                                                            .arg(secretError));
                         return;
                     }
                     m_cloudClient->listSuuntoPlusFeatures(QString::fromUtf8(data), variant, joined,
-                            [this, installed](bool cloudOk,
+                            [this, session, installed](bool cloudOk,
                                                const QVector<SuuntoCloudClient::SuuntoPlusItem> &items,
                                                const QString &cloudError) {
                         m_whiteboardTestInFlight = false;
-                        m_probeSession.reset();
                         if (!cloudOk) {
                             emit whiteboardTestResult(tr("Library listing failed: %1")
                                                                .arg(cloudError));
@@ -1720,7 +1696,6 @@ void AppController::testSuuntoPlusLibrary()
 void AppController::testPluginList()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_whiteboardTestInFlight) {
             emit whiteboardTestResult(tr("A test request is already in flight"));
             return;
@@ -1728,9 +1703,8 @@ void AppController::testPluginList()
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->fetchPluginList(
-                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
             m_whiteboardTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit whiteboardTestResult(tr("Plugin list read failed: %1").arg(error));
                 return;
@@ -1754,7 +1728,6 @@ void AppController::testPluginList()
 void AppController::testCapabilities()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_whiteboardTestInFlight) {
             emit whiteboardTestResult(tr("A test request is already in flight"));
             return;
@@ -1762,9 +1735,8 @@ void AppController::testCapabilities()
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->fetchCapabilities(
-                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
             m_whiteboardTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit whiteboardTestResult(tr("Capabilities read failed: %1").arg(error));
                 return;
@@ -1790,7 +1762,6 @@ void AppController::testCapabilities()
 void AppController::testWhiteboard()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_whiteboardTestInFlight) {
             emit whiteboardTestResult(tr("A test request is already in flight"));
             return;
@@ -1798,9 +1769,8 @@ void AppController::testWhiteboard()
 
         m_whiteboardTestInFlight = true;
         m_whiteboardClient->get(QStringLiteral("/Logbook/Entries"),
-                                 [this](bool ok, const Mds::Frame &frame, const QString &error) {
+                                 [this, session](bool ok, const Mds::Frame &frame, const QString &error) {
             m_whiteboardTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit whiteboardTestResult(tr("Request failed: %1").arg(error));
                 return;
@@ -1816,7 +1786,6 @@ void AppController::testWhiteboard()
 void AppController::testLogbookFetch(const QString &logbookId)
 {
     withWatchSession([this, logbookId](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight) {
             emit logbookTestResult(tr("A logbook fetch is already in flight"));
             return;
@@ -1829,12 +1798,11 @@ void AppController::testLogbookFetch(const QString &logbookId)
         m_logbookTestInFlight = true;
         // Same as a real sync: this watch's own field table first, or the
         // probe reports zeros for a watch that is not a Race.
-        ensureDescriptors(logbookId, [this, logbookId]() {
+        ensureDescriptors(logbookId, [this, session, logbookId]() {
         const QString path = QStringLiteral("/Logbook/byId/%1/Data").arg(logbookId);
         m_whiteboardClient->fetchLogbookData(path,
-                [this, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+                [this, session, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit logbookTestResult(tr("Fetch failed: %1").arg(error));
                 return;
@@ -1875,7 +1843,6 @@ void AppController::testLogbookFetch(const QString &logbookId)
 void AppController::testEntriesFetch()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight) {
             emit logbookTestResult(tr("A logbook fetch is already in flight"));
             return;
@@ -1895,9 +1862,8 @@ void AppController::testEntriesFetch()
         // 2026-09-22 (see the doc's "Gate: PASSED" note).
         m_logbookTestInFlight = true;
         m_whiteboardClient->fetchLogEntries(QStringLiteral("/Logbook/Entries"),
-                [this](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {
+                [this, session](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit logbookTestResult(tr("/Entries fetch failed: %1").arg(error));
                 return;
@@ -1917,7 +1883,6 @@ void AppController::testEntriesFetch()
 void AppController::testDescriptorsFetch(const QString &logbookId)
 {
     withWatchSession([this, logbookId](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight || m_workoutSyncInProgress) {
             emit logbookTestResult(tr("Another fetch is already in progress"));
             return;
@@ -1926,9 +1891,8 @@ void AppController::testDescriptorsFetch(const QString &logbookId)
         m_logbookTestInFlight = true;
         const QString path = QStringLiteral("/Logbook/byId/%1/Descriptors").arg(logbookId);
         m_whiteboardClient->fetchSummary(path,
-                [this, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+                [this, session, logbookId](bool ok, const std::vector<uint8_t> &data, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit logbookTestResult(tr("Descriptors fetch failed: %1").arg(error));
                 return;
@@ -1965,7 +1929,6 @@ void AppController::testNotification(const QString &title, const QString &messag
                                      int categoryId)
 {
     withWatchSession([this, title, message, categoryId](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight || m_workoutSyncInProgress) {
             emit logbookTestResult(tr("Another fetch is already in progress"));
             return;
@@ -2002,9 +1965,8 @@ void AppController::testNotification(const QString &title, const QString &messag
                 // `answered` is for the daemon, which retries a watch that said
                 // nothing. This is a button somebody pressed: it reports what
                 // happened once and does not try again on their behalf.
-                [this, trimmed](bool ok, bool, const QString &error) {
+                [this, session, trimmed](bool ok, bool, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit logbookTestResult(error);
                 return;
@@ -2019,7 +1981,6 @@ void AppController::testNotification(const QString &title, const QString &messag
 void AppController::testNotificationRemove()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_lastNotificationId == 0) {
             emit logbookTestResult(tr("Nothing has been sent from here yet"));
             return;
@@ -2031,9 +1992,8 @@ void AppController::testNotificationRemove()
 
         m_logbookTestInFlight = true;
         m_whiteboardClient->removeNotification(m_lastNotificationId,
-                [this](bool ok, bool, const QString &error) {
+                [this, session](bool ok, bool, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             m_lastNotificationId = 0;
             emit logbookTestResult(ok ? tr("The watch removed it") : error);
         });
@@ -2151,9 +2111,8 @@ const char *const kAncsEnabledPath = "/Settings/Ble/AncsEnabled";
 void AppController::readWatchNotificationsEnabled()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         m_whiteboardClient->readValue(QString::fromLatin1(kAncsEnabledPath),
-                [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &body, const QString &error) {
             if (!ok) {
                 emit watchNotificationsRead(-1, error);
                 return;
@@ -2174,10 +2133,9 @@ void AppController::readWatchNotificationsEnabled()
 void AppController::setWatchNotificationsEnabled(bool enabled)
 {
     withWatchSession([this, enabled](const WatchSession &session) {
-        m_probeSession = session;
         m_whiteboardClient->putSmallEnum(QString::fromLatin1(kAncsEnabledPath),
                                           enabled ? 1 : 0,
-                [this, enabled](bool ok, const QString &error) {
+                [this, session, enabled](bool ok, const QString &error) {
             if (!ok) {
                 emit logbookTestResult(error);
                 // Put the switch back where the watch has it.
@@ -2195,7 +2153,6 @@ void AppController::setWatchNotificationsEnabled(bool enabled)
 void AppController::probePath(const QString &path)
 {
     withWatchSession([this, path](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight || m_workoutSyncInProgress) {
             emit logbookTestResult(tr("Another fetch is already in progress"));
             return;
@@ -2203,9 +2160,8 @@ void AppController::probePath(const QString &path)
 
         m_logbookTestInFlight = true;
         m_whiteboardClient->readValue(path,
-                [this, path](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+                [this, session, path](bool ok, const std::vector<uint8_t> &body, const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 // readValue() says "not on this watch" for the f5 rejection,
                 // which is the answer this probe usually exists to get.
@@ -2288,7 +2244,7 @@ void AppController::updateWatchGps()
         // deciding from the model name. That is what makes one code path serve
         // watches this project has never seen.
         m_whiteboardClient->readValue(QString::fromLatin1(kEphemerisFormatPath),
-                [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+                [this, session](bool ok, const std::vector<uint8_t> &body, const QString &error) {
             if (!ok) {
                 finishGpsUpdate(tr("Could not ask the watch which GPS data it wants: %1")
                                           .arg(error));
@@ -2304,7 +2260,7 @@ void AppController::updateWatchGps()
             const int format = value[0];
 
             m_cloudClient->downloadEphemeris(format,
-                    [this, format](bool downloadOk, const QByteArray &data, const QString &dlError) {
+                    [this, session, format](bool downloadOk, const QByteArray &data, const QString &dlError) {
                 if (!downloadOk) {
                     finishGpsUpdate(tr("Could not download GPS data: %1").arg(dlError));
                     return;
@@ -2317,7 +2273,7 @@ void AppController::updateWatchGps()
                                     .arg(blob.size() / 1024));
 
                 m_whiteboardClient->putEphemeris(blob, nullptr,
-                        [this, format](bool putOk, const QString &putError) {
+                        [this, session, format](bool putOk, const QString &putError) {
                     if (!putOk) {
                         finishGpsUpdate(putError);
                         return;
@@ -2380,7 +2336,6 @@ void AppController::finishGpsUpdate(const QString &message)
 void AppController::testHealthResourceFetch(const QString &kind)
 {
     withWatchSession([this, kind](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight || m_workoutSyncInProgress) {
             emit logbookTestResult(tr("Another fetch is already in progress"));
             return;
@@ -2410,10 +2365,9 @@ void AppController::testHealthResourceFetch(const QString &kind)
 
         m_logbookTestInFlight = true;
         m_whiteboardClient->fetchTimelineFile(resource, filename, newerThan,
-                [this, resource, filename](bool ok, const std::vector<uint8_t> &data,
+                [this, session, resource, filename](bool ok, const std::vector<uint8_t> &data,
                                             const QString &error) {
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             if (!ok) {
                 emit logbookTestResult(tr("%1 (%2): %3").arg(resource, filename, error));
                 return;
@@ -2485,7 +2439,6 @@ bool isRejection(const std::vector<uint8_t> &body)
 void AppController::testActivityTrendFetch()
 {
     withWatchSession([this](const WatchSession &session) {
-        m_probeSession = session;
         if (m_logbookTestInFlight || m_workoutSyncInProgress) {
             emit logbookTestResult(tr("Another fetch is already in progress"));
             return;
@@ -2501,7 +2454,6 @@ void AppController::tryActivityTrendEncoding(int index)
                                         / sizeof(kTrendCursorCandidates[0]));
     if (index >= count) {
         m_logbookTestInFlight = false;
-        m_probeSession.reset();
         emit logbookTestResult(tr("/Activity/TrendData rejected every cursor encoding tried. "
                                    "The parameter is shaped differently than assumed."));
         return;
@@ -2522,7 +2474,6 @@ void AppController::tryActivityTrendEncoding(int index)
             // A transport failure is not a verdict on the encoding, so the
             // sweep stops rather than blaming the next candidate for it.
             m_logbookTestInFlight = false;
-            m_probeSession.reset();
             emit logbookTestResult(tr("%1 (%2): %3")
                                     .arg(path, QString::fromLatin1(candidate.label), error));
             return;
@@ -2533,7 +2484,6 @@ void AppController::tryActivityTrendEncoding(int index)
         }
 
         m_logbookTestInFlight = false;
-        m_probeSession.reset();
 
         // The whole reply goes to a file, header included. The status word
         // in that header is the point of the exercise: libmds treats 202 as

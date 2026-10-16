@@ -22,7 +22,9 @@ const Mapping kMappings[] = {
     { "im.received", Ancs::CategoryEmail },
     // Whisperfish registers its own categories, and its call one is the
     // only route to IncomingCall that needs no SIM.
-    { "harbour-whisperfish-call", Ancs::CategoryIncomingCall },
+    // Category 0, not 1, for the same reason incomingCall() uses it: a
+    // ring sent as category 1 freezes this watch. See the comment there.
+    { "harbour-whisperfish-call", Ancs::CategoryOther },
     { "harbour-whisperfish-message", Ancs::CategoryEmail },
 };
 
@@ -163,7 +165,24 @@ Ancs::Notification incomingCall(const std::string &caller, const std::string &nu
         out.title = blank(number) ? "Unknown caller" : number;
         out.message = "Incoming call";
     }
-    out.categoryId = Ancs::CategoryIncomingCall;
+    // **Deliberately not CategoryIncomingCall.** A ring sent as category 1
+    // froze this watch repeatedly on 2026-10-16 - black screen, no button
+    // response, recoverable only on the charger with both buttons held -
+    // and the frame that does it is one byte away from one the watch has
+    // accepted hundreds of times: 138 bytes, identical except byte 4, the
+    // category, 0x00 against 0x01. Nothing else in it changes.
+    //
+    // No capture of the official app contains an incoming call, in any of
+    // the three taken, so there is no evidence it ever sends category 1 at
+    // all - and the firmware's handling of a category its own app may
+    // never use is the obvious suspect for a crash.
+    //
+    // The cost of this workaround is that the watch writes its own heading
+    // from the category, so the alert no longer says it is a call: the
+    // caller's name is the title and the number (or "Incoming call") the
+    // line under it, which is what the message already carried. A frozen
+    // watch is the worse trade.
+    out.categoryId = Ancs::CategoryOther;
     out.date = nowSeconds;
     out.notificationId = Ancs::notificationIdFor(static_cast<int32_t>(callId), out.categoryId,
                                                   out.appId);

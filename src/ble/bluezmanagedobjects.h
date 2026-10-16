@@ -1,5 +1,19 @@
 #pragma once
 
+// How long any *blocking* BlueZ call may take before it is given up on.
+//
+// D-Bus's own default is 25 seconds, per call, and every call in the
+// attach-and-write path runs on the UI thread: GetManagedObjects,
+// StartNotify, StopNotify, AcquireWrite and one WriteValue per 124-byte
+// chunk. With a watch that has stopped answering - which this watch has
+// done repeatedly - that default froze the whole application, and a
+// hundred-kilobyte write would have held it for the better part of an
+// hour. A healthy call answers in milliseconds, so a few seconds is
+// generous for the cases that work and quick for the ones that do not.
+namespace Bluez {
+constexpr int kCallTimeoutMs = 4000;
+}
+
 #include <QDBusArgument>
 #include <QDBusObjectPath>
 #include <QMap>

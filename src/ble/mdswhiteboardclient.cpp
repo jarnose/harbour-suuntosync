@@ -132,6 +132,7 @@ void MdsWhiteboardClient::detach()
         if (m_notifySubscribed) {
             QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,
                                        QDBusConnection::systemBus());
+            notifyChar.setTimeout(Bluez::kCallTimeoutMs);
             notifyChar.call(QStringLiteral("StopNotify"));
         }
     }
@@ -198,6 +199,7 @@ void MdsWhiteboardClient::tryDiscoverGattObjects()
 
     QDBusInterface manager(kBluezService, QStringLiteral("/"), kObjectManagerInterface,
                             QDBusConnection::systemBus());
+    manager.setTimeout(Bluez::kCallTimeoutMs);
     QDBusReply<BluezObjectMap> reply = manager.call(QStringLiteral("GetManagedObjects"));
     if (!reply.isValid()) {
         emit errorOccurred(tr("Could not list GATT objects: %1").arg(reply.error().message()));
@@ -271,6 +273,7 @@ void MdsWhiteboardClient::subscribeToNotify()
 
     QDBusInterface notifyChar(kBluezService, m_notifyCharPath, kCharInterface,
                                QDBusConnection::systemBus());
+    notifyChar.setTimeout(Bluez::kCallTimeoutMs);
     QDBusReply<void> reply = notifyChar.call(QStringLiteral("StartNotify"));
     if (!reply.isValid()) {
         emit errorOccurred(tr("Could not subscribe to watch notifications: %1")
@@ -427,6 +430,7 @@ void MdsWhiteboardClient::learnWriteChunkSize()
     // nothing: the channel is not held and WriteValue keeps working.
     QDBusInterface writeChar(kBluezService, m_writeCharPath, kCharInterface,
                               QDBusConnection::systemBus());
+    writeChar.setTimeout(Bluez::kCallTimeoutMs);
     const QDBusMessage reply = writeChar.call(QStringLiteral("AcquireWrite"),
                                                QVariant::fromValue(QVariantMap()));
     if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2)
@@ -458,6 +462,11 @@ bool MdsWhiteboardClient::writeChunked(const std::vector<uint8_t> &framed, QStri
 
     QDBusInterface writeChar(kBluezService, m_writeCharPath, kCharInterface,
                               QDBusConnection::systemBus());
+    // Per chunk, and a large write is hundreds of them - so this bound is
+    // what keeps a watch that has stopped answering from holding the UI
+    // thread for the rest of the afternoon. The loop gives up on the first
+    // chunk that fails, so the cost of a dead watch is one timeout.
+    writeChar.setTimeout(Bluez::kCallTimeoutMs);
 
     const size_t chunkSize = static_cast<size_t>(m_writeChunkSize);
     for (size_t offset = 0; offset < framed.size(); offset += chunkSize) {

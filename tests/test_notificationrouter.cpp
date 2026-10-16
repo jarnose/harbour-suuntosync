@@ -65,7 +65,9 @@ int main()
     checkCategory("x-nemo.messaging.voicemail-SMS", Ancs::CategoryVoicemail);
     checkCategory("x-nemo.call.missed", Ancs::CategoryMissedCall);
     checkCategory("x-nemo.call.missed.group", Ancs::CategoryMissedCall);
-    checkCategory("harbour-whisperfish-call", Ancs::CategoryIncomingCall);
+    // Category 0, not 1: category 1 freezes this watch. The mapping used
+    // to be the only way to reach it from a notification.
+    checkCategory("harbour-whisperfish-call", Ancs::CategoryOther);
 
     // Anything unrecognised, including no category at all, is Other rather
     // than a guess.
@@ -146,8 +148,12 @@ int main()
     // rather than mapped; see NotificationRouter::incomingCall.
     const Ancs::Notification ring =
             NotificationRouter::incomingCall("", "+358401234567", 0xabcdu, 1791287147);
-    check(ring.categoryId == Ancs::CategoryIncomingCall,
-          "an incoming call is category 1, the one the mapping table could never reach");
+    // Category 1 is what this used to send, and what froze the watch on
+    // 2026-10-16 - the frame differs from an accepted one by that byte
+    // alone. Nothing may reach it until a capture of the official app
+    // sending a call says the watch can take it.
+    check(ring.categoryId == Ancs::CategoryOther,
+          "an incoming call does not go out as category 1");
     check(ring.title == "+358401234567",
           "with no contact for the number, the number is the title");
     check(ring.message == "Incoming call", "and the message says what it is");

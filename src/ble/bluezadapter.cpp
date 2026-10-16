@@ -1,4 +1,5 @@
 #include "bluezadapter.h"
+#include "bluezmanagedobjects.h"
 
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -40,6 +41,7 @@ QString BluezAdapter::adapterPath()
 
     QDBusInterface manager(kBluezService, QStringLiteral("/"), kObjectManagerInterface,
                             QDBusConnection::systemBus());
+    manager.setTimeout(Bluez::kCallTimeoutMs);
     QDBusReply<BluezObjectMap> reply = manager.call(QStringLiteral("GetManagedObjects"));
     if (!reply.isValid()) {
         emit errorOccurred(tr("Could not reach BlueZ (org.bluez): %1")
@@ -83,6 +85,7 @@ void BluezAdapter::refresh()
 {
     QDBusInterface manager(kBluezService, QStringLiteral("/"), kObjectManagerInterface,
                             QDBusConnection::systemBus());
+    manager.setTimeout(Bluez::kCallTimeoutMs);
     QDBusReply<BluezObjectMap> reply = manager.call(QStringLiteral("GetManagedObjects"));
     if (!reply.isValid()) {
         emit errorOccurred(tr("Could not list Bluetooth devices: %1")

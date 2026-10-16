@@ -2061,3 +2061,55 @@ attempt to clear the transient ring.
 wedge today followed one. If it turns out to misbehave the same way, the
 same reasoning applies and the same question arises - whether the official
 app sends `Del` at all, which a capture would answer.
+
+## The ring is sent as category 0, because category 1 freezes the watch (2026-10-16)
+
+The watch froze on an incoming call three times, the third one hard enough
+to need the charger. What the ANCS frame for a call actually is, measured
+by building both and diffing them:
+
+```
+captured calendar notification:  88146a0000 010200…   (138 bytes)
+our incoming call:               88146a0001 010200…   (138 bytes)
+                                           ^^
+                                  byte 4 = categoryId, 0x00 against 0x01
+```
+
+**One byte.** Everything else is identical to a frame this watch has
+accepted hundreds of times.
+
+And the thing that makes that byte the suspect rather than a coincidence:
+**no capture contains an incoming call.** All three notification captures
+taken off the official Android app - `btsnoop_notification_2026-09-26`,
+`btsnoop_notifications_2026-09-26`, `btsnoop_9baro_notification_2026-10-05`
+- carry nothing but ordinary application notifications (a calendar event,
+a shell notification, a test app), every one of them category 0. So there
+is no evidence the official app ever sends category 1, and the firmware's
+handling of a category its own app may never use is the obvious place for a
+crash to live.
+
+So both ways of reaching category 1 are closed: `incomingCall()` builds
+with `CategoryOther`, and the mapping table's `harbour-whisperfish-call`
+entry with it. The cost is that the watch writes its own heading from the
+category, so the alert no longer announces itself as a call - the caller's
+name is the title and the number the line under it, which is what it
+carried anyway.
+
+**What would reopen it:** a capture of the official app sending an incoming
+call. If it sends category 1 and the watch takes it, something else in our
+frame is wrong and this workaround is hiding it. If it does not send
+category 1 at all, this is the right behaviour and not a workaround.
+
+### The application froze too, and that one is ours alone
+
+Sending to a watch that had stopped answering froze the whole UI. Every
+blocking BlueZ call in the attach-and-write path runs on the UI thread -
+`GetManagedObjects`, `StartNotify`, `StopNotify`, `AcquireWrite`, and one
+`WriteValue` per 124-byte chunk - and D-Bus's default timeout is 25 seconds
+*per call*. A hundred-kilobyte write is some eight hundred chunks, so the
+worst case was most of an hour of frozen application.
+
+They all carry `Bluez::kCallTimeoutMs` now. A healthy call answers in
+milliseconds; the chunk loop gives up on the first failure, so a dead watch
+costs one timeout rather than eight hundred. Making them asynchronous is
+the real answer and a much larger change; this bounds the damage.

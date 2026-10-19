@@ -1021,9 +1021,18 @@ The file is an uncompressed `SBEM0102` container:
 
 ```
 0x01 source   "suunto-analytics-<serial>"
-0x02 written-at     0x03 firmware   0x04 serial   0x06 city
+0x02 written-at     0x03 firmware   0x04 serial   0x06 variant
 per event: 0x07 index, 0x08 type, 0x09 time, 0x0a message, 0x0b + 0x0c tags
 ```
+
+**Chunk 0x06 is the watch's variant, not a city**, and the first reading of
+this document called it one - it holds `Tianjin`, which looked like a
+location that was 6000 km wrong and was flagged as suspicious. The
+2026-10-19 HTTPS capture settles it: the official app sends
+`variant=Tianjin` on `suuntoplus/features/items` and fetches
+`devices.suunto-operations.com/devices/Tianjin/Q`. It is the model variant
+this project already extracts from `feat_simvariant_` and already sends as
+`variant=`. Nothing about it is geography.
 
 **Its times are microseconds since the epoch** - not the local64
 milliseconds a workout carries. A header stamp decoded to the exact second
@@ -1034,3 +1043,122 @@ the five events that had happened in between. So the file is written to
 disk now before anything else is done with it. The first read's weather
 lines were lost to this, and they are the reason the sync looked broken:
 they were all `Weather sync TO`, with no `ok` among the twelve shown.
+
+### The decisive capture: no weather is pushed, even with the watch's WiFi off
+
+`suuntosync-fixtures-private/btsnoop_s7_weather_wifioff_20261019.log`, taken
+with **the watch's WiFi switched off** so its own fetch could not possibly
+succeed, while the official app ran a full sync and displayed its own
+progress list: "Syncing SuuntoPlus", "Optimizing GPS performance",
+"Weather", "Training zone".
+
+Sixty registrations, in order. `/Weather/Sync` is the thirteenth - in the
+**subscription sweep** at connection setup, between
+`/Navigation/QuickNaviState` and `/FindPhone/PhoneState`, with the
+`/Voice/*` resources right after it. It never appears again.
+
+**There is no weather step on the BLE link at all.** No `/Weather/...`
+write, no forecast payload, no weather file through the filesystem
+resources - whose only traffic was `mdsSlp.sbm` (the sleep timeline),
+`sysevt.sbm` (the event log) and a watch-face zip. The app's "Weather" line
+is phone-side work; nothing of it crosses to the watch.
+
+So the question "what sets `/Weather/Sync/LastTime`" has one answer left
+standing: **the watch itself, when its own fetch succeeds.** Nothing else
+touches it, and this app already writes everything the official app writes.
+The test that confirms it is one tap: WiFi back on, let the watch fetch,
+read `LastTime`.
+
+Two things the same capture settles for free:
+
+- **Our two cloud writes are byte-identical to the official app's** - the
+  same `https://api.sports-tracker.com/apiserver/` and the same
+  `WatchUserKey <key>`, the key being per account and stable, not per
+  session.
+- **`/Plugin/Uninstall` is confirmed on the wire**, and our encoding of it
+  matches: `GET /Plugin/Uninstall` for a handle, then a PUT of
+  `[handle][01][0c 00]["mahlee01"][00]` - one NUL-terminated string
+  parameter. The official app uninstalled exactly the leftover dev plugin
+  that started that whole investigation, which also says it reconciles the
+  registry by itself.
+
+Still unmeasured, and it cannot change the above: which hosts the *phone*
+talks to during its own weather step. The HTTPS capture of this session
+produced nothing - the app had been started before mitmproxy's CA was
+bind-mounted into the Conscrypt store, so every TLS handshake failed
+("client does not trust the proxy's certificate"). Force-stopping the app
+after the bind is what that needs.
+
+### The WiFi-on capture, and what the phone does not do
+
+`btsnoop_s7_weather_wifion_20261019.log` with
+`suunto_sync_20261019.flows` beside it - the same sync with the watch's
+WiFi **on**, and this time the HTTPS side came through too (90 flows, the
+CA bind-mounted *before* the app was force-stopped and restarted, which is
+what the earlier attempt got wrong).
+
+The BLE side adds nine resources the WiFi-off sync did not touch, none of
+them weather: `/Logbook/byId/<id>/Flags` for each of five workouts - how
+the app marks one as synced, and something this project does not use -
+plus `/Device/Connectivity/Ble/Ancs/Notification/Add` and `/Del`,
+`/DataFormat/Descriptors` and `/Update/Suggest`.
+
+The HTTPS side contacts fourteen hosts and **not one of them is
+`weather.sports-tracker.com`**. The phone fetches no forecast, for itself
+or for the watch. What it does fetch that looks related, and is not:
+
+- `cloud-api.suunto.com/pointpos/app/pointinfo/getPosition` ->
+  `{"city":"Helsinki","code":"FI","country":"Finland","region":"Uusimaa"}`.
+  A geo-IP lookup with no coordinates in the request - and Helsinki is not
+  where the watch is. The watch's own `/Weather/Info` has the right place
+  (61.483/23.907, Vehmainen), so this is the app's own region display and
+  nothing to do with the watch's weather.
+- `POST /v1/workout/extensions/<id>` with a body listing the extension
+  types to compute, `WeatherExtension` and `WeatherStreamExtension` among
+  them. That is per-workout weather in the cloud's own records, not the
+  watch's forecast.
+
+So both captures agree, with the watch's WiFi off and on: **the phone's
+part in the watch's weather is the credential write and nothing else.**
+The watch fetches over its own WiFi, directly, which is why no capture
+taken on the phone can ever show that request.
+
+### Where the weather question stands at the end of the day (2026-10-19)
+
+Measured, in this order, all of it today:
+
+1. With the watch's WiFi **off**, the official app's full sync pushes
+   nothing weather-related over BLE. `/Weather/Sync` appears once, in the
+   subscription sweep.
+2. With the watch's WiFi **on**, the same - plus nine resources that are
+   not about weather, and 90 HTTPS flows that never touch a weather host.
+3. This app's own weather action - credential write plus the subscribe -
+   leaves **no trace in the watch's own event log**. Read twice, minutes
+   after pressing it: BLE service events and ANCS notifications, no
+   `Weather sync`, no `WifiDl`.
+4. The watch holds an address from the router (10.13.8.135) and the access
+   point calls it connected, yet the firewall sees **no traffic from it and
+   the resolver no queries**. So it is not using the network at all.
+5. Its weather data, full at 15:19 (kelvin readings, the right place, an
+   observation stamp from that morning), is **all zeros by 20:43**, and
+   `/Weather/Sync/LastTime` has not moved from 11 October through any of
+   this.
+
+So: the watch has the credential, has the network, holds no forecast, is
+not fetching one, and records no attempt. **The decision is the watch's and
+nothing the phone writes reaches it** - which also means this app already
+does everything the official app does here, byte for byte. The one success
+today, `WifiDl eph succ v:64` for the GPS predictions, proves the mechanism
+works when the watch chooses to use it.
+
+What is left to try is all on the watch: opening its weather view while it
+is on WiFi, or leaving it on the charger, which is when a Suunto does its
+background work. Not worth more protocol archaeology until one of those
+produces a `Weather sync` line.
+
+**A measurement hazard worth remembering: the event log has two
+consumers.** `/Analytics/Data` renders and then deletes `sysevt.sbm`, so
+whoever reads it first gets the lines and the other gets an empty file. A
+read of ours at 20:43 began at 20:41:57 because the official app's sync had
+eaten everything before it four minutes earlier. Read the log *before*
+running the official app, or the window is gone.

@@ -134,6 +134,30 @@ QVector<HealthEntry> HealthStore::load(const QString &kind, int limit, QString *
     return out;
 }
 
+QVector<HealthEntry> HealthStore::loadSince(const QString &kind, qint64 sinceMs,
+                                             QString *error) const
+{
+    QVector<HealthEntry> out;
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    q.prepare(QStringLiteral("SELECT timestamp, data FROM health_entries "
+                              "WHERE kind = ? AND timestamp >= ? ORDER BY timestamp DESC"));
+    q.addBindValue(kind);
+    q.addBindValue(sinceMs);
+    if (!q.exec()) {
+        if (error)
+            *error = q.lastError().text();
+        return out;
+    }
+    while (q.next()) {
+        HealthEntry entry;
+        entry.kind = kind;
+        entry.timestamp = q.value(0).toLongLong();
+        entry.data = q.value(1).toByteArray();
+        out.append(entry);
+    }
+    return out;
+}
+
 qint64 HealthStore::newestTimestamp(const QString &kind) const
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);

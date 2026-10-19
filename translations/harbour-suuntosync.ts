@@ -906,7 +906,47 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Earlier nights</source>
+        <source>Calories</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Steps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sleep</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sleep quality</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Last 30 days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>and</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 - %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Earlier days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 steps  ·  %2 kcal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>slept %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

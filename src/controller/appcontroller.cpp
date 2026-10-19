@@ -4363,6 +4363,82 @@ QVariantMap AppController::coverSummary() const
     return out;
 }
 
+QVariantList AppController::dailyHealth(int days) const
+{
+    if (days <= 0)
+        return QVariantList();
+
+    // The window starts at midnight local time `days - 1` days ago, so
+    // "30 days" means thirty calendar days including today rather than
+    // thirty times 24 hours from now.
+    const QDate firstDay = QDate::currentDate().addDays(-(days - 1));
+    const qint64 sinceMs = QDateTime(firstDay, QTime(0, 0)).toMSecsSinceEpoch();
+
+    struct Day {
+        double steps = 0;
+        double joules = 0;
+        double sleepSeconds = 0;
+        double sleepQuality = -1;
+        bool hasActivity = false;
+        bool hasSleep = false;
+    };
+    QVector<Day> daily(days);
+
+    const auto indexOf = [firstDay, days](qint64 ms) {
+        const int i = firstDay.daysTo(QDateTime::fromMSecsSinceEpoch(ms).date());
+        return (i >= 0 && i < days) ? i : -1;
+    };
+
+    for (const HealthEntry &entry : m_healthStore->loadSince(QStringLiteral("activity"),
+                                                              sinceMs, nullptr)) {
+        const int i = indexOf(entry.timestamp);
+        if (i < 0)
+            continue;
+        const QJsonObject o = QJsonDocument::fromJson(entry.data).object();
+        daily[i].steps += o.value(QStringLiteral("stepCount")).toDouble();
+        // Joules, as everywhere in this protocol - the kcal conversion is
+        // one place, here, rather than in every page that shows it.
+        daily[i].joules += o.value(QStringLiteral("energyConsumption")).toDouble();
+        daily[i].hasActivity = true;
+    }
+
+    // A night is one entry, and it belongs to the day its timestamp falls
+    // on - the same convention the page's "earlier nights" list already
+    // uses. A second entry for the same day (a nap) adds its duration and
+    // keeps the better quality rather than overwriting.
+    for (const HealthEntry &entry : m_healthStore->loadSince(QStringLiteral("sleep"),
+                                                              sinceMs, nullptr)) {
+        const int i = indexOf(entry.timestamp);
+        if (i < 0)
+            continue;
+        const QJsonObject o = QJsonDocument::fromJson(entry.data).object();
+        daily[i].sleepSeconds += o.value(QStringLiteral("duration")).toDouble();
+        if (o.contains(QStringLiteral("quality"))) {
+            daily[i].sleepQuality = std::max(daily[i].sleepQuality,
+                                              o.value(QStringLiteral("quality")).toDouble());
+        }
+        daily[i].hasSleep = true;
+    }
+
+    QVariantList out;
+    for (int i = days - 1; i >= 0; --i) {
+        const Day &day = daily[i];
+        QVariantMap row;
+        row.insert(QStringLiteral("dayMs"),
+                    QDateTime(firstDay.addDays(i), QTime(0, 0)).toMSecsSinceEpoch());
+        row.insert(QStringLiteral("steps"), day.steps);
+        row.insert(QStringLiteral("energyKcal"), day.joules / 4184.0);
+        row.insert(QStringLiteral("sleepSeconds"), day.sleepSeconds);
+        // -1 rather than 0 for "the watch did not score this night": a
+        // zero would draw as a bad night.
+        row.insert(QStringLiteral("sleepQuality"), day.sleepQuality);
+        row.insert(QStringLiteral("hasActivity"), day.hasActivity);
+        row.insert(QStringLiteral("hasSleep"), day.hasSleep);
+        out.append(row);
+    }
+    return out;
+}
+
 QVariantList AppController::healthEntries(const QString &kind, int limit) const
 {
     QVariantList out;

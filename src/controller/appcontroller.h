@@ -703,6 +703,21 @@ public:
     // they are the watch's and this project has no better names for them.
     Q_INVOKABLE QVariantList healthEntries(const QString &kind, int limit) const;
 
+    // One row per local day, newest first, for the last `days` days:
+    //
+    //   { dayMs, steps, energyKcal, sleepSeconds, sleepQuality }
+    //
+    // The aggregation is here rather than in QML because the rows it reads
+    // are 144 ten-minute samples per day - thirty days is four thousand of
+    // them, and the store holds two hundred thousand. The day boundary
+    // needs a timezone, which is also why this cannot live in the Qt-free
+    // side.
+    //
+    // A day with no samples is still a row, with zeros: a gap in the data
+    // is a thing worth seeing on a chart rather than a point silently
+    // joined across.
+    Q_INVOKABLE QVariantList dailyHealth(int days) const;
+
 
     // Uploads a watch-synced workout to the Suunto cloud (item 2 of the
     // 2026-09-22 list). The payload was built at sync time and stored (see

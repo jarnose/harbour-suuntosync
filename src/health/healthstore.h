@@ -27,6 +27,13 @@ public:
     // Newest first. limit <= 0 means no limit.
     QVector<HealthEntry> load(const QString &kind, int limit, QString *error) const;
 
+    // Newest first, but bounded by time rather than by count: "the last
+    // thirty days" is a window, and a day of activity is 144 ten-minute
+    // samples, so asking by count means guessing the arithmetic at the
+    // call site. 200 616 activity rows are stored here; a limit is not a
+    // substitute for a window.
+    QVector<HealthEntry> loadSince(const QString &kind, qint64 sinceMs, QString *error) const;
+
     // Entries this device decoded from the watch and has not yet pushed to
     // the cloud. Rows that came *from* the cloud are never pending - they
     // are already there - so the flag is set at insert time by the caller

@@ -1357,6 +1357,14 @@ void MdsWhiteboardClient::deleteWatchFile(const QString &filename, SimpleCallbac
     putString(QStringLiteral("/Dev/FileSystem/FileDelete"), filename, callback);
 }
 
+void MdsWhiteboardClient::uninstallPlugin(const QString &id, SimpleCallback callback)
+{
+    // The same two steps as every other string write, and not a filesystem
+    // resource - so the read verb, like /Settings/... and unlike
+    // /Dev/FileSystem/*.
+    putString(QStringLiteral("/Plugin/Uninstall"), id, callback);
+}
+
 void MdsWhiteboardClient::putString(const QString &path, const QString &value,
                                      SimpleCallback callback, uint8_t verb, uint8_t session)
 {
@@ -1501,6 +1509,101 @@ void MdsWhiteboardClient::fetchTimelineFile(const QString &resourcePath,
                 });
             });
         });
+    });
+}
+
+void MdsWhiteboardClient::connectWifi(const QString &ssid, const QString &key,
+                                       DataCallback callback)
+{
+    const QString resource = QStringLiteral("/Device/Connectivity/Wifi/Connect");
+    const std::string ssidBytes = ssid.toStdString();
+    const std::string keyBytes = key.toStdString();
+
+    getRaw([resource](uint16_t requestId) {
+        // Not a filesystem resource, so the read verb - the same
+        // registration every /Device/... and /Settings/... path uses here.
+        return Mds::encodeGetRequest(requestId, resource.toStdString());
+    }, [this, resource, ssidBytes, keyBytes, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(resource, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body").arg(resource));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, ssidBytes, keyBytes](uint16_t requestId) {
+            // Both strings NUL-terminated, as encodePutString does for the
+            // single-string case.
+            std::vector<uint8_t> ssidParam(ssidBytes.begin(), ssidBytes.end());
+            ssidParam.push_back(0x00);
+            std::vector<uint8_t> keyParam(keyBytes.begin(), keyBytes.end());
+            keyParam.push_back(0x00);
+            return Mds::encodeParameterisedFetch(requestId, ackBody,
+                    { { Mds::kParamString, ssidParam }, { Mds::kParamString, keyParam } });
+        }, [callback](bool joinOk, const Mds::Frame &frame, const QString &joinError) {
+            if (!joinOk) {
+                callback(false, {}, joinError);
+                return;
+            }
+            callback(true, frame.body, QString());
+        });
+    });
+}
+
+void MdsWhiteboardClient::setWifiEnabled(const QString &path, bool enabled,
+                                          SimpleCallback callback)
+{
+    putSmallEnum(path, enabled ? 1 : 0, callback);
+}
+
+void MdsWhiteboardClient::triggerStreamSync(const QString &path, DataCallback callback)
+{
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, callback](bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body").arg(path));
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodeStreamStartTrigger(requestId, ackBody);
+        }, [path, callback](bool triggerOk, const Mds::Frame &frame, const QString &triggerError) {
+            if (!triggerOk) {
+                callback(false, {}, tr("The %1 trigger failed: %2").arg(path, triggerError));
+                return;
+            }
+            callback(true, frame.body, QString());
+        });
+    });
+}
+
+void MdsWhiteboardClient::readWatchFile(const QString &filename, DataCallback callback)
+{
+    const std::string name = filename.toStdString();
+    getRaw([](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, "/Dev/FileSystem/Stream");
+    }, [this, name, callback]
+            (bool streamOk, const Mds::Frame &streamAck, const QString &streamError) {
+        if (!streamOk) {
+            callback(false, {}, tr("GET /Dev/FileSystem/Stream failed: %1").arg(streamError));
+            return;
+        }
+        if (streamAck.body.size() < 6) {
+            callback(false, {}, tr("Filesystem stream acked with a short body"));
+            return;
+        }
+        const std::vector<uint8_t> streamHandle = streamAck.body;
+        readPages([streamHandle, name](uint16_t requestId, uint32_t at) {
+            return Mds::encodeFileReadRequest(requestId, streamHandle, name, at);
+        }, 0, {}, callback);
     });
 }
 

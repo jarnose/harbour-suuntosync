@@ -9,6 +9,7 @@
 
 const QString CloudAccountStore::TokenSecretName = QStringLiteral("cloud_access_token");
 const QString CloudAccountStore::RefreshTokenSecretName = QStringLiteral("cloud_refresh_token");
+const QString CloudAccountStore::WifiKeySecretName = QStringLiteral("wifi_passphrase");
 
 namespace {
 constexpr int kSingletonRowId = 1;

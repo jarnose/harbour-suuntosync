@@ -101,6 +101,7 @@ set(WATCH_SOURCES
     src/ble/sbemcontainer.cpp
     src/ble/logbookdecoder.cpp
     src/ble/logentriesdecoder.cpp
+    src/ble/pluginregistry.cpp
     src/ble/summarydecoder.cpp
     src/ble/sbemdescriptors.cpp
     src/ble/smldecoder.cpp
@@ -225,6 +226,7 @@ add_custom_target(distfiles
         qml/pages/RecordsPage.qml
         qml/pages/SuuntoPlusPage.qml
         qml/pages/StorePage.qml
+        qml/pages/OfflineMapsPage.qml
         qml/pages/StoreCategoryPage.qml
         qml/pages/StoreItemPage.qml
         qml/pages/SettingsPage.qml

@@ -729,3 +729,123 @@ whole `store/userWatchface*` family - a *separate* API
 store/userWatchface/plugins/<id>` for the file). That one is for the user's
 own custom and album watch faces, not for the Suunto-published `zwc…` ones
 the store's watch-face category lists.
+
+## The directory holds more than the library does (2026-10-18)
+
+The library page matched the account's library against the directory and
+drew a row per library item. Anything in the directory with no library
+entry was therefore invisible — and could not be removed from this app at
+all, while still occupying one of the watch's plugin slots.
+
+That is not a corner case. A development build is exactly this: the
+suuntoplus-mahle project's `build-app.js` names a `"type":"device"` app
+`<id>-q.dev`, zappctl pushes it as `b:/zapp/<id>.dev`, and no catalogue
+anywhere has heard of it.
+
+So the extras are rows now, and the extension is what says which kind:
+
+| extension | kind | where it comes from |
+|---|---|---|
+| `.wfa` | watch face | the library, named by catalogue id |
+| `.fea` | sports app | the library, named by **pluginId** |
+| `.gui` | guide | the library, named by catalogue id |
+| `.dev` | sports app | pushed by hand; a `"type":"device"` build |
+
+Anything else in there — `storage.sbm`, `index.db`, `descript.sbm` — is the
+watch's own registry and gets no row: a row offers deletion, and this app
+should not offer to delete what it cannot name.
+
+Such a row carries no catalogue id, so removal goes by file name
+(`AppController::removeSuuntoPlusFile()`), guarded on the extension and on
+the name still being in the last directory listing. Installing it again is
+not offered, because there is nothing to install it *from*.
+
+**A note in suuntoplus-mahle's `docs/watch-notes.md` says the opposite of
+what this app does**: "BLE has no delete in the watch protocol: test
+variants stay on the watch until removed over USB." That is true of
+zappctl, not of the protocol. `/FileSystem/Delete` is measured working in
+this very document — see the delete-and-reinstall trace above — so a test
+build can be removed over BLE after all.
+
+### Deleting the file is half an uninstall (2026-10-18)
+
+Three hand-pushed `.dev` builds were removed from this page; their files
+went, and the watch then showed **three rows in its own SuuntoPlus
+selection with a button and no name**. The name lived in the file; the entry
+lived in the registry, and deleting the file does not touch it.
+
+`/Plugin/Uninstall` is what does, and it was in the APK's resource table all
+along beside `/Plugin/Install`, `/Plugin/InstallAid` and `/Plugin/List`. Its
+parameter is a single string: `MdsUninstallPluginRequest(id=…)`, which makes
+it the same two-step string write as `/Dev/FileSystem/FileDelete` — register,
+then PUT the id. Taken from the APK, not from the wire: no capture here
+contains an uninstall, so the first real one is the measurement.
+
+Removal therefore does both now, uninstall first because it may take the
+file with it, and only a *pair* of failures is reported. And because the
+registry can outlive the file, the page reads all three answers:
+
+| source | what it answers | what the page does with it |
+|---|---|---|
+| the account's library | what you own | rows, with install / remove |
+| the plugin directory | what files exist | says "on the watch"; extras get their own rows |
+| `/Plugin/List` | what the watch's menu draws | an entry with no file gets a row whose only action is the uninstall |
+
+The third was previously read once, during the install work, and then
+dropped as "the wrong oracle" — which it is, for *is this installed*. It is
+the right one for *what will the watch show*, and nothing else can see a
+leftover.
+
+### And the registry listing is incomplete too (2026-10-18)
+
+The leftover rows the section above added did not appear: after three
+`.dev` files were removed, the watch drew three nameless rows in its own
+SuuntoPlus menu and `/Plugin/List` named **none** of them.
+
+So the third oracle has the same hole as the first. `/Plugin/List` already
+named fifteen things where the directory held seventeen files; now it also
+fails to name an entry whose file is gone. It is not "the watch's menu" —
+it is its own partial view, and all three readable answers can miss what
+the watch is actually drawing.
+
+What is left to try, in order of cost:
+
+1. **Read `b:/zapp/index.db` as a file.** It sits in the same directory as
+   the plugins, reading a file off the watch is already implemented
+   (`/Dev/FileSystem/Stream`, see `watch-push-resources.md`), and it is
+   the registry itself rather than a view of it. If the three leftovers are
+   in there, the names to uninstall are in there too.
+2. `/Plugin/Uninstall` with the id the *file* had, blind. The ids are known
+   — they were the file stems — so this costs one write each and either
+   clears the rows or does not. It is cheap enough to be worth trying
+   before any decoding, but it answers nothing if it fails: no reply
+   distinguishes "wrong id" from "wrong resource".
+3. A capture of the official app removing a sideloaded plugin, if the
+   official app can even see one.
+
+### The registry is a file, and it is trivial (2026-10-19)
+
+`b:/zapp/index.db`, read off the watch with the ordinary file read. 408
+bytes, twenty entries, every byte accounted for:
+
+```
+entry := id(8 bytes, ASCII) value(LE32)* 0xFFFFFFFF
+```
+
+The first value is the kind, and it agrees with the extensions in the
+directory listing: **1** sports app (`.fea`), **2** guide (`.gui`), **4**
+hand-pushed development build (`.dev`), **8** watch face (`.wfa`). The
+second was 0 for all twenty. Two entries carried a third — 54 for a sports
+app, 3 for the guide — and what it means is not known; the parser keeps it
+rather than discarding it.
+
+The file named all four `mahle*` builds, including the three whose files
+were deleted. So this is the answer to the nameless rows: the registry is
+what the watch's menu is drawn from, the file is readable, and
+`/Plugin/List` was simply the wrong question twice over.
+
+The page reads this instead of `/Plugin/List` now, and a registry entry
+with no file of its own gets a row whose only action is
+`/Plugin/Uninstall`. `src/ble/pluginregistry.h` carries the format;
+`tests/test_pluginregistry.cpp` covers it with vectors built from the real
+file's shape, including a truncated tail and a padded id.

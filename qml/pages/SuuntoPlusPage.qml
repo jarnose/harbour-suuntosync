@@ -19,6 +19,13 @@ import Sailfish.Silica 1.0
 // A sports app is kept on the watch as <pluginId>.fea, a watch face as
 // <id>.wfa and a guide as <id>.gui; the zip that was uploaded does not
 // survive the install.
+//
+// The directory is also what puts plugins on this page that the library has
+// never heard of - a development build pushed by hand, which the watch keeps
+// as <id>.dev rather than <id>.fea. They show their file name and offer one
+// action, removal, because that is all this app knows about them. Before
+// that they were invisible here and could not be removed at all, while still
+// taking up a slot on the watch.
 Page {
     id: page
 
@@ -146,21 +153,50 @@ Page {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: modelData.installed ? Theme.highlightColor
                                                     : Theme.secondaryColor
-                        text: modelData.installed ? qsTr("On the watch")
-                                                   : qsTr("Not on the watch")
+                        // A plugin the watch has but the library does not
+                        // know about was put there by something else - a
+                        // development build pushed by hand. It says so,
+                        // because the only thing this app knows about it is
+                        // its file name, and installing it again is not
+                        // something this page can offer.
+                        text: {
+                            // The watch's registry still names it while the
+                            // file is gone, which is what a nameless row in
+                            // the watch's own SuuntoPlus menu is.
+                            if (modelData.registryOnly)
+                                return qsTr("In the watch's list with no file left")
+                            if (modelData.onWatchOnly)
+                                return qsTr("On the watch only, not in your library")
+                            return modelData.installed ? qsTr("On the watch")
+                                                        : qsTr("Not on the watch")
+                        }
                     }
                 }
 
                 menu: ContextMenu {
                     MenuItem {
-                        visible: !modelData.installed
+                        visible: !modelData.installed && !modelData.registryOnly
                         text: qsTr("Install on the watch")
                         onClicked: AppController.installSuuntoPlusItem(modelData.id)
                     }
+                    // The only thing to do with a leftover: take it out of
+                    // the watch's list, which is where it is still drawn.
                     MenuItem {
-                        visible: modelData.installed
+                        visible: modelData.registryOnly
+                        text: qsTr("Remove from the watch's list")
+                        onClicked: AppController.removeSuuntoPlusRegistryEntry(modelData.id)
+                    }
+                    MenuItem {
+                        visible: modelData.installed && !modelData.onWatchOnly
                         text: qsTr("Remove from the watch")
                         onClicked: AppController.removeSuuntoPlusItem(modelData.id)
+                    }
+                    // Same deletion, by file name: this row has no
+                    // catalogue id to look one up with.
+                    MenuItem {
+                        visible: modelData.onWatchOnly
+                        text: qsTr("Remove from the watch")
+                        onClicked: AppController.removeSuuntoPlusFile(modelData.fileName)
                     }
                     // Only while the watch does not have it. This takes the
                     // item out of the account's library and leaves the watch
@@ -170,7 +206,8 @@ Page {
                     // from the watch first is then the only route, and the
                     // two actions never both apply.
                     MenuItem {
-                        visible: !modelData.installed
+                        visible: !modelData.installed && !modelData.onWatchOnly
+                                 && !modelData.registryOnly
                         text: qsTr("Remove from library")
                         onClicked: AppController.removeSuuntoPlusFromLibrary(modelData.id)
                     }

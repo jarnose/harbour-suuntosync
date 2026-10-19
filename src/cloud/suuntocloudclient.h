@@ -3,6 +3,8 @@
 #include "../store/workout.h"
 #include "../health/healthentry.h"
 
+#include <QVariantList>
+#include <QVariantMap>
 #include <QJsonObject>
 #include <QNetworkRequest>
 #include <QObject>
@@ -158,6 +160,59 @@ public:
     // - see authorizedRequest() for the x-totp story - but kept because the
     // two endpoints that do want it are keyed by it.
     void setAccountEmail(const QString &email) { m_accountEmail = email; }
+
+    // GET v1/userlogin - the **watch's** own cloud credential, not the
+    // phone's. Sixteen characters, which the watch sends as
+    // `WatchUserKey <key>` when it fetches maps, weather and GPS
+    // predictions over its own WiFi.
+    //
+    // It needs an `x-totp` header, and that is the interesting part: the
+    // official app was measured sending x-totp on exactly 2 requests out
+    // of 122, and this is one of them. The TOTP is the same per-account
+    // one /login2 uses, so the account's email is the salt.
+    //
+    // Found in the APK (`WatchKeyRestApi.userLogin` ->
+    // `UserLoginResponse(watchKey=)`), not on a wire: no capture here
+    // contains it, because nothing in those sessions needed a watch key.
+    // See docs/wifi-and-offline-maps.md.
+    using WatchKeyCallback =
+            std::function<void(bool ok, const QString &watchKey, const QString &error)>;
+    void fetchWatchKey(const QString &sessionKey, WatchKeyCallback callback);
+
+    // ---- offline maps ----
+    //
+    // The watch downloads the tiles itself over WiFi; the phone's whole
+    // part is choosing regions here and then poking the watch. Paths and
+    // parameter names are the official app's own, read out of its retrofit
+    // annotations (tools/dex_dump.py cannot see those - the reader is in
+    // the scratchpad note in docs/wifi-and-offline-maps.md):
+    //
+    //   GET    maps/catalogue?lat=&lon=&includeNearbyGroups=&watchCapabilities=
+    //   GET    maps/library?deviceSerialNumber=&watchCapabilities=
+    //   PUT    maps/library                  {regionId, watchCapabilities,
+    //                                          deviceSerialNumber}
+    //   DELETE maps/library/<id>?deviceSerialNumber=&watchCapabilities=
+    //
+    // All four answer the same `{error, metadata, payload}` envelope the
+    // rest of this client already unwraps.
+    //
+    // A catalogue region, flattened for QML: id, name, description,
+    // `storageSize` and `transferSize` in bytes (summed over the region's
+    // sources), and `groupName` for the heading it came under.
+    using MapRegionsCallback =
+            std::function<void(bool ok, const QVariantList &regions, const QString &error)>;
+    void fetchMapCatalogue(const QString &sessionKey, const QString &capabilities,
+                            MapRegionsCallback callback);
+    // The account's chosen regions for one watch. Each carries `status` and
+    // `downloadedSize` as well, which is how far the watch has got.
+    void fetchMapLibrary(const QString &sessionKey, const QString &serial,
+                          const QString &capabilities, MapRegionsCallback callback);
+    void addMapRegion(const QString &sessionKey, const QString &regionId,
+                       const QString &serial, const QString &capabilities,
+                       SimpleCallback callback);
+    void removeMapRegion(const QString &sessionKey, const QString &regionId,
+                          const QString &serial, const QString &capabilities,
+                          SimpleCallback callback);
 
     // POSTs to /login2 with the signed+TOTP'd form body SuuntoAuth builds.
     // callback is invoked exactly once, on this object's thread.

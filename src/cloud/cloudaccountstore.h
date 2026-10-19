@@ -15,6 +15,11 @@ public:
     // Names under which TokenVault stores this account's secrets.
     static const QString TokenSecretName;
     static const QString RefreshTokenSecretName;
+    // The passphrase of the WiFi network the watch is told to join. In the
+    // same vault because it is the same kind of thing - someone else's
+    // secret that this app only ever hands onwards - and never read back
+    // into QML. The SSID is an ordinary setting; it is not a secret.
+    static const QString WifiKeySecretName;
 
     explicit CloudAccountStore(const QString &dbPath);
 

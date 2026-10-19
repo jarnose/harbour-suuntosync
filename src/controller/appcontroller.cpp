@@ -1,6 +1,7 @@
 #include "appcontroller.h"
 
 #include "../ble/capabilities.h"
+#include "../ble/pluginregistry.h"
 #include "../secrets/tokenvault.h"
 #include "../cloud/cloudaccountstore.h"
 #include "../ble/pairedwatchstore.h"
@@ -983,6 +984,12 @@ AppController::AppController(QObject *parent)
     connect(this, &AppController::whiteboardTestResult, this, [](const QString &summary) {
         qWarning().noquote() << summary;
     });
+    // The WiFi transcript especially: it is hex, it is long, and reading it
+    // off a phone screen and typing it out again is how a measurement
+    // acquires typos. Jarno asked for this after transcribing three.
+    connect(this, &AppController::wifiResult, this, [](const QString &summary) {
+        qWarning().noquote() << QStringLiteral("wifi: ") + summary;
+    });
     connect(this, &AppController::logbookTestResult, this, [](const QString &summary) {
         qWarning().noquote() << summary;
     });
@@ -1035,6 +1042,14 @@ AppController::AppController(QObject *parent)
         m_coverMode = settings.value(QStringLiteral("cover/mode"),
                                       QStringLiteral("latest")).toString();
         m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
+        m_autoUploadSuunto =
+                settings.value(QStringLiteral("upload/autoSuunto"), false).toBool();
+        m_wifiSsid = settings.value(QStringLiteral("wifi/ssid")).toString();
+        // Whether the vault holds a passphrase is a note here rather than a
+        // read of the vault: the page only asks to decide what to show, and
+        // a read would wake the Secrets daemon on every launch. A note that
+        // is wrong surfaces as a readable error on the first attempt.
+        m_wifiKeyStored = settings.value(QStringLiteral("wifi/keyStored"), false).toBool();
         m_baseMapEnabled = settings.value(QStringLiteral("map/enabled"), false).toBool();
         m_mapTileUrl = settings.value(QStringLiteral("map/tileUrl"), kDefaultMapTileUrl).toString();
     }
@@ -3389,6 +3404,587 @@ void AppController::setCoverMode(const QString &mode)
     emit coverModeChanged();
 }
 
+
+void AppController::setAutoUploadSuunto(bool enabled)
+{
+    if (enabled == m_autoUploadSuunto)
+        return;
+    m_autoUploadSuunto = enabled;
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("upload/autoSuunto"), enabled);
+    emit autoUploadChanged();
+}
+
+void AppController::autoUploadAfterSync(const QVector<QString> &keys)
+{
+    if (keys.isEmpty())
+        return;
+
+    // The existing action, unchanged: it uploads every watch workout the
+    // cloud hasn't taken, which after a sync is these and anything an
+    // earlier sync left behind.
+    if (m_autoUploadSuunto && m_cloudAccount.isSignedIn() && !m_uploadInProgress
+            && !m_workoutStore->keysPendingUpload().isEmpty()) {
+        uploadAllWorkouts();
+    }
+}
+
+QString AppController::wifiEnablePath() const
+{
+    // The firmware version is not read anywhere in this app, so the newer
+    // of the two resources is the default; sendWifiToWatch() falls back to
+    // the other one when the watch rejects it, which is a measurement
+    // rather than a guess.
+    return QStringLiteral("/Settings/Wifi/Enabled");
+}
+
+void AppController::setWifiCredentials(const QString &ssid, const QString &passphrase)
+{
+    const QString trimmed = ssid.trimmed();
+    if (trimmed.isEmpty()) {
+        emit errorOccurred(tr("Enter the network's name."));
+        return;
+    }
+    m_wifiSsid = trimmed;
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("wifi/ssid"), trimmed);
+
+    // An open network is a real case and stores no passphrase, rather than
+    // storing an empty one that would later look like a forgotten key.
+    if (passphrase.isEmpty()) {
+        m_tokenVault->deleteSecret(CloudAccountStore::WifiKeySecretName,
+                [this](bool, const QString &) {
+            m_wifiKeyStored = false;
+            QSettings(settingsPath(), QSettings::IniFormat)
+                    .setValue(QStringLiteral("wifi/keyStored"), false);
+            emit wifiChanged();
+            emit errorOccurred(tr("Saved %1 with no passphrase.").arg(m_wifiSsid));
+        });
+        return;
+    }
+
+    m_tokenVault->storeSecret(CloudAccountStore::WifiKeySecretName, passphrase.toUtf8(),
+            [this](bool ok, const QString &error) {
+        if (!ok) {
+            emit errorOccurred(tr("Could not store the passphrase: %1").arg(error));
+            return;
+        }
+        m_wifiKeyStored = true;
+        QSettings(settingsPath(), QSettings::IniFormat)
+                .setValue(QStringLiteral("wifi/keyStored"), true);
+        emit wifiChanged();
+        emit errorOccurred(tr("Saved %1.").arg(m_wifiSsid));
+    });
+}
+
+void AppController::forgetWifiCredentials()
+{
+    m_tokenVault->deleteSecret(CloudAccountStore::WifiKeySecretName,
+            [this](bool, const QString &) {
+        m_wifiSsid.clear();
+        m_wifiKeyStored = false;
+        QSettings settings(settingsPath(), QSettings::IniFormat);
+        settings.remove(QStringLiteral("wifi/ssid"));
+        settings.setValue(QStringLiteral("wifi/keyStored"), false);
+        emit wifiChanged();
+        emit errorOccurred(tr("Forgot the network."));
+    });
+}
+
+void AppController::finishWifi(const QString &message)
+{
+    m_wifiBusy = false;
+    m_wifiSession.reset();
+    emit wifiBusyChanged();
+    emit wifiResult(message);
+}
+
+void AppController::sendWifiToWatch()
+{
+    if (m_wifiBusy)
+        return;
+    if (m_wifiSsid.isEmpty()) {
+        emit errorOccurred(tr("Save a network first."));
+        return;
+    }
+
+    // The watch has to say it has WiFi at all. A 9 Baro does not, and
+    // writing these resources to one would be asking a question with no
+    // answer; the Race answers `hw_wifi_1`, so the test is a prefix.
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+
+        m_whiteboardClient->fetchCapabilities(
+                [this](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+            if (!ok) {
+                finishWifi(tr("Could not read the watch's capabilities: %1").arg(error));
+                return;
+            }
+            bool hasWifi = false;
+            for (const std::string &token : Capabilities::parse(payload)) {
+                if (QString::fromStdString(token).startsWith(QStringLiteral("hw_wifi"))) {
+                    hasWifi = true;
+                    break;
+                }
+            }
+            if (!hasWifi) {
+                finishWifi(tr("This watch says it has no WiFi (no hw_wifi in its "
+                               "capabilities)."));
+                return;
+            }
+            enableWatchWifi();
+        });
+    });
+}
+
+void AppController::enableWatchWifi()
+{
+    // Step 1: switch WiFi on. Both resources are tried, newest first,
+    // because which one a watch has depends on its firmware and this app
+    // does not read the version. Whichever answers is reported.
+    const QString primary = wifiEnablePath();
+    const QString fallback = QStringLiteral("/Settings/Connectivity/Current/Wifi/Enabled");
+
+    m_whiteboardClient->setWifiEnabled(primary, true,
+            [this, primary, fallback](bool ok, const QString &error) {
+        if (ok) {
+            joinWatchWifi(tr("WiFi enabled (%1).").arg(primary));
+            return;
+        }
+        m_whiteboardClient->setWifiEnabled(fallback, true,
+                [this, primary, fallback, error](bool fallbackOk, const QString &fallbackError) {
+            if (fallbackOk) {
+                joinWatchWifi(tr("WiFi enabled (%1; %2 was refused: %3).")
+                                        .arg(fallback, primary, error));
+                return;
+            }
+            // Neither worked, which is worth reporting in full rather than
+            // retrying: both answers name the resource that refused them.
+            finishWifi(tr("Could not switch WiFi on. %1: %2. %3: %4.")
+                                .arg(primary, error, fallback, fallbackError));
+        });
+    });
+}
+
+void AppController::joinWatchWifi(const QString &soFar)
+{
+    // Step 2: the passphrase, out of the vault and straight onto the wire.
+    // It is never held in a member and never reaches QML.
+    if (!m_wifiKeyStored) {
+        connectWatchWifi(soFar, QString());
+        return;
+    }
+    m_tokenVault->loadSecret(CloudAccountStore::WifiKeySecretName,
+            [this, soFar](bool ok, const QByteArray &data, const QString &error) {
+        if (!ok) {
+            finishWifi(tr("%1 Could not read the passphrase: %2").arg(soFar, error));
+            return;
+        }
+        connectWatchWifi(soFar, QString::fromUtf8(data));
+    });
+}
+
+void AppController::connectWatchWifi(const QString &soFar, const QString &passphrase)
+{
+    m_whiteboardClient->connectWifi(m_wifiSsid, passphrase,
+            [this, soFar](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        if (!ok) {
+            finishWifi(tr("%1 The join request failed: %2").arg(soFar, error));
+            return;
+        }
+
+        // The reply is a result structure and its layout is not decoded
+        // yet, so the bytes are reported as they arrived. That is the
+        // measurement this step exists for; once the layout is known this
+        // turns into a sentence.
+        const QString hex = QString::fromLatin1(
+                QByteArray(reinterpret_cast<const char *>(body.data()),
+                            static_cast<int>(body.size())).toHex());
+        // Then ask the watch how it went, which is a resource of its own.
+        m_whiteboardClient->readValue(
+                QStringLiteral("/Device/Connectivity/Wifi/Connection/Status"),
+                [this, soFar, hex](bool statusOk, const std::vector<uint8_t> &status,
+                                     const QString &statusError) {
+            const QString statusText = statusOk
+                    ? QString::fromLatin1(
+                            QByteArray(reinterpret_cast<const char *>(status.data()),
+                                        static_cast<int>(status.size())).toHex())
+                    : statusError;
+            finishWifi(tr("%1 Join reply: %2. Status: %3.").arg(soFar, hex, statusText));
+        });
+    });
+}
+
+QString AppController::watchSerial() const
+{
+    return m_pairedWatch.name.section(QLatin1Char(' '), -1).trimmed();
+}
+
+void AppController::setMapsBusy(bool busy)
+{
+    if (busy == m_mapsBusy)
+        return;
+    m_mapsBusy = busy;
+    // The session rides with the flag, the same way the SuuntoPlus one
+    // does, so there is one place to forget rather than two.
+    if (!busy)
+        m_mapsSession.reset();
+    emit mapsBusyChanged();
+}
+
+QVariantList AppController::mapCatalogue() const
+{
+    // `inLibrary` is computed here rather than stored, so one refresh of
+    // either list keeps both honest.
+    QSet<QString> owned;
+    for (const QVariant &value : m_mapLibrary)
+        owned.insert(value.toMap().value(QStringLiteral("id")).toString());
+
+    QVariantList out;
+    for (const QVariant &value : m_mapCatalogue) {
+        QVariantMap row = value.toMap();
+        row.insert(QStringLiteral("inLibrary"),
+                    owned.contains(row.value(QStringLiteral("id")).toString()));
+        out.append(row);
+    }
+    return out;
+}
+
+QVariantList AppController::mapLibrary() const
+{
+    return m_mapLibrary;
+}
+
+void AppController::refreshMaps()
+{
+    if (m_mapsBusy)
+        return;
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    // The watch is needed for its capability string, which decides which
+    // tile packages the cloud offers - the same parameter the SuuntoPlus
+    // store takes, and the same context that fetches it.
+    withWatchSession([this](const WatchSession &session) {
+        m_mapsSession = session;
+        setMapsBusy(true);
+        withSuuntoPlusContext([this](const QString &key, const QString &,
+                                       const QString &capabilities) {
+            // The watch's part is over: it answered its capabilities, and
+            // everything below is HTTPS. Holding the link through two
+            // cloud requests blocks notifications for as long as they
+            // take - measured at five seconds - and that is exactly what
+            // the per-operation session was built to stop.
+            m_mapsSession.reset();
+            m_cloudClient->fetchMapCatalogue(key, capabilities,
+                    [this, key, capabilities](bool ok, const QVariantList &regions,
+                                                const QString &error) {
+                if (!ok) {
+                    setMapsBusy(false);
+                    emit errorOccurred(tr("Map catalogue failed: %1").arg(error));
+                    return;
+                }
+                m_mapCatalogue = regions;
+                m_cloudClient->fetchMapLibrary(key, watchSerial(), capabilities,
+                        [this](bool libraryOk, const QVariantList &library,
+                                 const QString &libraryError) {
+                    setMapsBusy(false);
+                    if (libraryOk)
+                        m_mapLibrary = library;
+                    else
+                        emit errorOccurred(tr("Map library failed: %1").arg(libraryError));
+                    emit mapsChanged();
+                });
+            });
+        }, [this]() { setMapsBusy(false); });
+    });
+}
+
+void AppController::addMapRegion(const QString &regionId)
+{
+    if (m_mapsBusy || regionId.isEmpty())
+        return;
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    withWatchSession([this, regionId](const WatchSession &session) {
+        m_mapsSession = session;
+        setMapsBusy(true);
+        withSuuntoPlusContext([this, regionId](const QString &key, const QString &,
+                                                 const QString &capabilities) {
+            // Same here: the capability read is done, and the nudge at the
+            // end takes the watch again for itself.
+            m_mapsSession.reset();
+            m_cloudClient->addMapRegion(key, regionId, watchSerial(), capabilities,
+                    [this, key, capabilities](bool ok, const QString &error) {
+                if (!ok) {
+                    setMapsBusy(false);
+                    emit errorOccurred(tr("The cloud would not take that region: %1")
+                                                .arg(error));
+                    return;
+                }
+                // The cloud has it; now the watch is told to go and look,
+                // which is what actually starts a download.
+                m_cloudClient->fetchMapLibrary(key, watchSerial(), capabilities,
+                        [this](bool libraryOk, const QVariantList &library, const QString &) {
+                    if (libraryOk)
+                        m_mapLibrary = library;
+                    emit mapsChanged();
+                    notifyWatchMapsChanged(tr("Added to the library."));
+                });
+            });
+        }, [this]() { setMapsBusy(false); });
+    });
+}
+
+void AppController::removeMapRegion(const QString &regionId)
+{
+    if (m_mapsBusy || regionId.isEmpty())
+        return;
+    if (!m_cloudAccount.isSignedIn()) {
+        emit errorOccurred(tr("Sign in to the Suunto cloud first."));
+        return;
+    }
+
+    withWatchSession([this, regionId](const WatchSession &session) {
+        m_mapsSession = session;
+        setMapsBusy(true);
+        withSuuntoPlusContext([this, regionId](const QString &key, const QString &,
+                                                 const QString &capabilities) {
+            m_mapsSession.reset();
+            m_cloudClient->removeMapRegion(key, regionId, watchSerial(), capabilities,
+                    [this, key, capabilities](bool ok, const QString &error) {
+                if (!ok) {
+                    setMapsBusy(false);
+                    emit errorOccurred(tr("The cloud would not drop that region: %1")
+                                                .arg(error));
+                    return;
+                }
+                m_cloudClient->fetchMapLibrary(key, watchSerial(), capabilities,
+                        [this](bool libraryOk, const QVariantList &library, const QString &) {
+                    if (libraryOk)
+                        m_mapLibrary = library;
+                    emit mapsChanged();
+                    notifyWatchMapsChanged(tr("Removed from the library."));
+                });
+            });
+        }, [this]() { setMapsBusy(false); });
+    });
+}
+
+void AppController::notifyWatchMapsChanged(const QString &soFar)
+{
+    // Two writes and a read, all on the watch: the cloud credentials so it
+    // can fetch at all, the nudge, and then how many areas it says it has.
+    // The credentials every time for the same reason the weather sync does
+    // it - a stale token is indistinguishable from a watch that has no
+    // network.
+    //
+    // Its own session, because the caller let the watch go before its
+    // cloud requests; this is the part that actually needs the link.
+    withWatchSession([this, soFar](const WatchSession &session) {
+        m_mapsSession = session;
+        writeCloudCredentials([this, soFar](const QString &credentials) {
+        m_whiteboardClient->putEmpty(QStringLiteral("/MapsDownload/AreaSelectionChanged"),
+                [this, soFar, credentials](bool ok, const QString &error) {
+            if (!ok) {
+                setMapsBusy(false);
+                emit errorOccurred(tr("%1 %2 The watch would not take the map selection: %3")
+                                            .arg(soFar, credentials, error));
+                return;
+            }
+            m_whiteboardClient->readValue(QStringLiteral("/MapsDownload/NumberOfAreas"),
+                    [this, soFar, credentials](bool countOk, const std::vector<uint8_t> &body,
+                                                 const QString &countError) {
+                setMapsBusy(false);
+                // The count is a scalar, the same shape /Settings/... values
+                // have: a 16-bit value after the type code.
+                QString areas = countError;
+                uint16_t typeCode = 0;
+                const uint8_t *value = nullptr;
+                size_t length = 0;
+                if (countOk && scalarPayload(body, &typeCode, &value, &length) && length >= 1) {
+                    areas = QString::number(length >= 2
+                            ? static_cast<int>(value[0] | (value[1] << 8))
+                            : static_cast<int>(value[0]));
+                }
+                emit errorOccurred(tr("%1 %2 Accept the download on the watch; it holds "
+                                       "%3 area(s) so far.")
+                                            .arg(soFar, credentials, areas));
+                });
+            });
+        }, [this, soFar](const QString &error) {
+            setMapsBusy(false);
+            emit errorOccurred(tr("%1 The watch was not told: %2").arg(soFar, error));
+        });
+    });
+}
+
+void AppController::writeCloudCredentials(
+        const std::function<void(const QString &soFar)> &then,
+        const std::function<void(const QString &error)> &onFailure)
+{
+    // Measured values, both of them: the official app writes exactly this
+    // URL - the API base, despite the resource being named after offline
+    // maps - and `WatchUserKey ` plus a sixteen-character key. See
+    // docs/watch-push-resources.md for the capture and
+    // docs/wifi-and-offline-maps.md for where the key comes from.
+    static const QString kWatchCloudUrl =
+            QStringLiteral("https://api.sports-tracker.com/apiserver/");
+
+    if (!m_cloudAccount.isSignedIn()) {
+        onFailure(tr("Sign in to the Suunto cloud first - the watch needs a credential of "
+                      "its own, and only the cloud can mint one."));
+        return;
+    }
+
+    m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
+            [this, then, onFailure](bool ok, const QByteArray &session,
+                                      const QString &vaultError) {
+        if (!ok) {
+            onFailure(tr("Could not read the stored session: %1").arg(vaultError));
+            return;
+        }
+        m_cloudClient->fetchWatchKey(QString::fromUtf8(session),
+                [this, then, onFailure](bool keyOk, const QString &watchKey,
+                                          const QString &keyError) {
+            if (!keyOk) {
+                onFailure(tr("The cloud would not give the watch a key: %1").arg(keyError));
+                return;
+            }
+            m_whiteboardClient->putString(
+                    QStringLiteral("/Settings/Wifi/Cloud/OfflineMaps/Url"), kWatchCloudUrl,
+                    [this, then, onFailure, watchKey](bool urlOk, const QString &urlError) {
+                if (!urlOk) {
+                    onFailure(tr("Could not write the cloud URL: %1").arg(urlError));
+                    return;
+                }
+                m_whiteboardClient->putString(
+                        QStringLiteral("/Settings/Wifi/Cloud/STTAuthorization"),
+                        QStringLiteral("WatchUserKey %1").arg(watchKey),
+                        [this, then, onFailure, watchKey](bool tokenOk,
+                                                            const QString &tokenError) {
+                    if (!tokenOk) {
+                        onFailure(tr("Could not write the watch's key: %1").arg(tokenError));
+                        return;
+                    }
+                    // The key itself is not shown - it is a credential -
+                    // but its length is, because sixteen characters is
+                    // what the capture had and a different number would
+                    // mean this endpoint answers something else.
+                    then(tr("Cloud credentials written (key of %1 characters).")
+                                  .arg(watchKey.size()));
+                });
+            });
+        });
+    });
+}
+
+void AppController::sendCloudCredentialsToWatch()
+{
+    if (m_wifiBusy)
+        return;
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+        writeCloudCredentials([this](const QString &soFar) {
+            finishWifi(soFar);
+        }, [this](const QString &error) { finishWifi(error); });
+    });
+}
+
+void AppController::syncWatchWeather()
+{
+    if (m_wifiBusy)
+        return;
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+
+        // The credentials first, every time: they are two writes and a
+        // request, and a stale or missing token is the one failure this
+        // cannot tell apart from a watch that simply has no network.
+        writeCloudCredentials([this](const QString &soFar) {
+            m_whiteboardClient->triggerStreamSync(QStringLiteral("/Weather/Sync"),
+                    [this, soFar](bool ok, const std::vector<uint8_t> &body,
+                                    const QString &error) {
+                if (!ok) {
+                    finishWifi(tr("%1 The weather sync failed: %2").arg(soFar, error));
+                    return;
+                }
+                // A short reply with no forecast in it is the *expected*
+                // answer - the watch goes and fetches it over WiFi, and
+                // its own event log is where the result shows up. So this
+                // reports the bytes and says what to look at next rather
+                // than claiming success.
+                const QString hex = QString::fromLatin1(
+                        QByteArray(reinterpret_cast<const char *>(body.data()),
+                                    static_cast<int>(body.size())).toHex());
+                finishWifi(tr("%1 Weather sync asked, watch answered %2 bytes: %3. The "
+                               "forecast comes over the watch's own WiFi, so look at the "
+                               "watch's weather view in a minute.")
+                                    .arg(soFar).arg(body.size()).arg(hex));
+            });
+        }, [this](const QString &error) { finishWifi(error); });
+    });
+}
+
+void AppController::readWatchWifiState()
+{
+    if (m_wifiBusy)
+        return;
+
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+
+        // Three reads, each reported as the watch answered it: whether
+        // WiFi is on, which slots hold a network, and the last connection
+        // result. Hex, because none of the three layouts is decoded yet.
+        m_whiteboardClient->readValue(wifiEnablePath(),
+                [this](bool, const std::vector<uint8_t> &enabled, const QString &enabledError) {
+            const QString enabledText = enabled.empty()
+                    ? enabledError
+                    : QString::fromLatin1(
+                            QByteArray(reinterpret_cast<const char *>(enabled.data()),
+                                        static_cast<int>(enabled.size())).toHex());
+            m_whiteboardClient->readValue(QStringLiteral("/Settings/Wifi/AccessPoints"),
+                    // Not `slots`: Qt's own macro by that name turns the
+                    // parameter list into something the compiler cannot
+                    // parse, and the error points at the line after.
+                    [this, enabledText](bool, const std::vector<uint8_t> &savedSlots,
+                                          const QString &slotsError) {
+                const QString slotsText = savedSlots.empty()
+                        ? slotsError
+                        : QString::fromLatin1(
+                                QByteArray(reinterpret_cast<const char *>(savedSlots.data()),
+                                            static_cast<int>(savedSlots.size())).toHex());
+                m_whiteboardClient->readValue(
+                        QStringLiteral("/Device/Connectivity/Wifi/Connection/Status"),
+                        [this, enabledText, slotsText](bool, const std::vector<uint8_t> &status,
+                                                         const QString &statusError) {
+                    const QString statusText = status.empty()
+                            ? statusError
+                            : QString::fromLatin1(
+                                    QByteArray(reinterpret_cast<const char *>(status.data()),
+                                                static_cast<int>(status.size())).toHex());
+                    finishWifi(tr("Enabled: %1. Saved slots: %2. Status: %3.")
+                                        .arg(enabledText, slotsText, statusText));
+                });
+            });
+        });
+    });
+}
+
 void AppController::setSyncOnConnect(bool enabled)
 {
     if (enabled == m_syncOnConnect)
@@ -4178,6 +4774,27 @@ void appendSuuntoPlusItems(QVariantList &library,
     }
 }
 
+// Which kind the watch's own file name says a plugin is, or an empty
+// string for a file that is not a plugin at all.
+//
+// .wfa, .gui and .fea are what the library installs. **.dev is a
+// development build**: build-app.js names a `"type":"device"` app
+// `<id>-q.dev` and zappctl pushes it as `b:/zapp/<id>.dev`, so it never has
+// a catalogue entry and the extension is the only thing that says it is a
+// sports app. Measured in the suuntoplus-mahle project, whose own apps
+// these are.
+QString suuntoPlusKindForFile(const QString &file)
+{
+    if (file.endsWith(QStringLiteral(".wfa"), Qt::CaseInsensitive))
+        return QStringLiteral("watchface");
+    if (file.endsWith(QStringLiteral(".gui"), Qt::CaseInsensitive))
+        return QStringLiteral("sequence");
+    if (file.endsWith(QStringLiteral(".fea"), Qt::CaseInsensitive)
+            || file.endsWith(QStringLiteral(".dev"), Qt::CaseInsensitive))
+        return QStringLiteral("feature");
+    return QString();
+}
+
 // Grouped by kind, and by name inside a kind. The page draws a heading
 // wherever the kind changes from one row to the next, so the sort is what
 // makes the three groups whole rather than scattered.
@@ -4213,12 +4830,111 @@ void AppController::setSuuntoPlusBusy(bool busy)
 QVariantList AppController::suuntoPlusItems() const
 {
     QVariantList out;
+    QSet<QString> claimed;
+    // Which registry entries the rows above and below account for. The
+    // registry names a plugin by its pluginId, a watch face and a guide by
+    // their catalogue id, and a hand-pushed build by its file's stem - so
+    // all of those are what a row can claim.
+    QSet<QString> claimedIds;
     for (const QVariant &value : m_suuntoPlusLibrary) {
         QVariantMap entry = value.toMap();
-        entry.insert(QStringLiteral("installed"),
-                      m_suuntoPlusFiles.contains(suuntoPlusFileName(entry)));
+        const QString file = suuntoPlusFileName(entry);
+        const bool installed = m_suuntoPlusFiles.contains(file);
+        entry.insert(QStringLiteral("installed"), installed);
+        entry.insert(QStringLiteral("fileName"), file);
+        entry.insert(QStringLiteral("onWatchOnly"), false);
+        entry.insert(QStringLiteral("registryOnly"), false);
+        if (installed) {
+            claimed.insert(file);
+            claimedIds.insert(entry.value(QStringLiteral("id")).toString());
+            claimedIds.insert(entry.value(QStringLiteral("pluginId")).toString());
+        }
         out.append(entry);
     }
+
+    // Everything else the plugin directory holds. A plugin put there by
+    // something other than this library - a development build pushed by
+    // hand - has no catalogue entry, so matching the library against the
+    // directory could only ever hide it: it was on the watch, taking up a
+    // slot, and no page listed it or could remove it.
+    //
+    // Only the three plugin extensions are rows. The directory holds other
+    // things, and a row for a file this app cannot reason about would
+    // offer to delete something it does not understand.
+    QVariantList extras;
+    for (const QString &file : m_suuntoPlusFiles) {
+        if (claimed.contains(file))
+            continue;
+        const QString type = suuntoPlusKindForFile(file);
+        if (type.isEmpty())
+            continue;
+
+        QVariantMap entry;
+        // No catalogue id, because there is no catalogue entry: the file
+        // name is the handle, and the page removes it by that.
+        entry.insert(QStringLiteral("id"), QString());
+        entry.insert(QStringLiteral("pluginId"), QString());
+        // The file's own stem is the only name there is. Reading a real
+        // one would mean fetching the plugin back off the watch and
+        // parsing it, for a label.
+        entry.insert(QStringLiteral("name"), file.left(file.lastIndexOf(QLatin1Char('.'))));
+        entry.insert(QStringLiteral("description"), QString());
+        entry.insert(QStringLiteral("type"), type);
+        entry.insert(QStringLiteral("version"), QString());
+        entry.insert(QStringLiteral("installed"), true);
+        entry.insert(QStringLiteral("fileName"), file);
+        entry.insert(QStringLiteral("onWatchOnly"), true);
+        entry.insert(QStringLiteral("registryOnly"), false);
+        claimedIds.insert(entry.value(QStringLiteral("name")).toString());
+        extras.append(entry);
+    }
+
+    // And what the watch's registry names that neither a library item nor a
+    // file accounts for: a plugin whose file is gone. The watch still draws
+    // it in its own SuuntoPlus menu, as a row with a button and no name,
+    // because the name lived in the file. Removing its file is not what
+    // clears it - /Plugin/Uninstall is - and these rows are the only way
+    // to reach one.
+    for (auto it = m_suuntoPlusRegistry.constBegin();
+            it != m_suuntoPlusRegistry.constEnd(); ++it) {
+        const QString id = it.key();
+        if (id.isEmpty() || claimedIds.contains(id))
+            continue;
+        // A registry entry whose file is still there is not a leftover -
+        // it is one of the rows above, or a plugin the account's library
+        // has never heard of, and the file's own row already covers it.
+        const QString extension =
+                QString::fromStdString(PluginRegistry::extensionForKind(it.value()));
+        if (!extension.isEmpty() && m_suuntoPlusFiles.contains(id + extension))
+            continue;
+
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), id);
+        entry.insert(QStringLiteral("pluginId"), id);
+        entry.insert(QStringLiteral("name"), id);
+        entry.insert(QStringLiteral("description"), QString());
+        // The registry says which kind it was, which the file cannot any
+        // more: 1 is a sports app, 2 a guide, 4 a hand-pushed build and 8
+        // a watch face.
+        entry.insert(QStringLiteral("type"),
+                      it.value() == 8 ? QStringLiteral("watchface")
+                      : it.value() == 2 ? QStringLiteral("sequence")
+                                         : QStringLiteral("feature"));
+        entry.insert(QStringLiteral("version"), QString());
+        entry.insert(QStringLiteral("installed"), false);
+        entry.insert(QStringLiteral("fileName"), QString());
+        entry.insert(QStringLiteral("onWatchOnly"), false);
+        entry.insert(QStringLiteral("registryOnly"), true);
+        extras.append(entry);
+    }
+
+    // Sorted into the same three groups as the library rows, so a
+    // hand-pushed sports app appears among the sports apps rather than in
+    // a section of its own. m_suuntoPlusFiles is a QSet, whose order is
+    // its hash order, so this is also what makes the extras stable from
+    // one read to the next.
+    out.append(extras);
+    sortSuuntoPlusLibrary(out);
     return out;
 }
 
@@ -4330,8 +5046,8 @@ void AppController::readWatchPluginFiles()
         m_whiteboardClient->listDirectory(location,
                 [this](bool listOk, const std::vector<uint8_t> &body,
                         const QString &listError) {
-            setSuuntoPlusBusy(false);
             if (!listOk) {
+                setSuuntoPlusBusy(false);
                 emit suuntoPlusChanged();
                 emit errorOccurred(listError);
                 return;
@@ -4350,7 +5066,45 @@ void AppController::readWatchPluginFiles()
                     m_suuntoPlusFiles.insert(v.toString());
             }
             emit suuntoPlusChanged();
+            readWatchPluginRegistry();
         });
+    });
+}
+
+void AppController::readWatchPluginRegistry()
+{
+    // The third answer about what is on the watch, and the only one that
+    // says what the watch's own menu will draw.
+    //
+    // This reads `index.db` out of the plugin directory rather than
+    // /Plugin/List, because the list is incomplete twice over: it named
+    // fifteen things where the directory held seventeen files, and it does
+    // not name a plugin whose file has been deleted at all - while the
+    // watch still draws that plugin, nameless, in its own menu. The file
+    // is where those rows come from. Measured: 408 bytes, twenty entries,
+    // every byte accounted for. See src/ble/pluginregistry.h.
+    //
+    // Worth saying rather than worth failing for: the library and the
+    // directory are already in hand, and they are what the page is mostly
+    // about.
+    const QString path = m_suuntoPlusLocation + QStringLiteral("/index.db");
+    m_whiteboardClient->readWatchFile(path,
+            [this, path](bool ok, const std::vector<uint8_t> &payload, const QString &error) {
+        setSuuntoPlusBusy(false);
+        if (!ok) {
+            emit suuntoPlusChanged();
+            emit errorOccurred(tr("Could not read the watch's plugin registry (%1): %2")
+                                        .arg(path, error));
+            return;
+        }
+        m_suuntoPlusRegistry.clear();
+        for (const PluginRegistry::Entry &entry : PluginRegistry::parse(payload)) {
+            if (entry.id.empty())
+                continue;
+            m_suuntoPlusRegistry.insert(QString::fromStdString(entry.id),
+                                         entry.kind);
+        }
+        emit suuntoPlusChanged();
     });
 }
 
@@ -4640,21 +5394,88 @@ void AppController::removeSuuntoPlusItem(const QString &id)
         emit errorOccurred(tr("Refresh the list first."));
         return;
     }
-    const QString name = target.value(QStringLiteral("name")).toString();
+    deleteSuuntoPlusFile(suuntoPlusFileName(target),
+                          target.value(QStringLiteral("name")).toString());
+}
 
-    withWatchSession([this, target, name](const WatchSession &session) {
+void AppController::removeSuuntoPlusFile(const QString &fileName)
+{
+    if (m_suuntoPlusBusy)
+        return;
+    if (m_suuntoPlusLocation.isEmpty()) {
+        emit errorOccurred(tr("Refresh the list first."));
+        return;
+    }
+    // The name comes from the watch's own directory listing, and nothing
+    // matches it against the library - so it is checked here instead:
+    // a name, in the plugin directory, with a plugin's extension.
+    if (suuntoPlusKindForFile(fileName).isEmpty() || fileName.contains(QLatin1Char('/'))) {
+        emit errorOccurred(tr("%1 is not a plugin file.").arg(fileName));
+        return;
+    }
+    if (!m_suuntoPlusFiles.contains(fileName)) {
+        emit errorOccurred(tr("The watch no longer has %1. Refresh the list.").arg(fileName));
+        return;
+    }
+    deleteSuuntoPlusFile(fileName, fileName);
+}
+
+void AppController::removeSuuntoPlusRegistryEntry(const QString &id)
+{
+    if (m_suuntoPlusBusy)
+        return;
+    if (id.isEmpty()) {
+        emit errorOccurred(tr("That entry has no id to remove."));
+        return;
+    }
+
+    withWatchSession([this, id](const WatchSession &session) {
         m_suuntoPlusSession = session;
         setSuuntoPlusBusy(true);
-        const QString path =
-                m_suuntoPlusLocation + QLatin1Char('/') + suuntoPlusFileName(target);
-        m_whiteboardClient->deleteFile(path, [this, name](bool ok, const QString &error) {
+        m_whiteboardClient->uninstallPlugin(id, [this, id](bool ok, const QString &error) {
             setSuuntoPlusBusy(false);
             if (!ok) {
-                emit errorOccurred(error);
+                emit errorOccurred(tr("Uninstalling %1 failed: %2").arg(id, error));
                 return;
             }
-            emit errorOccurred(tr("Removed %1 from the watch").arg(name));
+            emit errorOccurred(tr("Uninstalled %1").arg(id));
             refreshSuuntoPlus();
+        });
+    });
+}
+
+void AppController::deleteSuuntoPlusFile(const QString &fileName, const QString &label)
+{
+    // Two steps, and the second one is the one that was missing: deleting
+    // the file leaves the watch's registry naming a plugin it can no
+    // longer name - a row with a button and no label in the watch's own
+    // SuuntoPlus menu. /Plugin/Uninstall is what clears that.
+    //
+    // The uninstall goes first, because it may take the file with it; the
+    // delete afterwards is therefore allowed to fail, and only a pair of
+    // failures is reported as one. The id is the file's stem: the registry
+    // names a sports app by its pluginId, which is exactly what the file
+    // is called.
+    const QString id = fileName.left(fileName.lastIndexOf(QLatin1Char('.')));
+
+    withWatchSession([this, fileName, label, id](const WatchSession &session) {
+        m_suuntoPlusSession = session;
+        setSuuntoPlusBusy(true);
+        m_whiteboardClient->uninstallPlugin(id,
+                [this, fileName, label](bool uninstallOk, const QString &uninstallError) {
+            const QString path = m_suuntoPlusLocation + QLatin1Char('/') + fileName;
+            m_whiteboardClient->deleteFile(path,
+                    [this, label, uninstallOk, uninstallError]
+                    (bool ok, const QString &error) {
+                setSuuntoPlusBusy(false);
+                if (!ok && !uninstallOk) {
+                    emit errorOccurred(tr("Could not remove %1. Uninstall: %2. Delete: %3")
+                                                .arg(label, uninstallError, error));
+                    return;
+                }
+                emit errorOccurred(tr("Removed %1 from the watch").arg(label));
+                refreshSuuntoPlus();
+            });
         });
     });
 }
@@ -5109,6 +5930,15 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         m_workoutSyncSession.reset();
         emit workoutSyncInProgressChanged();
         loadCachedWorkouts();
+        // "ble_<id>" - the same derivation workoutFromDecoded() uses, so
+        // the keys this sync stored need no second trip through the store.
+        // The session is already released: sending a workout onwards is
+        // network work and must not hold the watch.
+        QVector<QString> syncedKeys;
+        syncedKeys.reserve(logbookIds.size());
+        for (const QString &logbookId : logbookIds)
+            syncedKeys.append(QStringLiteral("ble_%1").arg(logbookId));
+        autoUploadAfterSync(syncedKeys);
         if (!failures.isEmpty()) {
             emit errorOccurred(tr("Synced %1 of %2 watch workouts. Failed: %3")
                                         .arg(succeeded)

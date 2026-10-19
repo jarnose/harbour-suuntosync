@@ -436,11 +436,20 @@ GET  /Settings/Wifi/Cloud/STTAuthorization
 
 So implementing this is two `putString()` calls, which already exist.
 
-**Open**: where the 16-character token comes from. It is not the account's
-userKey - that is 32 characters and a different value - and it does not
-appear in the 2026-09-22 HTTPS capture. Until that is known, this cannot
-be implemented for a fresh account, only replayed. The next HTTPS capture
-during a watch sync should show which endpoint mints it.
+**Closed, 2026-10-18**: the 16-character token comes from **`GET
+userlogin`** - `WatchKeyRestApi.userLogin`, which answers
+`{"watchKey": "..."}` and wants an `x-totp` header, which is also why the
+official app was measured sending `x-totp` on 2 requests out of 122. The
+`"WatchUserKey "` prefix is added phone-side by
+`SetWatchKeyForWatchUseCase`. So it is a credential of the watch's own,
+not the account's session key, and it is obtainable with the TOTP this
+project already generates. Read out of the APK, not off a wire; see
+`wifi-and-offline-maps.md`, which also covers what the watch does with it.
+
+The earlier wording, kept because the reasoning was right: it is not the
+account's userKey - that is 32 characters and a different value - and it
+does not appear in the 2026-09-22 HTTPS capture, which turns out to be
+because nothing in that session needed a watch key.
 
 ### Item 5: the watch fetches its own weather
 

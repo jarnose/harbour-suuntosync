@@ -1297,3 +1297,82 @@ cycling. Worth noting beside its imported twin of the same ride, six
 seconds apart in start time: the watch recorded it as *Cycling* and the
 Edge as *E-biking*, because the watch does not know about the motor. Both
 files state what their recorder knew.
+
+## Strava (2026-10-16), removed again (2026-10-19)
+
+**It is gone from the app.** Strava's upload API needs a paid subscription
+to be usable with a client of one's own, and the workouts already arrive in
+Strava anyway — through the Suunto cloud's own connection to it, which this
+app feeds. A second route to the same place, behind a paywall, is not worth
+the settings page.
+
+The rest of this section is kept as it was written, because the endpoints
+and the decisions are the expensive part and the code is the cheap part: if
+there is ever a reason to bring it back, this is what it took. The commit
+that removed it is the one to revert.
+
+### What it was
+
+A second destination for the same bytes. Strava's upload endpoint takes a
+FIT file directly, which is the whole reason this arrives now and not
+earlier: before the encoder (`src/fit/fitencoder.*`) there was nothing to
+send for a watch workout.
+
+Endpoint shapes were read out of
+[`stravalib`](https://github.com/stravalib/stravalib)'s own source
+(`protocol.py`, `client.py`) and
+[`strava-cli`](https://github.com/bwilczynski/strava-cli), not from
+documentation about them:
+
+| step | request |
+|---|---|
+| authorise | `GET https://www.strava.com/oauth/authorize?client_id=…&redirect_uri=http://localhost&response_type=code&approval_prompt=auto&scope=activity:write,activity:read` |
+| exchange | `POST https://www.strava.com/oauth/token`, `grant_type=authorization_code` |
+| refresh | the same url, `grant_type=refresh_token` |
+| upload | `POST /api/v3/uploads`, multipart: `file`, `data_type=fit`, `external_id` |
+| poll | `GET /api/v3/uploads/<id>` until `activity_id` is set |
+
+Decisions worth not relitigating:
+
+- **The credentials are the user's own.** Strava issues them per
+  developer, and a client secret in a public repository is not a secret.
+  `strava-cli` reads the same two values from the environment for the same
+  reason. So the client id is an ordinary setting and the secret goes into
+  the Secrets vault; the settings page points at
+  `strava.com/settings/api`.
+- **`http://localhost` as the redirect, with the code copied by hand.**
+  Strava accepts localhost for any application, and this app cannot
+  receive the redirect: a listening socket inside Sailjail is not a thing
+  that works. The browser lands on a page that does not load and its
+  address bar carries `code=…`. Clumsy, and it needs no server.
+- **The refresh token rotates on every use**, so the reply's token
+  replaces the stored one before anything else happens with it. The
+  secret is stored first and the refresh token second: a stored refresh
+  token with no secret beside it cannot be used for anything.
+- **Nothing in `StravaClient` is logged.** This project logs liberally,
+  and stravalib carries a comment about exactly this hazard - its issue
+  #740 was an application writing the token endpoint's parameters to a
+  log.
+- **Whether the vault holds credentials is a note in the settings**, not a
+  read of the vault at launch: the question is only asked to decide which
+  button to show, and answering it would wake the Secrets daemon on every
+  start. A note that turns out to be wrong surfaces as a readable error on
+  the first upload, which is the moment it matters.
+- **No `name` is sent.** Strava names an activity from its sport and the
+  time of day, which reads better than anything this app knows to call it.
+  The `external_id` is this app's own workout key, so a second attempt
+  comes back as Strava's own "duplicate of activity &lt;id&gt;" rather than
+  as a silent second copy - and that answer is recorded as success, with
+  the activity id when the reply carries one.
+- **The automatic upload covers what a sync brought in**, not everything
+  that could be sent. Switching the setting on should not push a year of
+  history to someone's account. The Suunto half of it is the existing
+  action unchanged, which uploads every watch workout the cloud has not
+  taken.
+- **One Strava upload at a time**, because the token refresh and the poll
+  both belong to the one in flight; the rest wait in a queue that the
+  finish of each one drains.
+
+Untested until a real account says otherwise: everything above. The code
+builds and the shapes match two independent clients, but no request has
+been sent yet.

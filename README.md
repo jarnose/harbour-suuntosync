@@ -23,8 +23,8 @@ Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.4.0-1.aarch64.rpm
-devel-su pkcon install-local -y suuntosync-notifyd-1.4.0-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.5.0-1.aarch64.rpm
+devel-su pkcon install-local -y suuntosync-notifyd-1.5.0-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
@@ -301,6 +301,35 @@ Confirmed on real hardware, not just in tests:
   code that wrote it — a watch workout exported here, sent to Garmin, and
   displaying correctly on connect.garmin.com.
 
+- **The watch's own WiFi: weather and offline maps.** A Race downloads its
+  forecast, its GPS predictions and its map tiles itself, over its own WiFi
+  — none of it crosses the Bluetooth link. The phone's whole part is three
+  settings and a nudge, and that is what this does.
+
+  The network goes in from the settings page (the passphrase into the
+  Secrets vault beside the account's own), and the watch is given two cloud
+  settings: the API address, and **a credential of its own**, which `GET
+  userlogin` mints against an `x-totp` header — sixteen characters, written
+  as `WatchUserKey …`. Then `/Weather/Sync` makes the watch refresh its
+  forecast, and the maps page puts regions in the account's map library and
+  tells the watch the library changed.
+
+  Both are confirmed on a real watch. The weather view had been saying
+  "update the weather from the Suunto app" that morning; after one tap here
+  it showed a forecast. A map region added here reached the watch the same
+  way: the watch asks you to accept the download on its own screen, shows
+  the progress there, and `/MapsDownload/NumberOfAreas` then counts exactly
+  the regions the cloud calls `FINISHED` — two numbers that agree without
+  being read from each other.
+
+  The map list carries every region the catalogue offers, grouped as the
+  cloud groups them, with a search field because that list is every country
+  in the world.
+
+  See `docs/wifi-and-offline-maps.md`, which also has the parts that are
+  still unread: the watch's structure replies for the saved networks and
+  the connection status.
+
 ## What doesn't, yet
 
 - **The watch's media controls.** Both watches ask the *phone* for
@@ -310,9 +339,15 @@ Confirmed on real hardware, not just in tests:
   app.
 - **The MediaTek EPO assist-data format**, which neither watch here asks
   for.
-- **Weather to the watch** is not a missing feature: a Race fetches its
-  own forecast over WiFi, and a 9 Baro never gets one at all. Nothing is
-  pushed over BLE on either.
+- **Saving a WiFi network into the watch's own slots.** The watch is told
+  to join a network and does; storing one in `/Settings/Wifi/AccessPoints`
+  is a six-field structure write, and writing structures needs the
+  metadata walk this project has only read about. A network added from the
+  official app, or typed on the watch, is what the maps and the weather
+  use here.
+- **Weather on a 9 Baro.** A Race fetches its own forecast over WiFi and
+  this app can tell it to; a 9 Baro has no WiFi and no weather at all, and
+  no mechanism exists to give it one over BLE.
 - **Raster map tiles.** The base map draws vector tiles; an address that
   serves images is detected and says so rather than drawing a blank. It is
   the easier of the two renderers, and what it would buy is a source like

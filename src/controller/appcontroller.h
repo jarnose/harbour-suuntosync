@@ -6,6 +6,7 @@
 #include "../ble/pairedwatch.h"
 #include "../notify/watchlink.h"
 
+#include <QHash>
 #include <QSet>
 #include <QElapsedTimer>
 #include <QObject>
@@ -65,6 +66,18 @@ class AppController : public QObject
     Q_PROPERTY(QString coverMode READ coverMode WRITE setCoverMode NOTIFY coverModeChanged)
     Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
     Q_PROPERTY(bool gpsUpdateInProgress READ isGpsUpdateInProgress NOTIFY gpsUpdateInProgressChanged)
+    // The watch's WiFi. The SSID is an ordinary setting and readable; the
+    // passphrase lives in the Secrets vault and is not, so the page only
+    // learns whether one is stored. `wifiSupported` is the watch's own
+    // answer - the capability list has to contain hw_wifi, which a Race
+    // spells `hw_wifi_1` and a 9 Baro does not have at all.
+    Q_PROPERTY(QString wifiSsid READ wifiSsid NOTIFY wifiChanged)
+    Q_PROPERTY(bool wifiKeyStored READ isWifiKeyStored NOTIFY wifiChanged)
+    Q_PROPERTY(bool wifiBusy READ isWifiBusy NOTIFY wifiBusyChanged)
+
+    // Whether a finished watch sync uploads to the cloud by itself.
+    Q_PROPERTY(bool autoUploadSuunto READ autoUploadSuunto WRITE setAutoUploadSuunto
+                       NOTIFY autoUploadChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -436,6 +449,19 @@ public:
     // undone by installing it again.
     Q_INVOKABLE void removeSuuntoPlusItem(const QString &id);
 
+    // Takes an entry out of the watch's own plugin registry, for one that
+    // has no file left: three .dev builds whose files were deleted left
+    // three nameless rows in the watch's SuuntoPlus menu, and nothing on
+    // this page could reach them. `id` is what /Plugin/List calls it.
+    Q_INVOKABLE void removeSuuntoPlusRegistryEntry(const QString &id);
+
+    // The same deletion, named by the file instead of by a catalogue id:
+    // for a plugin that was put on the watch by something other than this
+    // library - a development build pushed by hand, say - which has no
+    // catalogue entry to find it by, and which was therefore impossible to
+    // remove from this page at all.
+    Q_INVOKABLE void removeSuuntoPlusFile(const QString &fileName);
+
     // Takes the item out of the account's library, from the library page
     // rather than the store - the two pages reach the same endpoint, but
     // only this one can name an item the store listing has never been
@@ -589,6 +615,58 @@ public:
     // `label` is the display name the page already has for the activity;
     // the vocabulary lives in QML, so it comes from there rather than
     // being looked up again here.
+    bool autoUploadSuunto() const { return m_autoUploadSuunto; }
+    void setAutoUploadSuunto(bool enabled);
+
+    // ---- the watch's WiFi ----
+    QString wifiSsid() const { return m_wifiSsid; }
+    bool isWifiKeyStored() const { return m_wifiKeyStored; }
+    bool isWifiBusy() const { return m_wifiBusy; }
+
+    // Stores the network to hand to the watch: the SSID in the settings,
+    // the passphrase in the vault. An empty passphrase is an open network
+    // and stores nothing, rather than storing emptiness.
+    Q_INVOKABLE void setWifiCredentials(const QString &ssid, const QString &passphrase);
+    Q_INVOKABLE void forgetWifiCredentials();
+
+    // Turns the watch's WiFi on and tells it to join the stored network.
+    // Reports what the watch answered at each step, because none of this
+    // has been measured yet - see docs/wifi-and-offline-maps.md.
+    Q_INVOKABLE void sendWifiToWatch();
+
+    // ---- offline maps ----
+    //
+    // Same division of labour as the weather: the regions are chosen in
+    // the account's map library over HTTPS, and the watch is told to go
+    // and look. The tiles never cross the BLE link.
+    Q_PROPERTY(bool mapsBusy READ isMapsBusy NOTIFY mapsBusyChanged)
+    bool isMapsBusy() const { return m_mapsBusy; }
+
+    // Both lists as the last refresh left them. A catalogue row carries
+    // id, name, description, groupName, storageSize and transferSize; a
+    // library row adds status and downloadedSize, and `inLibrary` says
+    // which catalogue rows the account already has.
+    Q_INVOKABLE QVariantList mapCatalogue() const;
+    Q_INVOKABLE QVariantList mapLibrary() const;
+    Q_INVOKABLE void refreshMaps();
+    Q_INVOKABLE void addMapRegion(const QString &regionId);
+    Q_INVOKABLE void removeMapRegion(const QString &regionId);
+
+    // Hands the watch the two cloud settings it needs to fetch anything
+    // over its own WiFi: the API base URL, and a credential of the watch's
+    // own from `GET userlogin`. Weather, offline maps and GPS predictions
+    // all ride on these - see docs/wifi-and-offline-maps.md.
+    Q_INVOKABLE void sendCloudCredentialsToWatch();
+
+    // Tells the watch to refresh its forecast. It fetches the forecast
+    // itself over WiFi, so this writes the credentials above and then
+    // pokes /Weather/Sync; nothing about the weather crosses the BLE link.
+    Q_INVOKABLE void syncWatchWeather();
+
+    // Asks the watch what it currently thinks: whether WiFi is enabled,
+    // which slots hold a saved network, and the last connection result.
+    Q_INVOKABLE void readWatchWifiState();
+
     Q_INVOKABLE bool canExportFit(const QString &key) const;
     Q_INVOKABLE bool canExportSml(const QString &key) const;
     Q_INVOKABLE void exportWorkoutFit(const QString &key, const QString &label);
@@ -705,6 +783,15 @@ signals:
     void suuntoPlusChanged();
     void storeBusyChanged();
     void storeChanged();
+    void autoUploadChanged();
+    void wifiChanged();
+    void mapsBusyChanged();
+    void mapsChanged();
+    void wifiBusyChanged();
+    // One line per step of a WiFi attempt, as the watch answered it. A
+    // signal rather than a property because the page shows the whole
+    // transcript: each step's own words are the measurement.
+    void wifiResult(const QString &message);
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
@@ -820,6 +907,15 @@ private:
     bool m_recordsSyncInProgress = false;
     bool m_suuntoPlusBusy = false;
     bool m_storeBusy = false;
+    bool m_autoUploadSuunto = false;
+    QVariantList m_mapCatalogue;
+    QVariantList m_mapLibrary;
+    bool m_mapsBusy = false;
+    WatchSession m_mapsSession;
+    QString m_wifiSsid;
+    bool m_wifiKeyStored = false;
+    bool m_wifiBusy = false;
+    WatchSession m_wifiSession;
 
     // Weak on purpose: this does not keep the session alive, it only finds
     // the one the holders share.
@@ -870,6 +966,13 @@ private:
     QVariantList m_storeCategories;
     QVariantMap m_storeItemsById;
     QSet<QString> m_suuntoPlusFiles;
+    // The watch's own registry file, id -> kind: a different question from
+    // what the directory holds, and the two disagree in both directions -
+    // the registry keeps naming a plugin whose file is gone, which is
+    // exactly the row the watch draws with no name on it. Both are read,
+    // so the page can offer whichever removal the state needs. See
+    // src/ble/pluginregistry.h.
+    QHash<QString, quint32> m_suuntoPlusRegistry;
     QString m_suuntoPlusLocation;
     QString m_coverMode;
     bool m_syncOnConnect = false;
@@ -913,17 +1016,64 @@ private:
     // from a different listing and are not in this library.
     static QString suuntoPlusFileName(const QVariantMap &item);
     void setSuuntoPlusBusy(bool busy);
+    // Shared by the two removals above: takes the watch, deletes the file
+    // and refreshes. `label` is what the message calls it - an item's name,
+    // or the file's own name when that is all there is.
+    void deleteSuuntoPlusFile(const QString &fileName, const QString &label);
 
     // The second half of refreshSuuntoPlus(): where the watch keeps plugins
     // and what is in there. Its own method because the library half is two
     // chained cloud requests now, and the nesting had stopped being
     // readable.
     void readWatchPluginFiles();
+    // And the third answer: `index.db`, the watch's own registry, which is
+    // what its SuuntoPlus menu is drawn from. Read after the directory
+    // because it is the one the page can only act on, not browse.
+    void readWatchPluginRegistry();
     // Shared by the two exports: the directory, the name, the write and the
     // one message that says where it went.
     void writeExport(const QString &key, const QString &label, const QString &extension,
                       const QByteArray &contents);
     QString sourceOfWorkout(const QString &key) const;
+    // The resource that turns WiFi on, which depends on the firmware: the
+    // official app writes /Settings/Wifi/Enabled above 2.40.38 and
+    // /Settings/Connectivity/Current/Wifi/Enabled at or below it. The
+    // version comes from the paired watch's own info when there is one;
+    // with no version to read, the newer path is used, because every watch
+    // this app has been run against is newer than that.
+    // The serial the cloud knows this watch by, which is the last word of
+    // its Bluetooth name - "Suunto Race 2352D0000247" -> "2352D0000247".
+    // Not the "suunto-" form smlSourceFor() builds; the maps endpoints
+    // take the bare one.
+    QString watchSerial() const;
+    void setMapsBusy(bool busy);
+    // After the library changes: tells the watch to look again, and reads
+    // back how many areas it holds. The watch does the downloading.
+    void notifyWatchMapsChanged(const QString &soFar);
+    QString wifiEnablePath() const;
+    // The three steps of sendWifiToWatch(), each its own method because
+    // every one of them waits for the watch: switch WiFi on, fetch the
+    // passphrase, join. `soFar` carries what the earlier steps answered,
+    // so the one message at the end is the whole transcript.
+    void enableWatchWifi();
+    void joinWatchWifi(const QString &soFar);
+    void connectWatchWifi(const QString &soFar, const QString &passphrase);
+    void finishWifi(const QString &message);
+    // The cloud-credentials write, shared by three callers now: the action
+    // of its own, the weather sync and the map selection. Fetch the watch
+    // key, write the URL, write the token, then `then` with a line saying
+    // what happened.
+    //
+    // `onFailure` is the caller's own, not finishWifi(): the maps path
+    // rides a different busy flag, and clearing the wrong one leaves a
+    // page spinning for ever. That is not hypothetical - it is the same
+    // mistake withSuuntoPlusContext() already carries a comment about.
+    void writeCloudCredentials(const std::function<void(const QString &soFar)> &then,
+                                const std::function<void(const QString &error)> &onFailure);
+    // Called when a watch sync finishes, if the setting says so: uploads
+    // to the Suunto cloud without being asked. Takes the keys that sync
+    // actually stored, because that is what the setting is about.
+    void autoUploadAfterSync(const QVector<QString> &keys);
     // A watch workout's stored payload, written as a FIT file: the samples
     // from the payload itself and the summary from the row, because a
     // watch workout's ascent, descent and energy are the watch's own

@@ -11,6 +11,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDateTime>
+#include <QStringList>
+#include <QHash>
+#include <QSet>
 #include <QUrl>
 #include <QByteArray>
 
@@ -113,6 +116,252 @@ void SuuntoCloudClient::downloadEphemeris(int formatIndex, RawDownloadCallback c
             return;
         }
         callback(true, body, QString());
+    });
+}
+
+namespace {
+
+// One catalogue or library region, flattened into what a list needs. The
+// sizes are summed over the region's `sources`, because that is where the
+// bytes are: a region names several and the watch is told which by its own
+// capabilities.
+QVariantMap mapRegionRow(const QJsonObject &region, const QString &groupName)
+{
+    QVariantMap row;
+    row.insert(QStringLiteral("id"), region.value(QStringLiteral("id")).toString());
+    row.insert(QStringLiteral("name"), region.value(QStringLiteral("name")).toString());
+    row.insert(QStringLiteral("description"),
+                region.value(QStringLiteral("description")).toString());
+    row.insert(QStringLiteral("groupName"), groupName);
+    row.insert(QStringLiteral("status"), region.value(QStringLiteral("status")).toString());
+
+    double storage = region.value(QStringLiteral("storageSize")).toDouble();
+    double transfer = region.value(QStringLiteral("transferSize")).toDouble();
+    for (const QJsonValue &value : region.value(QStringLiteral("sources")).toArray()) {
+        const QJsonObject source = value.toObject();
+        storage += source.value(QStringLiteral("storageSize")).toDouble();
+        transfer += source.value(QStringLiteral("transferSize")).toDouble();
+    }
+    row.insert(QStringLiteral("storageSize"), storage);
+    row.insert(QStringLiteral("transferSize"), transfer);
+    row.insert(QStringLiteral("downloadedSize"),
+                region.value(QStringLiteral("downloadedSize")).toDouble());
+    return row;
+}
+
+} // namespace
+
+void SuuntoCloudClient::fetchMapCatalogue(const QString &sessionKey,
+                                           const QString &capabilities,
+                                           MapRegionsCallback callback)
+{
+    // No lat/lon: both are nullable in the official app and leaving them
+    // out asks for the whole catalogue rather than what is nearby, which
+    // is what a list to browse wants. `includeNearbyGroups` is pointless
+    // without a position, so it is left out too.
+    const QString path = QStringLiteral("maps/catalogue?watchCapabilities=%1")
+                                 .arg(QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    QNetworkReply *reply = m_network->get(authorizedRequest(kBaseUrl + path, sessionKey));
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, {}, reply->errorString());
+            return;
+        }
+        const QJsonObject envelope = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString error = envelopeError(envelope);
+        if (!error.isEmpty()) {
+            callback(false, {}, error);
+            return;
+        }
+        const QJsonObject payload = envelope.value(QStringLiteral("payload")).toObject();
+
+        // **A group's `regions` are references, not regions.** They carry
+        // an id and nothing else (`RemoteId` in the official app), and the
+        // full records live once in `payload.regions`. Reading a group's
+        // entry as a region gives a row with an id and no name - which is
+        // exactly what the first version of this drew.
+        //
+        // So the full records are indexed first, and the groups are then
+        // walked only to learn which heading each one belongs under.
+        QHash<QString, QJsonObject> byId;
+        QStringList order;
+        for (const QJsonValue &regionValue : payload.value(QStringLiteral("regions")).toArray()) {
+            const QJsonObject region = regionValue.toObject();
+            const QString id = region.value(QStringLiteral("id")).toString();
+            if (id.isEmpty() || byId.contains(id))
+                continue;
+            byId.insert(id, region);
+            order.append(id);
+        }
+
+        QHash<QString, QString> groupOf;
+        QStringList groupOrder;
+        for (const QJsonValue &groupValue : payload.value(QStringLiteral("groups")).toArray()) {
+            const QJsonObject group = groupValue.toObject();
+            const QString groupName = group.value(QStringLiteral("name")).toString();
+            for (const QJsonValue &ref : group.value(QStringLiteral("regions")).toArray()) {
+                // A reference is an object with an id; a bare string is
+                // accepted too, because one listing of ids as strings
+                // would otherwise silently drop a whole group.
+                const QString id = ref.isString()
+                        ? ref.toString()
+                        : ref.toObject().value(QStringLiteral("id")).toString();
+                if (id.isEmpty() || groupOf.contains(id))
+                    continue;
+                groupOf.insert(id, groupName);
+                groupOrder.append(id);
+            }
+        }
+
+        // Grouped regions first, in the cloud's own group order, then
+        // anything no group claimed. The page draws a heading wherever the
+        // group name changes, so the order is what makes the groups whole.
+        QVariantList rows;
+        for (const QString &id : groupOrder) {
+            if (!byId.contains(id))
+                continue;
+            rows.append(mapRegionRow(byId.value(id), groupOf.value(id)));
+        }
+        for (const QString &id : order) {
+            if (groupOf.contains(id))
+                continue;
+            rows.append(mapRegionRow(byId.value(id), QString()));
+        }
+        callback(true, rows, QString());
+    });
+}
+
+void SuuntoCloudClient::fetchMapLibrary(const QString &sessionKey, const QString &serial,
+                                         const QString &capabilities,
+                                         MapRegionsCallback callback)
+{
+    const QString path = QStringLiteral("maps/library?deviceSerialNumber=%1&watchCapabilities=%2")
+                                 .arg(QString::fromUtf8(QUrl::toPercentEncoding(serial)),
+                                       QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    QNetworkReply *reply = m_network->get(authorizedRequest(kBaseUrl + path, sessionKey));
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, {}, reply->errorString());
+            return;
+        }
+        const QJsonObject envelope = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString error = envelopeError(envelope);
+        if (!error.isEmpty()) {
+            callback(false, {}, error);
+            return;
+        }
+        QVariantList rows;
+        for (const QJsonValue &value : envelope.value(QStringLiteral("payload")).toArray())
+            rows.append(mapRegionRow(value.toObject(), QString()));
+        callback(true, rows, QString());
+    });
+}
+
+void SuuntoCloudClient::addMapRegion(const QString &sessionKey, const QString &regionId,
+                                      const QString &serial, const QString &capabilities,
+                                      SimpleCallback callback)
+{
+    QJsonObject body;
+    body.insert(QStringLiteral("regionId"), regionId);
+    body.insert(QStringLiteral("watchCapabilities"), capabilities);
+    body.insert(QStringLiteral("deviceSerialNumber"), serial);
+
+    QNetworkRequest request =
+            authorizedRequest(kBaseUrl + QStringLiteral("maps/library"), sessionKey);
+    // The official app sends this header explicitly on this one request,
+    // which is a hint worth copying rather than reasoning about.
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+    QNetworkReply *reply = m_network->put(request,
+                                            QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        const QByteArray answer = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, reply->errorString());
+            return;
+        }
+        const QString error = envelopeError(QJsonDocument::fromJson(answer).object());
+        callback(error.isEmpty(), error);
+    });
+}
+
+void SuuntoCloudClient::removeMapRegion(const QString &sessionKey, const QString &regionId,
+                                         const QString &serial, const QString &capabilities,
+                                         SimpleCallback callback)
+{
+    const QString path = QStringLiteral("maps/library/%1?deviceSerialNumber=%2"
+                                         "&watchCapabilities=%3")
+                                 .arg(QString::fromUtf8(QUrl::toPercentEncoding(regionId)),
+                                       QString::fromUtf8(QUrl::toPercentEncoding(serial)),
+                                       QString::fromUtf8(QUrl::toPercentEncoding(capabilities)));
+    QNetworkReply *reply =
+            m_network->deleteResource(authorizedRequest(kBaseUrl + path, sessionKey));
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        const QByteArray answer = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            callback(false, reply->errorString());
+            return;
+        }
+        const QString error = envelopeError(QJsonDocument::fromJson(answer).object());
+        callback(error.isEmpty(), error);
+    });
+}
+
+void SuuntoCloudClient::fetchWatchKey(const QString &sessionKey, WatchKeyCallback callback)
+{
+    if (m_accountEmail.isEmpty()) {
+        callback(false, QString(), tr("No account email to build a TOTP from."));
+        return;
+    }
+    const std::string totp = SuuntoAuth::generateTotp(m_accountEmail.toStdString(),
+                                                       QDateTime::currentMSecsSinceEpoch());
+
+    QNetworkRequest request =
+            authorizedRequest(kBaseUrl + QStringLiteral("userlogin"), sessionKey);
+    request.setRawHeader("x-totp", QByteArray::fromStdString(totp));
+
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        const QByteArray body = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            // The error body can carry the account object too, so it is
+            // described rather than quoted.
+            callback(false, QString(),
+                      tr("%1 (%2 bytes of answer)")
+                              .arg(reply->errorString()).arg(body.size()));
+            return;
+        }
+        // Measured, 2026-10-19: the field is **`watchUserKey`**, sixteen
+        // characters, at the top level of a plain user object - no
+        // envelope. The APK's own class calls it `watchKey`
+        // (`UserLoginResponse(watchKey=)`), so the Kotlin property name and
+        // the wire name differ; that cost one round trip. `watchKey` is
+        // still accepted in case another account or version answers it.
+        const QJsonObject object = QJsonDocument::fromJson(body).object();
+        QString key = object.value(QStringLiteral("watchUserKey")).toString();
+        if (key.isEmpty())
+            key = object.value(QStringLiteral("watchKey")).toString();
+        if (key.isEmpty()) {
+            key = object.value(QStringLiteral("payload")).toObject()
+                          .value(QStringLiteral("watchUserKey")).toString();
+        }
+        if (key.isEmpty()) {
+            // The field names, never the values. This endpoint answers the
+            // whole user object - the account's own userKey is in there -
+            // and the first version of this put all of it in the journal,
+            // which is a credential in a log file. Names are enough to see
+            // what the answer was shaped like.
+            callback(false, QString(),
+                      tr("No watchUserKey in the answer; it carried: %1")
+                              .arg(QStringList(object.keys()).join(QStringLiteral(", "))));
+            return;
+        }
+        callback(true, key, QString());
     });
 }
 

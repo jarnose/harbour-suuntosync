@@ -8,6 +8,10 @@ Page {
 
     property string lastError: ""
 
+    // What the watch answered to the last WiFi attempt, kept so it stays on
+    // screen while reading it.
+    property string wifiReport: ""
+
     // Not a binding: knownWatches() hits SQLite, so it is read when the
     // page opens and when the active watch changes, not on every repaint.
     property var knownWatches: []
@@ -33,6 +37,7 @@ Page {
     Connections {
         target: AppController
         onErrorOccurred: page.lastError = message
+        onWifiResult: page.wifiReport = message
         onPairedWatchChanged: page.refreshKnownWatches()
         onWatchNotificationsRead: {
             page.watchNotifications = value
@@ -249,6 +254,148 @@ Page {
                                   + "- the health page has its own action for that.")
                 checked: AppController.syncOnConnect
                 onClicked: AppController.syncOnConnect = checked
+            }
+
+            // ---- the watch's wifi ----
+            SectionHeader { text: qsTr("Watch WiFi") }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
+                // Said plainly because it is the point of the feature: the
+                // watch does the downloading, not the phone.
+                text: qsTr("The watch downloads offline maps and GPS predictions over "
+                           + "WiFi by itself. The network is stored here and handed to "
+                           + "the watch; the passphrase goes into the same vault as the "
+                           + "account's and is never shown again.")
+            }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                visible: AppController.wifiSsid.length > 0
+                color: Theme.highlightColor
+                text: AppController.wifiKeyStored
+                       ? qsTr("Stored: %1, with a passphrase").arg(AppController.wifiSsid)
+                       : qsTr("Stored: %1, open network").arg(AppController.wifiSsid)
+            }
+
+            TextField {
+                id: wifiSsidField
+                width: parent.width
+                label: qsTr("Network name (SSID)")
+                text: AppController.wifiSsid
+                inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.iconSource: "image://theme/icon-m-enter-next"
+                EnterKey.onClicked: wifiKeyField.focus = true
+            }
+
+            TextField {
+                id: wifiKeyField
+                width: parent.width
+                label: qsTr("Passphrase")
+                placeholderText: AppController.wifiKeyStored
+                                  ? qsTr("Stored - type to replace")
+                                  : qsTr("Leave empty for an open network")
+                echoMode: TextInput.PasswordEchoOnEdit
+                inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                EnterKey.onClicked: focus = false
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                text: qsTr("Save the network")
+                enabled: wifiSsidField.text.length > 0
+                onClicked: {
+                    AppController.setWifiCredentials(wifiSsidField.text, wifiKeyField.text)
+                    // Not kept on the page: it is in the vault now, and a
+                    // field that still holds it is a field that can show it.
+                    wifiKeyField.text = ""
+                }
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                text: AppController.wifiBusy ? qsTr("Talking to the watch…")
+                                              : qsTr("Send to the watch")
+                enabled: !AppController.wifiBusy && AppController.wifiSsid.length > 0
+                         && AppController.watchConnected
+                onClicked: AppController.sendWifiToWatch()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                // Needed before the watch can fetch anything itself: the
+                // API address and a credential of its own.
+                text: qsTr("Give the watch its cloud credentials")
+                enabled: !AppController.wifiBusy && AppController.watchConnected
+                         && AppController.cloudSignedIn
+                onClicked: AppController.sendCloudCredentialsToWatch()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                // Same mechanism as the weather, one page further: the
+                // regions are chosen there and the watch fetches them.
+                text: qsTr("Offline maps for the watch")
+                enabled: AppController.cloudSignedIn
+                onClicked: pageStack.push(Qt.resolvedUrl("OfflineMapsPage.qml"))
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                // The forecast never crosses the BLE link - this only
+                // tells the watch to go and get it.
+                text: qsTr("Refresh the watch's weather")
+                enabled: !AppController.wifiBusy && AppController.watchConnected
+                         && AppController.cloudSignedIn
+                onClicked: AppController.syncWatchWeather()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                text: qsTr("Read the watch's WiFi state")
+                enabled: !AppController.wifiBusy && AppController.watchConnected
+                onClicked: AppController.readWatchWifiState()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                visible: AppController.wifiSsid.length > 0
+                text: qsTr("Forget the network")
+                onClicked: AppController.forgetWifiCredentials()
+            }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                visible: page.wifiReport.length > 0
+                font.pixelSize: Theme.fontSizeExtraSmall
+                color: Theme.secondaryHighlightColor
+                // The watch's own answers, byte for byte where they are not
+                // decoded yet. This is the measurement - see
+                // docs/wifi-and-offline-maps.md - so it is shown rather
+                // than swallowed.
+                text: page.wifiReport
+            }
+
+            // ---- sending workouts onwards ----
+            SectionHeader { text: qsTr("Sending workouts onwards") }
+
+            TextSwitch {
+                text: qsTr("Send to Suunto after a sync")
+                description: qsTr("Uploads every synced workout the Suunto cloud "
+                                  + "does not have yet, without asking.")
+                enabled: AppController.cloudSignedIn
+                checked: AppController.autoUploadSuunto
+                onClicked: AppController.autoUploadSuunto = !AppController.autoUploadSuunto
             }
 
             // ---- cover ----

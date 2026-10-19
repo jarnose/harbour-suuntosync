@@ -134,6 +134,23 @@ public:
     void fetchTimelineFile(const QString &resourcePath, const QString &filename,
                             qint64 newerThanMs, DataCallback callback);
 
+    // GET `path`, then the 0x10 stream-start trigger, and hand back what
+    // the watch answers. This is the shape the official app's weather sync
+    // has: `GET /Weather/Sync`, a stream start, and a short reply with no
+    // payload in it - because the forecast does not come over BLE at all.
+    // The watch fetches it over WiFi with the credentials written to
+    // /Settings/Wifi/Cloud/*, and its own event log says so
+    // ("Weather sync ok d:1500 f:0", "synced city:Tampere"). See
+    // docs/watch-push-resources.md.
+    void triggerStreamSync(const QString &path, DataCallback callback);
+
+    // Reads a file that already exists on the watch, by name: the second
+    // half of fetchTimelineFile() without the render step and without the
+    // delete. For a file that is the watch's own and not one it made for
+    // us - `b:/zapp/index.db`, the plugin registry - so deleting it
+    // afterwards would be vandalism rather than cleanup.
+    void readWatchFile(const QString &filename, DataCallback callback);
+
     // Writes a string to a watch resource: GET the path for a handle, then
     // PUT through it. This is how the official app configures the watch -
     // see docs/watch-push-resources.md.
@@ -163,6 +180,33 @@ public:
     // A PUT with no value - used for the "do this now" resources, and for
     // deleting a rendered file once its name has been written.
     void putEmpty(const QString &path, SimpleCallback callback);
+
+    // ---- WiFi ----
+    //
+    // The watch brings up its own WiFi and downloads its own maps and GPS
+    // ephemeris over it; the phone's whole part is a handful of settings
+    // and a nudge. See docs/wifi-and-offline-maps.md for where these paths
+    // and their payloads come from (the official app's own code) and for
+    // what is still unmeasured, which is most of it: nothing below has
+    // been on a wire yet.
+
+    // GET /Device/Connectivity/Wifi/Connect with the SSID and the
+    // passphrase as two string parameters - `{Ssid, Key}` as the official
+    // app spells them. The reply is a result structure whose layout is not
+    // decoded here; the body is handed back so the caller can report it,
+    // which is how the layout gets learned.
+    void connectWifi(const QString &ssid, const QString &key, DataCallback callback);
+
+    // PUT a one-byte 1 or 0. The resource depends on the firmware: the
+    // official app writes /Settings/Wifi/Enabled above 2.40.38 and
+    // /Settings/Connectivity/Current/Wifi/Enabled at or below it, so the
+    // caller names the path.
+    //
+    // The type code is this project's `kParamSmallEnum`, which is what
+    // every measured /Settings/... toggle uses. The official app writes a
+    // Boolean, and whether the watch spells that the same way as an enum
+    // is the first thing a real attempt will say.
+    void setWifiEnabled(const QString &path, bool enabled, SimpleCallback callback);
 
     // Writes a one-byte enum to a watch resource - which is what every
     // /Settings/... toggle looks like on the wire. Confirmed against the
@@ -383,6 +427,15 @@ public:
     // fetch, no paging, answered in a single frame. Hands back the paged
     // reply's payload for Capabilities::tokens().
     void fetchPluginList(DataCallback callback);
+
+    // Takes a plugin out of the watch's own registry: /Plugin/Uninstall,
+    // with the plugin id as a string parameter (`MdsUninstallPluginRequest(id=)`
+    // in the official app, whose resource table is where this path comes
+    // from). Deleting the file does **not** do this - three deleted .dev
+    // builds left three nameless rows in the watch's own SuuntoPlus menu,
+    // which is what `index.db` disagreeing with the filesystem looks like
+    // from the watch's side.
+    void uninstallPlugin(const QString &id, SimpleCallback callback);
 
     // Lists a directory on the watch. Hands back the whole reply body: the
     // JSON sits somewhere inside it, and finding it by its braces is what

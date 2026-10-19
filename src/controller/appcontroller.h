@@ -663,6 +663,23 @@ public:
     // pokes /Weather/Sync; nothing about the weather crosses the BLE link.
     Q_INVOKABLE void syncWatchWeather();
 
+    // What the watch itself holds about the weather: when it last synced
+    // (/Weather/Sync/LastTime - the "Synk." date on its own screen), what
+    // it thinks its location is (/Weather/Info), and the current reading
+    // (/Weather/Current). Three reads, no writes.
+    //
+    // These came out of the APK's resource table while chasing a sync
+    // that kept timing out; the watch's weather is readable over BLE even
+    // though it is never pushed over it.
+    Q_INVOKABLE void readWatchWeatherState();
+
+    // Reads the watch's own event log, /Analytics/Data, and reports the
+    // lines about weather and WiFi in it. A diagnostic: the watch is the
+    // only thing that knows whether its own fetch worked, and its log is
+    // where it says so ("Weather sync ok d:1500 f:0", "synced
+    // city:Tampere" - see docs/watch-push-resources.md).
+    Q_INVOKABLE void readWatchEventLog();
+
     // Asks the watch what it currently thinks: whether WiFi is enabled,
     // which slots hold a saved network, and the last connection result.
     Q_INVOKABLE void readWatchWifiState();

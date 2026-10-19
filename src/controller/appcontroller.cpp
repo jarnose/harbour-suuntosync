@@ -2,6 +2,7 @@
 
 #include "../ble/capabilities.h"
 #include "../ble/pluginregistry.h"
+#include "../ble/sbemcontainer.h"
 #include "../secrets/tokenvault.h"
 #include "../cloud/cloudaccountstore.h"
 #include "../ble/pairedwatchstore.h"
@@ -900,6 +901,33 @@ QVariantMap progressFrom(const QVector<Workout> &workouts)
     out[QStringLiteral("atl")] = progress.atl;
     out[QStringLiteral("tsb")] = progress.tsb;
     out[QStringLiteral("days")] = days;
+
+    // **How far behind these figures are**, which the page needs in order
+    // not to lie by omission.
+    //
+    // Only the cloud scores a workout: a watch-synced row has no
+    // trainingStressScore at all, so three sessions read off the watch
+    // move nothing here while the official app, which has the cloud's
+    // numbers, moves by twenty points. That is exactly what happened on
+    // 2026-10-19 - ours read 14/4/+9 against the app's 17/19/0, and the
+    // cause was a cloud sync eight days stale with three watch workouts
+    // sitting on top of it.
+    //
+    // The count is of collapsed entries, so a workout that exists as both
+    // a cloud and a watch row does not count: collapseDuplicates() keeps
+    // the scored copy.
+    qint64 newestScored = 0;
+    for (const WorkoutSummary::Entry &entry : entries) {
+        if (entry.tss > 0 && entry.startMs > newestScored)
+            newestScored = entry.startMs;
+    }
+    int unscored = 0;
+    for (const WorkoutSummary::Entry &entry : entries) {
+        if (entry.tss <= 0 && entry.startMs > newestScored)
+            ++unscored;
+    }
+    out[QStringLiteral("unscored")] = unscored;
+    out[QStringLiteral("scoredThrough")] = newestScored;
     return out;
 }
 
@@ -3909,9 +3937,19 @@ void AppController::syncWatchWeather()
         m_wifiBusy = true;
         emit wifiBusyChanged();
 
-        // The credentials first, every time: they are two writes and a
-        // request, and a stale or missing token is the one failure this
-        // cannot tell apart from a watch that simply has no network.
+        // **The credentials are the part that matters.** The watch fetches
+        // its own forecast over WiFi with them, exactly as it fetches its
+        // own GPS predictions, and a token it cannot use is the one
+        // failure that looks like having no network at all.
+        //
+        // The /Weather/Sync below is a **subscribe**, not a command: in
+        // both captures the official app GETs it and sends 0x10, the same
+        // pair it sends for /Voice/Status, /FindPhone/PhoneState and
+        // /Navigation/QuickNaviState - resources the *watch* pushes on.
+        // Calling it a trigger was this project's reading, and the
+        // captures do not support it. It is kept because it is what the
+        // official app does at this point in a sync, and because
+        // subscribing is harmless; the credential write is the mechanism.
         writeCloudCredentials([this](const QString &soFar) {
             m_whiteboardClient->triggerStreamSync(QStringLiteral("/Weather/Sync"),
                     [this, soFar](bool ok, const std::vector<uint8_t> &body,
@@ -3928,12 +3966,285 @@ void AppController::syncWatchWeather()
                 const QString hex = QString::fromLatin1(
                         QByteArray(reinterpret_cast<const char *>(body.data()),
                                     static_cast<int>(body.size())).toHex());
-                finishWifi(tr("%1 Weather sync asked, watch answered %2 bytes: %3. The "
-                               "forecast comes over the watch's own WiFi, so look at the "
-                               "watch's weather view in a minute.")
+                finishWifi(tr("%1 Subscribed to /Weather/Sync (%2 bytes: %3). The watch "
+                               "fetches the forecast itself over WiFi now that it has a "
+                               "credential; look at its weather view in a minute.")
                                     .arg(soFar).arg(body.size()).arg(hex));
             });
         }, [this](const QString &error) { finishWifi(error); });
+    });
+}
+
+namespace {
+
+// One scalar reply, as text: the type code and the value, decoded when the
+// type is one this project knows and shown as hex when it is not. Enough
+// for a diagnostic, and it never pretends to understand more than it does.
+QString scalarText(bool ok, const std::vector<uint8_t> &body, const QString &error)
+{
+    if (!ok)
+        return error;
+    uint16_t typeCode = 0;
+    const uint8_t *value = nullptr;
+    size_t length = 0;
+    if (!scalarPayload(body, &typeCode, &value, &length))
+        return AppController::tr("unreadable (%1 bytes)").arg(body.size());
+
+    const QByteArray raw(reinterpret_cast<const char *>(value), static_cast<int>(length));
+    switch (typeCode) {
+    case Mds::kParamString:
+        return QString::fromLatin1(raw).left(raw.indexOf('\0') < 0 ? raw.size()
+                                                                    : raw.indexOf('\0'));
+    case Mds::kParamSmallEnum:
+        return length >= 1 ? QString::number(value[0]) : QString();
+    case 0x0001:
+        // The 16-bit value /Settings/... booleans read as - see
+        // docs/notifications.md's AncsEnabled measurement.
+        return length >= 2 ? QString::number(value[0] | (value[1] << 8))
+                            : QString::number(value[0]);
+    case Mds::kParamInt32:
+        if (length >= 4) {
+            const uint32_t v = static_cast<uint32_t>(value[0]) | (static_cast<uint32_t>(value[1]) << 8)
+                    | (static_cast<uint32_t>(value[2]) << 16) | (static_cast<uint32_t>(value[3]) << 24);
+            return QString::number(v);
+        }
+        break;
+    case Mds::kParamInt64:
+        if (length >= 8) {
+            uint64_t v = 0;
+            for (int i = 7; i >= 0; --i)
+                v = (v << 8) | value[i];
+            // The analytics log stamps events in microseconds since the
+            // epoch (measured), and a time this size is almost certainly
+            // one of those; a plain integer is shown beside it rather than
+            // instead of it, because the unit is a reading and not a fact.
+            const QDateTime asMicroseconds =
+                    QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(v / 1000));
+            return QStringLiteral("%1 (%2 if microseconds)")
+                    .arg(QString::number(v),
+                          asMicroseconds.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+        }
+        break;
+    default:
+        break;
+    }
+    return QStringLiteral("type 0x%1: %2")
+            .arg(typeCode, 4, 16, QLatin1Char('0')).arg(QString::fromLatin1(raw.toHex()));
+}
+
+} // namespace
+
+void AppController::readWatchWeatherState()
+{
+    if (m_wifiBusy)
+        return;
+
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+
+        m_whiteboardClient->readValue(QStringLiteral("/Weather/Sync/LastTime"),
+                [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+            // Measured: a 32-bit Unix time in **seconds**, and it is
+            // exactly what the watch draws on its own weather screen as
+            // "Synk." - 0x6acbc585 there read as 10/11/2026 on the watch,
+            // which is 11 October 2026 in month/day order.
+            QString lastTime = scalarText(ok, body, error);
+            uint16_t typeCode = 0;
+            const uint8_t *value = nullptr;
+            size_t length = 0;
+            if (ok && scalarPayload(body, &typeCode, &value, &length) && length >= 4) {
+                const quint32 seconds = static_cast<quint32>(value[0])
+                        | (static_cast<quint32>(value[1]) << 8)
+                        | (static_cast<quint32>(value[2]) << 16)
+                        | (static_cast<quint32>(value[3]) << 24);
+                if (seconds > 1500000000u) {
+                    lastTime = QDateTime::fromMSecsSinceEpoch(
+                            static_cast<qint64>(seconds) * 1000)
+                            .toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+                }
+            }
+            m_whiteboardClient->readValue(QStringLiteral("/Weather/Info"),
+                    [this, lastTime](bool infoOk, const std::vector<uint8_t> &infoBody,
+                                       const QString &infoError) {
+                // The structure is not decoded, but its tail is plain
+                // text - a country code and a place name ("FI",
+                // "Vehmainen") - and two 32-bit floats earlier in it are
+                // the latitude and longitude, measured against a known
+                // location. The place is what a person wants to see here;
+                // the rest stays hex.
+                QString info = infoError;
+                if (infoOk && infoBody.size() > 8) {
+                    const QByteArray raw(
+                            reinterpret_cast<const char *>(infoBody.data()) + 8,
+                            static_cast<int>(infoBody.size()) - 8);
+                    QStringList words;
+                    QString word;
+                    for (char c : raw) {
+                        if (c >= 0x20 && c < 0x7f) {
+                            word.append(QLatin1Char(c));
+                            continue;
+                        }
+                        if (word.size() >= 2)
+                            words.append(word);
+                        word.clear();
+                    }
+                    if (word.size() >= 2)
+                        words.append(word);
+                    info = words.isEmpty() ? QString::fromLatin1(raw.toHex())
+                                            : words.join(QLatin1Char(' '));
+                }
+                m_whiteboardClient->readValue(QStringLiteral("/Weather/Current"),
+                        [this, lastTime, info](bool currentOk,
+                                                 const std::vector<uint8_t> &currentBody,
+                                                 const QString &currentError) {
+                    const QString current = currentOk && currentBody.size() > 8
+                            ? QString::fromLatin1(
+                                    QByteArray(reinterpret_cast<const char *>(currentBody.data()) + 8,
+                                                static_cast<int>(currentBody.size()) - 8).toHex())
+                            : currentError;
+                    finishWifi(tr("Last sync: %1. Info: %2. Current: %3.")
+                                        .arg(lastTime, info, current));
+                });
+            });
+        });
+    });
+}
+
+void AppController::readWatchEventLog()
+{
+    if (m_wifiBusy)
+        return;
+
+    withWatchSession([this](const WatchSession &session) {
+        m_wifiSession = session;
+        m_wifiBusy = true;
+        emit wifiBusyChanged();
+
+        // Not a stream: measured in btsnoop_race_sync_2026-09-25.log, the
+        // official app hands /Analytics/Data a **filename** and then reads
+        // that file off the filesystem. The first attempt here used the
+        // bulk-stream trigger and timed out, which is the same lesson
+        // /Logbook/Entries taught - the trigger is per resource and the
+        // capture is what says which.
+        m_whiteboardClient->fetchRenderedFile(QStringLiteral("/Analytics/Data"),
+                                               QStringLiteral("sysevt.sbm"),
+                [this](bool ok, const std::vector<uint8_t> &data, const QString &error) {
+            if (!ok) {
+                finishWifi(tr("Could not read the watch's event log: %1").arg(error));
+                return;
+            }
+
+            QByteArray bytes(reinterpret_cast<const char *>(data.data()),
+                              static_cast<int>(data.size()));
+
+            // The whole file goes to disk as well as the summary to the
+            // screen. A filtered tail of twelve lines with no timestamps
+            // is enough to see that something is wrong and not enough to
+            // say what - and this file is cheap to keep.
+            QString saved;
+            const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                    + QStringLiteral("/SuuntoSync");
+            if (QDir().mkpath(dir)) {
+                const QString out = QStringLiteral("%1/watch-eventlog_%2.sbm")
+                        .arg(dir, QDateTime::currentDateTime()
+                                    .toString(QStringLiteral("yyyy-MM-dd_HHmm")));
+                QFile file(out);
+                if (file.open(QIODevice::WriteOnly)) {
+                    file.write(bytes);
+                    file.close();
+                    saved = out;
+                }
+            }
+
+            // The log is an uncompressed SBEM0102 container - measured, on
+            // a 444-byte read - so it parses with the same reader a
+            // workout's payload uses. Its chunks, in the order they
+            // arrive:
+            //
+            //   0x01 source   0x02 when the file was written
+            //   0x03 firmware 0x04 serial  0x06 the watch's own city
+            //   then per event: 0x07 index, 0x08 type, 0x09 time,
+            //   0x0a message, 0x0b and 0x0c two tags
+            //
+            // **The times are microseconds since the epoch**, not the
+            // local64 milliseconds a workout carries: a header stamp
+            // decoded to the exact second the read was made.
+            std::vector<uint8_t> container = data;
+            if (Sbem::parseContainer(container).empty()) {
+                // Not a container as it stands; a compressed one would be,
+                // once inflated.
+                const std::vector<uint8_t> inflated = Sbem::heatshrinkDecompress(data);
+                if (!Sbem::parseContainer(inflated).empty())
+                    container = inflated;
+            }
+            const std::vector<Sbem::Chunk> chunks = Sbem::parseContainer(container);
+
+            QString city;
+            QString firmware;
+            QStringList events;
+            QString when;
+            QString message;
+            QStringList tags;
+            auto flush = [&events, &when, &message, &tags]() {
+                if (message.isEmpty())
+                    return;
+                events.append(tags.isEmpty()
+                        ? QStringLiteral("%1 %2").arg(when, message)
+                        : QStringLiteral("%1 %2 [%3]")
+                                .arg(when, message, tags.join(QLatin1Char('/'))));
+                message.clear();
+                tags.clear();
+                when.clear();
+            };
+
+            for (const Sbem::Chunk &chunk : chunks) {
+                const QByteArray value(reinterpret_cast<const char *>(chunk.value.data()),
+                                        static_cast<int>(chunk.value.size()));
+                const QString text = QString::fromLatin1(
+                        value.left(value.indexOf('\0') < 0 ? value.size()
+                                                            : value.indexOf('\0')));
+                switch (chunk.id) {
+                case 0x03: firmware = text; break;
+                case 0x06: city = text; break;
+                case 0x07: flush(); break;
+                case 0x09:
+                    if (chunk.value.size() >= 8) {
+                        uint64_t microseconds = 0;
+                        for (int i = 7; i >= 0; --i)
+                            microseconds = (microseconds << 8) | chunk.value[i];
+                        when = QDateTime::fromMSecsSinceEpoch(
+                                static_cast<qint64>(microseconds / 1000))
+                                .toString(QStringLiteral("HH:mm:ss"));
+                    }
+                    break;
+                case 0x0a: message = text; break;
+                case 0x0b:
+                case 0x0c: if (!text.isEmpty()) tags.append(text); break;
+                default: break;
+                }
+            }
+            flush();
+
+            if (events.isEmpty()) {
+                finishWifi(tr("The watch's log parsed to no events (%1 bytes, %2 chunks). "
+                               "Saved: %3")
+                                    .arg(container.size()).arg(chunks.size()).arg(saved));
+                return;
+            }
+
+            // **Reading the log empties it**: a second read right after the
+            // first came back with only the events in between. So this says
+            // how many there were, and the file on disk is the copy that
+            // keeps them.
+            const int keep = 8;
+            const QStringList tail = events.mid(qMax(0, events.size() - keep));
+            finishWifi(tr("Watch log: firmware %1, city %2, %3 events (last %4 shown; the "
+                           "read empties the log, full copy in %5): %6")
+                                .arg(firmware, city).arg(events.size()).arg(tail.size())
+                                .arg(saved, tail.join(QStringLiteral(" | "))));
+        });
     });
 }
 
@@ -4308,7 +4619,58 @@ void AppController::loadCachedWorkouts()
         emit errorOccurred(tr("Failed to load workouts: %1").arg(error));
         return;
     }
-    m_workoutModel->setWorkouts(workouts);
+
+    // **One row per real outing.** A workout this app uploaded from the
+    // watch comes back from the next cloud sync as a second row - same
+    // outing, different key namespace - and the list showed both.
+    //
+    // The upload records the cloud's own key against the watch row
+    // (workout_sml.uploaded_key), so for these there is an exact
+    // cross-reference and no need to guess from timestamps. The watch row
+    // is the one kept: its route, curves and laps are stored under its
+    // key, and it already carries the marker saying the cloud has it.
+    //
+    // Only the list is filtered. trainingProgress() and monthSummary()
+    // still see everything, because the cloud copy is the one carrying the
+    // training stress score and collapsing by time is what those do.
+    const QHash<QString, QString> uploaded = m_workoutStore->uploadedCloudKeys();
+    QSet<QString> hide;
+    for (const Workout &workout : workouts) {
+        const QString cloudKey = uploaded.value(workout.key);
+        if (!cloudKey.isEmpty())
+            hide.insert(cloudKey);
+    }
+
+    // The pairs this app did not create itself - a workout the watch sent
+    // to the cloud by some other route - have no such mapping, and for
+    // those the only cross-reference is the start time. The window is
+    // WorkoutSummary's own 90 seconds, already measured and already used
+    // by the month totals and the progress figures, so the list now
+    // counts a workout the same way they do.
+    //
+    // Deliberately one-directional: a cloud row is hidden when a local one
+    // sits beside it, never the other way round. The 1179 cloud-only rows
+    // here are nobody's duplicate and must stay.
+    for (const Workout &workout : workouts) {
+        if (workout.source == QStringLiteral("cloud"))
+            continue;
+        for (const Workout &other : workouts) {
+            if (other.source != QStringLiteral("cloud"))
+                continue;
+            if (std::llabs(other.startTime - workout.startTime)
+                    <= WorkoutSummary::kSameWorkoutWindowMs)
+                hide.insert(other.key);
+        }
+    }
+
+    QVector<Workout> shown;
+    shown.reserve(workouts.size());
+    for (const Workout &workout : workouts) {
+        if (workout.source == QStringLiteral("cloud") && hide.contains(workout.key))
+            continue;
+        shown.append(workout);
+    }
+    m_workoutModel->setWorkouts(shown);
 }
 
 void AppController::syncCloudWorkouts()

@@ -144,6 +144,18 @@ public:
     // docs/watch-push-resources.md.
     void triggerStreamSync(const QString &path, DataCallback callback);
 
+    // The watch renders a named file and we read it back - the same shape
+    // fetchTimelineFile() has, with one parameter instead of two.
+    //
+    // Measured for `/Analytics/Data` with `"sysevt.sbm"`, which is the
+    // watch's own event log (the thing that says "Weather sync ok d:1500
+    // f:0" and "synced city:Tampere"): GET the resource, hand it the
+    // filename, read that file off /Dev/FileSystem/Stream, delete it. The
+    // file is the watch's copy of its log, made for this read, so
+    // deleting it is the cleanup the official app does too.
+    void fetchRenderedFile(const QString &resourcePath, const QString &filename,
+                            DataCallback callback);
+
     // Reads a file that already exists on the watch, by name: the second
     // half of fetchTimelineFile() without the render step and without the
     // delete. For a file that is the watch's own and not one it made for
@@ -409,6 +421,9 @@ private:
     // other way re-reads the first page for ever.
     enum class PageAdvance { Bytes, Items };
 
+    // The tail of fetchRenderedFile() and of fetchTimelineFile(): open
+    // the filesystem stream, page the named file off it, delete it.
+    void readRenderedFile(const std::string &name, DataCallback callback);
     void readPages(PageRequestEncoder encoder, uint32_t offset,
                     std::vector<uint8_t> collected, DataCallback callback,
                     PageAdvance advance = PageAdvance::Bytes);

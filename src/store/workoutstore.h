@@ -3,6 +3,7 @@
 #include "workout.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QString>
 #include <QVector>
 
@@ -85,6 +86,12 @@ public:
     // itself and a second tap can't create a duplicate workout up there.
     bool markSmlUploaded(const QString &key, const QString &cloudKey, QString *error);
     bool isSmlUploaded(const QString &key) const;
+    // Every watch workout this app has uploaded, as watch key -> the cloud
+    // key the cloud answered with. That mapping is the only *exact*
+    // cross-reference between a watch row and its cloud twin - everything
+    // else is timestamp proximity - and it is what lets the list show one
+    // row per real outing instead of two.
+    QHash<QString, QString> uploadedCloudKeys() const;
 
     // Watch workouts whose stored payload decoded to nothing at all - no
     // duration, no distance, no heart rate - and which therefore have

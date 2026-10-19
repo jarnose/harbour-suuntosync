@@ -501,6 +501,18 @@ bool WorkoutStore::markSmlUploaded(const QString &key, const QString &cloudKey, 
     return true;
 }
 
+QHash<QString, QString> WorkoutStore::uploadedCloudKeys() const
+{
+    QHash<QString, QString> out;
+    QSqlQuery q(QSqlDatabase::database(m_connectionName));
+    if (!q.exec(QStringLiteral(
+            "SELECT key, uploaded_key FROM workout_sml WHERE uploaded_key IS NOT NULL")))
+        return out;
+    while (q.next())
+        out.insert(q.value(0).toString(), q.value(1).toString());
+    return out;
+}
+
 bool WorkoutStore::isSmlUploaded(const QString &key) const
 {
     QSqlQuery q(QSqlDatabase::database(m_connectionName));

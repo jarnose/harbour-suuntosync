@@ -849,3 +849,131 @@ with no file of its own gets a row whose only action is
 `/Plugin/Uninstall`. `src/ble/pluginregistry.h` carries the format;
 `tests/test_pluginregistry.cpp` covers it with vectors built from the real
 file's shape, including a truncated tail and a padded id.
+
+## Making a guide, not just installing one (2026-10-19, not implemented)
+
+Everything above is about guides somebody else wrote. **Creating one is four
+endpoints and one JSON document**, and this section is the schema, written
+down so the work can start without the research.
+
+Source: [`Marius-Ar/suunto-api-wrapper`](https://github.com/Marius-Ar/suunto-api-wrapper)
+(ISC), a TypeScript client for this same cloud API, read from its type
+declarations - not measured here. Two things in it this project *can*
+vouch for, which is why the rest is worth trusting: its `guides/items`
+listing is the endpoint this app already uses, and its `generateXtotp()`
+derives the `x-totp` TOTP exactly as `SuuntoAuth::generateTotp()` does -
+same obfuscated master secret, PBKDF2 with 100 iterations, 32-byte key,
+30-second period, six digits, keyed by the account email. An independent
+implementation agreeing on that is the best confirmation available without
+another capture.
+
+### The endpoints
+
+```
+GET    v1/suuntoplus/guides/items          the account's guides, metadata only
+GET    v1/suuntoplus/guides/files/<id>     a zip: guide.json + icon.png
+POST   v1/suuntoplus/guides/files          create; Content-Type: application/zip
+PUT    v1/suuntoplus/guides/files/<id>     replace
+DELETE v1/suuntoplus/guides/files/<id>     delete (the path already in
+                                            docs/app-api-surface.txt)
+```
+
+The zip holds exactly two entries, `guide.json` and `icon.png`, and the
+icon must be a PNG of exactly **300x300**. The wrapper ships a transparent
+default for callers with no artwork, which says the field is required
+rather than optional.
+
+The answer is the usual envelope, with the created guide's own record in
+`payload`: `id`, `username`, `type`, `name`, `description`,
+`shortDescription`, `owner`, `url`, `iconUrl`, `richText`, `activities`,
+`localDate` (YYYY-MM-DD), `usage`, `pinned`, `externalId`, `ownerId`,
+`modificationTime`, `fileModificationTime`.
+
+### `guide.json`
+
+```
+{ type: "sequence", name, description, shortDescription, owner,
+  activities: [<cloud activity id>, ...], usage: "workout",
+  url?, localDate?, externalId?,
+  steps: [ ... ],
+  extensions?: { "com.suunto": { workoutPlanType?: "interval" | "race",
+                                   raceParameters?: { totalDistanceMeters,
+                                                       totalDurationSeconds?,
+                                                       unitSystem } } } }
+```
+
+Three kinds of step, keyed by `type`:
+
+| step | fields |
+|---|---|
+| `fields` | the thing the athlete performs: `trigger`, `fields`, `title`, `phase`, `lap`, `alerts`, `notification`, `transitions`, `options`, `createManualLap`, `id`, `extensions` |
+| `notification` | a passive banner: `title`, `fields`, no trigger |
+| `repeat` | `times` and a nested `steps` array - so "5 x (1 km hard + 60 s easy)" nests naturally |
+
+`phase` is one of `warmUp`, `interval`, `rest`, `coolDown`, `split`,
+`finished`, and it is repeated inside
+`extensions["com.suunto"] = { phase, isCustomNameSet, uuid }` - an
+upper-case UUID per step.
+
+**Triggers and conditions are one union**, nestable:
+
+```
+and{triggers[]}   or{triggers[]}
+distance{value}        duration{value}        (since the workout started)
+stepDistance{value}    stepDuration{value}    (since this step started)
+location{latitude, longitude, distance?}      manualLap{}
+```
+
+Metres and seconds throughout - no scaling, unlike the watch's own binary
+formats.
+
+**Fields** are what the watch draws, and there are five families:
+
+- a live readout, `type` naming the metric: `altitude`, `ascent`,
+  `ascentTime`, `cadence`, `descent`, `descentTime`, `distance`,
+  `duration`, `energy`, `heartRate`, `pace`, `power`, `speed`,
+  `strokeRate`, `strokes`, `swolf`, `temperature`, `verticalSpeed`, with
+  optional `window` (`workout`/`step`/`manualLap`), `aggregate`
+  (`average`/`max`/`min`), `windowIndex`, `comparison`;
+- a target range: `targetHeartRate`, `targetPace`, `targetPower`,
+  `targetSpeed`, `targetCadence`, each with `min`, `max`, `value`;
+- a target taken from the user's own zones:
+  `targetFromHeartRateZone`, `targetFromPaceZone`, `targetFromPowerZone`,
+  with `zone`;
+- a zone selector: `targetHeartRateZone`, `targetPaceZone`,
+  `targetPowerZone`;
+- a countdown, `stepDistanceCountdown` or `stepDurationCountdown`, and
+  plain `text`.
+
+Plus the small supporting shapes: `alerts: [{ type: "default", condition,
+countdown: { type: "standard" } }]`, `lap: { type: "manual", hidden }`,
+`notification: { type: "default", title, text }`,
+`transitions: [{ condition, stepId }]`,
+`options: { repeatNumberPreferred }`.
+
+### The rules that are not in the schema
+
+Worth more than the type names, because they are what a first attempt gets
+wrong:
+
+- **An alert's condition may only be `stepDuration` or `stepDistance`.**
+  The wrapper mirrors a step's trigger into an alert by scanning it
+  recursively for the first such condition; a trigger made only of
+  `location` produces no alert at all.
+- **A manual lap is the escape hatch**, and it is added by default:
+  `trigger: or(stepDuration|stepDistance, manualLap())`. Without it a step
+  whose condition never fires traps the athlete in it.
+- A countdown field is appended to match whichever of `.duration` or
+  `.distance` the step ends on.
+- The backend rejects a document missing the required properties, which is
+  why the wrapper's builder throws before sending rather than after.
+
+### What this would be worth here
+
+The app can already install a guide onto the watch. With the above it could
+**compose** one - an interval session built on the phone, uploaded, and
+installed over BLE in the same breath - which is the one thing in the
+SuuntoPlus area the official app does and this does not. The pieces that
+exist: the guides listing, the zip install path, `/Plugin/Install`, and the
+Secrets-backed session. The pieces missing: this JSON writer, a 300x300
+PNG to put in the zip, and a UI to describe a workout.

@@ -314,11 +314,16 @@ Confirmed on real hardware, not just in tests:
   forecast, and the maps page puts regions in the account's map library and
   tells the watch the library changed.
 
-  Both are confirmed on a real watch. The weather view had been saying
-  "update the weather from the Suunto app" that morning; after one tap here
-  it showed a forecast. A map region added here reached the watch the same
-  way: the watch asks you to accept the download on its own screen, shows
-  the progress there, and `/MapsDownload/NumberOfAreas` then counts exactly
+  The maps are confirmed on a real watch, end to end. The weather is
+  **not** confirmed as *caused* by this: the watch's weather view had been
+  saying "update the weather from the Suunto app" that morning and showed a
+  forecast after one tap here, but the forecast's own observation time
+  predates the tap, and a later pair of taps moved nothing readable at all.
+  So the credential write is what the watch needs and the rest is an
+  observation, not a mechanism - see `docs/watch-push-resources.md`, which
+  says what would settle it. A map region added here reached the watch: the
+  watch asks you to accept the download on its own screen, shows the
+  progress there, and `/MapsDownload/NumberOfAreas` then counts exactly
   the regions the cloud calls `FINISHED` — two numbers that agree without
   being read from each other.
 

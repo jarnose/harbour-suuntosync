@@ -275,8 +275,12 @@ Page {
             // than a second opinion computed from duration.
             Item {
                 width: parent.width
-                height: visible ? progressRow.height + Theme.paddingLarge : 0
+                height: visible ? progressColumn.height + Theme.paddingLarge : 0
                 visible: page.progress.days >= 42
+
+                Column {
+                    id: progressColumn
+                    width: parent.width
 
                 Row {
                     id: progressRow
@@ -307,6 +311,24 @@ Page {
                             }
                         }
                     }
+                }
+
+                // Only the cloud scores a workout, so watch-synced ones
+                // move nothing here. Without this line the figures just
+                // look wrong: three sessions read off the watch, the
+                // official app twenty points higher, and no hint why.
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    visible: page.progress.unscored > 0
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.highlightColor
+                    text: qsTr("%n workout(s) newer than these figures have no training "
+                               + "stress score yet - sync the cloud.", "",
+                               page.progress.unscored)
+                }
                 }
             }
         }

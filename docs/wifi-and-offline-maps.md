@@ -239,10 +239,9 @@ worth writing down about them anyway:
 Neither blocks the feature: the enable write and the join take parameters,
 not structures.
 
-## Weather works (2026-10-19)
+## Weather: the credential works, the trigger is unproven (2026-10-19)
 
-The first feature where this app drives the watch's own internet
-connection, and it went end to end on the first real attempt:
+The parts that are measured, and they are the valuable ones:
 
 ```
 GET  userlogin  (x-totp)              -> watchUserKey, 16 characters
@@ -253,11 +252,18 @@ GET  /Weather/Sync + the 0x10 stream start
 
 The watch's own weather view had been saying "update the weather from the
 Suunto app" that morning; after this it showed a forecast. Nothing about
-the forecast crossed the BLE link, which is exactly the mechanism the two
-earlier captures implied and neither could prove.
+the forecast crossed the BLE link.
 
-So the ephemeris, the weather and the maps are one feature with three
-front ends, and the two writes above are all of it.
+**That last sentence is the measurement; "after this" is not.** A later
+pair of attempts moved nothing: `/Weather/Sync/LastTime` stayed at 11
+October and `/Weather/Current` came back byte for byte identical. And
+`/Weather/Sync` turned out to be a *subscribe* rather than a command - see
+`docs/watch-push-resources.md`, which has the correction and the one test
+that would settle what refreshed the forecast.
+
+What does hold: the ephemeris, the weather and the maps all need the same
+two writes, and the watch's log confirms it fetches with them
+(`WifiDl eph succ`). The maps are confirmed end to end on top of that.
 
 ## The cloud's map endpoints, with their real parameter names
 

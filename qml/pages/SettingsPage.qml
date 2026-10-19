@@ -350,12 +350,33 @@ Page {
 
             Button {
                 x: Theme.horizontalPageMargin
-                // The forecast never crosses the BLE link - this only
-                // tells the watch to go and get it.
-                text: qsTr("Refresh the watch's weather")
+                // Not a command, which the captures settled: it writes the
+                // credential the watch needs and subscribes to the
+                // resource the official app subscribes to. The watch does
+                // the fetching, over its own WiFi.
+                text: qsTr("Let the watch fetch its weather")
                 enabled: !AppController.wifiBusy && AppController.watchConnected
                          && AppController.cloudSignedIn
                 onClicked: AppController.syncWatchWeather()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                // Reads what the watch holds: when it last synced the
+                // weather - the date on its own screen - where it thinks
+                // it is, and the current reading.
+                text: qsTr("Read the watch's weather state")
+                enabled: !AppController.wifiBusy && AppController.watchConnected
+                onClicked: AppController.readWatchWeatherState()
+            }
+
+            Button {
+                x: Theme.horizontalPageMargin
+                // The watch is the only one that knows whether its own
+                // download worked; this is where it says so.
+                text: qsTr("Read the watch's event log")
+                enabled: !AppController.wifiBusy && AppController.watchConnected
+                onClicked: AppController.readWatchEventLog()
             }
 
             Button {

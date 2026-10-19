@@ -923,3 +923,114 @@ rather than a verdict.
 
 That the first version reported failure on a watch that was merely still
 working is worth keeping in mind for the next thing that answers 202.
+
+## Item 5 reopened and corrected: `/Weather/Sync` is a subscribe (2026-10-19)
+
+This document has called `/Weather/Sync` a trigger since September, on the
+strength of a `GET` followed by a `0x10`. **Both captures contradict that
+reading**, and it took reading the frames either side of it to see:
+
+```
+GET /Voice/AutoLap              -> 0x10
+GET /Weather/Sync               -> 0x10
+GET /Voice/HeartRateZone        -> 0x10
+GET /FindPhone/PhoneState       -> 0x10
+GET /Navigation/QuickNaviState  -> 0x10
+```
+
+Every one of those is a resource the **watch** pushes on, and the pair is
+how the official app subscribes. `/Weather/Sync` sits in that list, not in
+a list of commands. Its GET answers `01 00 01` - a scalar 1 - which is why
+the earlier "ack with no payload" looked like a trigger that did nothing:
+it was a read, and nothing was supposed to follow.
+
+What the watch needs in order to fetch anything at all is **the
+credential**: a fresh `WatchUserKey` in
+`/Settings/Wifi/Cloud/STTAuthorization`. Its own log confirms that side
+works - `WifiDl eph succ` for the GPS predictions.
+
+**Whether writing it is what refreshed the weather is not established**,
+and the first version of this section said it was. The sequence that
+produced the claim: the watch's weather view asked to be updated from the
+Suunto app in the morning, the credential was written and `/Weather/Sync`
+subscribed, and a forecast appeared. Then, the same afternoon:
+
+- `/Weather/Sync/LastTime` stayed at 11 October through two more attempts;
+- `/Weather/Current` came back **byte for byte identical** eleven minutes
+  and two attempts later;
+- and the forecast's own observation stamp, 04:34 that morning, *predates*
+  the first attempt - so it cannot date the fetch either way, because it is
+  the provider's observation time and not the watch's download time.
+
+So three readings survive: the watch fetched because of us, the watch had
+already fetched by itself overnight and the tap only cleared a stale-looking
+screen, or the watch fetches on a schedule of its own. The data cannot tell
+them apart.
+
+What would: watch `/Weather/Current`'s stamp until the provider issues a
+newer observation, then attempt a sync and read it again. If the stamp
+moves right after an attempt, the attempt fetches. That is one read, a few
+hours apart, and it is worth more than any amount of further reasoning
+about these bytes.
+
+### What the watch holds, read over BLE
+
+Four resources out of the APK's table, all readable, none of them pushed:
+
+```
+/Weather/Sync/LastTime      a 32-bit Unix time in seconds
+/Weather/Info               location and two day-times
+/Weather/Current            the current reading
+/Weather/Forecast/<n>, /Weather/Daily/<n>, /Weather/HourlyAqi/<n>,
+/Weather/DailyUvi/<n>       the rest of it
+```
+
+Measured on 2026-10-19:
+
+| field | value | reading |
+|---|---|---|
+| `LastTime` | `85 c5 cb 6a` | 2026-10-11 20:21 local |
+| `Info` floats | `98 ee 75 42`, `89 41 bf 41` | 61.483, 23.907 - the right place |
+| `Info` text | `FI`, `Vehmainen` | and the right name for it |
+| `Info` stamps | 08:16:55 and 18:01:30 local | today's sunrise and sunset here |
+| `Current` stamp | 2026-10-19 04:34 local | the observation's own time |
+| `Current` floats | 276.0, 276.99, 280.2, 273.4 K | 2.9, 3.8, 7.1, 0.2 °C - kelvin, as everywhere in this protocol |
+
+**So the watch's data is current and its location is right, and the one
+field that is stale is `LastTime`** - which is exactly what the watch draws
+as "Synk. 10/11/2026", month before day. That answers the question that
+started this: the date on the screen is that field, it has not moved since
+the official app last ran, and nothing this app does moves it. What it
+does do is give the watch a credential it can fetch with.
+
+Open, and worth one capture with a genuinely stale forecast: what sets
+`LastTime`. The official app has `WeatherUpdateModel.updateWeatherToDevice`,
+so a phone-side push may exist for the case where the watch cannot fetch -
+and that push is the likeliest thing to set it.
+
+### The watch's event log, and that it is consumed by reading
+
+`/Analytics/Data` takes a filename (`sysevt.sbm`), renders the log into it,
+and the file is then read off `/Dev/FileSystem/Stream` and deleted - the
+same shape the sleep timeline has, with one parameter instead of two. The
+first attempt here used the bulk-stream trigger instead and timed out,
+which is the same lesson `/Logbook/Entries` taught: **the trigger is per
+resource, and the capture is what says which.**
+
+The file is an uncompressed `SBEM0102` container:
+
+```
+0x01 source   "suunto-analytics-<serial>"
+0x02 written-at     0x03 firmware   0x04 serial   0x06 city
+per event: 0x07 index, 0x08 type, 0x09 time, 0x0a message, 0x0b + 0x0c tags
+```
+
+**Its times are microseconds since the epoch** - not the local64
+milliseconds a workout carries. A header stamp decoded to the exact second
+the read was made, which is how that was settled.
+
+And **reading it empties it**: a second read moments later returned only
+the five events that had happened in between. So the file is written to
+disk now before anything else is done with it. The first read's weather
+lines were lost to this, and they are the reason the sync looked broken:
+they were all `Weather sync TO`, with no `ok` among the twelve shown.

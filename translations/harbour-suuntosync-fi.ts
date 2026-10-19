@@ -781,7 +781,7 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>%1 Weather sync asked, watch answered %2 bytes: %3. The forecast comes over the watch&apos;s own WiFi, so look at the watch&apos;s weather view in a minute.</source>
-        <translation>%1 Sään synkronointi pyydetty, kello vastasi %2 tavua: %3. Ennuste tulee kellon omaa wifiä pitkin, joten katso kellon sääsivua hetken päästä.</translation>
+        <translation type="vanished">%1 Sään synkronointi pyydetty, kello vastasi %2 tavua: %3. Ennuste tulee kellon omaa wifiä pitkin, joten katso kellon sääsivua hetken päästä.</translation>
     </message>
     <message>
         <source>Map catalogue failed: %1</source>
@@ -822,6 +822,46 @@ löytyy - %2 tavua
     <message>
         <source>%1 %2 Accept the download on the watch; it holds %3 area(s) so far.</source>
         <translation>%1 %2 Hyväksy lataus kellon näytöltä; kellossa on tähän mennessä %3 aluetta.</translation>
+    </message>
+    <message>
+        <source>Could not read the watch&apos;s event log: %1</source>
+        <translation>Kellon tapahtumalokin luku ei onnistunut: %1</translation>
+    </message>
+    <message>
+        <source>The watch&apos;s log read as %1 bytes with no weather or WiFi lines in it; %2 text runs in total.</source>
+        <translation type="vanished">Kellon loki luki %1 tavua eikä siinä ollut sää- tai wifi-rivejä; tekstijaksoja yhteensä %2.</translation>
+    </message>
+    <message>
+        <source>Watch log (%1 of %2 matching lines): %3</source>
+        <translation type="vanished">Kellon loki (%1 / %2 osuvaa riviä): %3</translation>
+    </message>
+    <message>
+        <source>The watch&apos;s log read as %1 bytes with no weather or WiFi lines in it; %2 text runs in total. Saved: %3</source>
+        <translation type="vanished">Kellon loki luki %1 tavua eikä siinä ollut sää- tai wifi-rivejä; tekstijaksoja yhteensä %2. Tallennettu: %3</translation>
+    </message>
+    <message>
+        <source>Watch log (%1 of %2 matching lines, %3 bytes saved to %4): %5</source>
+        <translation type="vanished">Kellon loki (%1 / %2 osuvaa riviä, %3 tavua tallennettu kohteeseen %4): %5</translation>
+    </message>
+    <message>
+        <source>unreadable (%1 bytes)</source>
+        <translation>ei luettavissa (%1 tavua)</translation>
+    </message>
+    <message>
+        <source>Last sync: %1. Info: %2. Current: %3.</source>
+        <translation>Viimeinen synkronointi: %1. Info: %2. Nykyinen: %3.</translation>
+    </message>
+    <message>
+        <source>The watch&apos;s log parsed to no events (%1 bytes, %2 chunks). Saved: %3</source>
+        <translation>Kellon lokista ei jäsentynyt tapahtumia (%1 tavua, %2 lohkoa). Tallennettu: %3</translation>
+    </message>
+    <message>
+        <source>Watch log: firmware %1, city %2, %3 events (last %4 shown; the read empties the log, full copy in %5): %6</source>
+        <translation>Kellon loki: firmware %1, kaupunki %2, %3 tapahtumaa (näytetään %4 viimeistä; luku tyhjentää lokin, koko kopio: %5): %6</translation>
+    </message>
+    <message>
+        <source>%1 Subscribed to /Weather/Sync (%2 bytes: %3). The watch fetches the forecast itself over WiFi now that it has a credential; look at its weather view in a minute.</source>
+        <translation>%1 Tilattu /Weather/Sync (%2 tavua: %3). Kello hakee ennusteen itse wifillä nyt kun sillä on tunniste; katso sen sääsivua hetken päästä.</translation>
     </message>
 </context>
 <context>
@@ -1123,6 +1163,13 @@ löytyy - %2 tavua
         <source>Strava</source>
         <translation type="vanished">Strava</translation>
     </message>
+    <message numerus="yes">
+        <source>%n workout(s) newer than these figures have no training stress score yet - sync the cloud.</source>
+        <translation>
+            <numerusform>%n harjoitus on näitä lukuja uudempi eikä sille ole vielä kuormalukemaa - synkronoi pilvi.</numerusform>
+            <numerusform>%n harjoitusta on näitä lukuja uudempia eikä niille ole vielä kuormalukemaa - synkronoi pilvi.</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>MapCanvas</name>
@@ -1399,6 +1446,10 @@ löytyy - %2 tavua
     <message>
         <source>The %1 trigger failed: %2</source>
         <translation>Resurssin %1 laukaisu ei onnistunut: %2</translation>
+    </message>
+    <message>
+        <source>The render request failed: %1</source>
+        <translation>Renderöintipyyntö ei onnistunut: %1</translation>
     </message>
 </context>
 <context>
@@ -1970,11 +2021,23 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>Refresh the watch&apos;s weather</source>
-        <translation>Päivitä kellon sää</translation>
+        <translation type="vanished">Päivitä kellon sää</translation>
     </message>
     <message>
         <source>Offline maps for the watch</source>
         <translation>Kellon offline-kartat</translation>
+    </message>
+    <message>
+        <source>Read the watch&apos;s event log</source>
+        <translation>Lue kellon tapahtumaloki</translation>
+    </message>
+    <message>
+        <source>Read the watch&apos;s weather state</source>
+        <translation>Lue kellon säätila</translation>
+    </message>
+    <message>
+        <source>Let the watch fetch its weather</source>
+        <translation>Anna kellon hakea sää</translation>
     </message>
 </context>
 <context>

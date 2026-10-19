@@ -1585,6 +1585,74 @@ void MdsWhiteboardClient::triggerStreamSync(const QString &path, DataCallback ca
     });
 }
 
+void MdsWhiteboardClient::fetchRenderedFile(const QString &resourcePath,
+                                             const QString &filename, DataCallback callback)
+{
+    const std::string name = filename.toStdString();
+
+    getRaw([resourcePath](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, resourcePath.toStdString());
+    }, [this, resourcePath, name, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) {
+        if (!ok) {
+            callback(false, {}, tr("GET %1 failed: %2").arg(resourcePath, error));
+            return;
+        }
+        if (ack.body.size() < 6) {
+            callback(false, {}, tr("GET %1 acked with an unusably short body")
+                                         .arg(resourcePath));
+            return;
+        }
+
+        // One string parameter, the filename, exactly as captured:
+        // f0 48 00 01 80 00 | 01 | 0c 00 | "sysevt.sbm" 00
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody, name](uint16_t requestId) {
+            std::vector<uint8_t> parameter(name.begin(), name.end());
+            parameter.push_back(0x00);
+            return Mds::encodeParameterisedFetch(requestId, ackBody,
+                    { { Mds::kParamString, parameter } });
+        }, [this, name, callback](bool renderOk, const Mds::Frame &,
+                                    const QString &renderError) {
+            if (!renderOk) {
+                callback(false, {}, tr("The render request failed: %1").arg(renderError));
+                return;
+            }
+            readRenderedFile(name, callback);
+        });
+    });
+}
+
+void MdsWhiteboardClient::readRenderedFile(const std::string &name, DataCallback callback)
+{
+    getRaw([](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, "/Dev/FileSystem/Stream");
+    }, [this, name, callback](bool streamOk, const Mds::Frame &streamAck,
+                                const QString &streamError) {
+        if (!streamOk) {
+            callback(false, {}, tr("GET /Dev/FileSystem/Stream failed: %1").arg(streamError));
+            return;
+        }
+        if (streamAck.body.size() < 6) {
+            callback(false, {}, tr("Filesystem stream acked with a short body"));
+            return;
+        }
+        const std::vector<uint8_t> streamHandle = streamAck.body;
+        readPages([streamHandle, name](uint16_t requestId, uint32_t at) {
+            return Mds::encodeFileReadRequest(requestId, streamHandle, name, at);
+        }, 0, {},
+        [this, name, callback](bool readOk, const std::vector<uint8_t> &data,
+                                 const QString &readError) {
+            // Best effort, as in fetchTimelineFile(): the bytes are in
+            // hand by now, so a failed cleanup must not fail the read.
+            deleteWatchFile(QString::fromStdString(name),
+                    [callback, readOk, data, readError](bool, const QString &) {
+                callback(readOk, data, readError);
+            });
+        });
+    });
+}
+
 void MdsWhiteboardClient::readWatchFile(const QString &filename, DataCallback callback)
 {
     const std::string name = filename.toStdString();

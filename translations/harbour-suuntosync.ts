@@ -692,10 +692,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 Weather sync asked, watch answered %2 bytes: %3. The forecast comes over the watch&apos;s own WiFi, so look at the watch&apos;s weather view in a minute.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Map catalogue failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -729,6 +725,30 @@ exists - %2 bytes
     </message>
     <message>
         <source>%1 %2 Accept the download on the watch; it holds %3 area(s) so far.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not read the watch&apos;s event log: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>unreadable (%1 bytes)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Last sync: %1. Info: %2. Current: %3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The watch&apos;s log parsed to no events (%1 bytes, %2 chunks). Saved: %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Watch log: firmware %1, city %2, %3 events (last %4 shown; the read empties the log, full copy in %5): %6</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 Subscribed to /Weather/Sync (%2 bytes: %3). The watch fetches the forecast itself over WiFi now that it has a credential; look at its weather view in a minute.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1027,6 +1047,12 @@ exists - %2 bytes
         <source>imported</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>%n workout(s) newer than these figures have no training stress score yet - sync the cloud.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>MapCanvas</name>
@@ -1302,6 +1328,10 @@ exists - %2 bytes
     </message>
     <message>
         <source>The %1 trigger failed: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The render request failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1816,11 +1846,19 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Refresh the watch&apos;s weather</source>
+        <source>Offline maps for the watch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Offline maps for the watch</source>
+        <source>Read the watch&apos;s event log</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Read the watch&apos;s weather state</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Let the watch fetch its weather</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

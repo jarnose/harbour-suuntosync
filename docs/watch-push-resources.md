@@ -1205,6 +1205,10 @@ happen in a state not yet reproduced - the 19 October capture had the
 watch's radio switched off but a network still saved, which is not the
 same as a watch with no network at all.
 
+And the watch's own weather screen **still reads "Synk. 10/11/2026" while
+showing a current forecast** - checked after the 04:34 fetch. So the field
+is vestigial on both sides: the firmware draws it and does not refresh it.
+
 **The practical consequence is nil.** The watch's weather works, this app
-does everything the official app does for it, and the stale field is a
-display the watch's own firmware does not refresh.
+does everything the official app does for it, and that date tells nobody
+anything about how fresh the forecast is.

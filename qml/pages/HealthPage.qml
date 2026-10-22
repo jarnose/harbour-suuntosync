@@ -383,8 +383,12 @@ Page {
                     // zero - a watch left on the table is not a day of no
                     // steps.
                     function drawSeries(ctx, which, colour) {
+                        // dailyHealth() answers newest first, like every
+                        // other accessor here; a chart reads the other way,
+                        // oldest on the left, so the walk is reversed here
+                        // rather than the data being re-sorted for one view.
                         var values = []
-                        for (var i = 0; i < page.days.length; ++i)
+                        for (var i = page.days.length - 1; i >= 0; --i)
                             values.push(page.seriesValue(page.days[i], which))
 
                         var lo = Number.MAX_VALUE, hi = -Number.MAX_VALUE
@@ -481,8 +485,9 @@ Page {
                 width: parent.width - 2 * x
                 visible: page.days.length > 0
                 horizontalAlignment: Text.AlignRight
-                text: qsTr("%1 - %2").arg(page.dayOf(page.days[0].dayMs))
-                                       .arg(page.dayOf(page.days[page.days.length - 1].dayMs))
+                text: qsTr("%1 - %2")
+                        .arg(page.dayOf(page.days[page.days.length - 1].dayMs))
+                        .arg(page.dayOf(page.days[0].dayMs))
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
             }
@@ -499,8 +504,13 @@ Page {
                 // while still breaking the chart's line - the list is a
                 // record of what was measured, the chart of when it was
                 // not.
-                model: page.days.length > 1
-                       ? page.days.slice(0, page.days.length - 1).reverse() : []
+                //
+                // `days` is newest first, so dropping today is slice(1).
+                // The first version of this sliced the other end and
+                // reversed what was left, which dropped the oldest day,
+                // kept today and listed the rest backwards - all three
+                // things the comment above says it does not do.
+                model: page.days.length > 1 ? page.days.slice(1) : []
 
                 ListItem {
                     width: page.width

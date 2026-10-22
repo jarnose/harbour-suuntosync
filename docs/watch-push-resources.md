@@ -1069,6 +1069,10 @@ touches it, and this app already writes everything the official app writes.
 The test that confirms it is one tap: WiFi back on, let the watch fetch,
 read `LastTime`.
 
+**That test was run on 2026-10-22, and it refuted exactly that.** See
+"Weather works, and the trigger is a clock" below: the watch fetched, the
+forecast is on its screen, and `LastTime` did not move.
+
 Two things the same capture settles for free:
 
 - **Our two cloud writes are byte-identical to the official app's** - the
@@ -1162,3 +1166,45 @@ whoever reads it first gets the lines and the other gets an empty file. A
 read of ours at 20:43 began at 20:41:57 because the official app's sync had
 eaten everything before it four minutes earlier. Read the log *before*
 running the official app, or the window is gone.
+
+## Weather works, and the trigger is a clock (2026-10-22)
+
+The feature is confirmed end to end, and the mechanism is not the one any
+amount of protocol reading would have produced:
+
+| step | who | evidence |
+|---|---|---|
+| the credential reaches the watch | the phone - this app | the two writes, byte-identical to the official app's |
+| the forecast is fetched at ~04:34 | **the watch, over its own WiFi** | the router's resolver logged the watch asking for `weather.sports-tracker.com` at 04:34 |
+| the forecast is on the watch | the watch | its weather app shows one |
+
+So the trigger is **the watch's own nightly schedule**, which is why three
+measured attempts from the phone produced no `Weather sync` line: the watch
+does not fetch when asked, it fetches when its clock says so. The phone's
+whole contribution is a credential it can use when that moment arrives.
+
+It also explains a number read on 19 October and labelled wrongly then:
+`/Weather/Current`'s stamp was **04:34 that morning**, which this document
+called the provider's observation time. It is the watch's own fetch.
+
+### `/Weather/Sync/LastTime` is not what its name says
+
+It read `2026-10-11 20:21` before the fetch and reads `2026-10-11 20:21`
+after it. So, measured rather than reasoned, it is **not**:
+
+- the watch's record of its own successful fetch - that happened at 04:34
+  on 22 October and the field did not move;
+- the official app's sync time - that app ran twice on 19 October, and it
+  did not move then either;
+- anything this app writes - three attempts, no movement.
+
+What it does record is unknown, and 11 October 20:21 is a moment nothing
+observed since has repeated. One hypothesis survives and is not worth the
+cost of testing yet: that it marks a **phone-side push**, which would only
+happen in a state not yet reproduced - the 19 October capture had the
+watch's radio switched off but a network still saved, which is not the
+same as a watch with no network at all.
+
+**The practical consequence is nil.** The watch's weather works, this app
+does everything the official app does for it, and the stale field is a
+display the watch's own firmware does not refresh.

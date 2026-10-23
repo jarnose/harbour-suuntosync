@@ -2976,6 +2976,20 @@ void AppController::uploadWorkoutAt(const QVector<QString> &keys, int index, int
                                 .arg(failures.join(QStringLiteral("; "))));
         }
         loadCachedWorkouts();
+        // **Fetch back what was just sent.** Only the cloud scores a
+        // workout, so an upload without a read leaves the fitness figures
+        // behind by exactly the workouts that were uploaded - which is the
+        // state that read 14/4/+9 against the official app's 17/19/0 on
+        // 2026-10-19.
+        //
+        // **The cloud scores it immediately**, measured 2026-10-23: a
+        // workout sent from the watch moved the figures the moment this
+        // read came back, so no retry and no waiting is needed. And if a
+        // future upload ever does arrive unscored, nothing is lost - the
+        // cursor is the cloud's `lastModified`, so the workout comes back
+        // on an ordinary sync once the score exists.
+        if (succeeded > 0)
+            syncCloudWorkouts();
         return;
     }
 
@@ -3057,6 +3071,11 @@ void AppController::uploadWorkoutToCloud(const QString &key)
             // the next sync. The batch path reloads once at the end; this
             // one uploads a single workout, so it reloads here.
             loadCachedWorkouts();
+            // And read it back for its training stress score - see the
+            // batch path's own note. The duplicate row this creates is
+            // hidden by the list's own filter, which has the cloud key
+            // this upload just recorded.
+            syncCloudWorkouts();
         });
     });
 }

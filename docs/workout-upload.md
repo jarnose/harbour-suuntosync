@@ -1376,3 +1376,23 @@ Decisions worth not relitigating:
 Untested until a real account says otherwise: everything above. The code
 builds and the shapes match two independent clients, but no request has
 been sent yet.
+
+## An upload reads itself back (2026-10-23)
+
+Only the cloud scores a workout, so sending one and not reading it back
+leaves the fitness figures behind by exactly the workouts that were sent -
+the state that read 14/4/+9 here against the official app's 17/19/0 four
+days ago.
+
+Both upload paths now run a cloud sync when they finish: the single-workout
+action and the batch, the batch once at the end and only if something
+succeeded. The duplicate row that creates is hidden by the list's own
+filter, which has the exact cloud key the upload just recorded.
+
+**The cloud computes the training stress score immediately** - measured: a
+workout sent from the watch moved CTL, ATL and TSB as soon as the read
+came back. So there is no retry here and no guessed delay. Should an
+upload ever come back unscored, the cursor is the cloud's own
+`lastModified`, so the workout arrives again on an ordinary sync once the
+score exists, and until then the main page says how many workouts are
+newer than the figures.

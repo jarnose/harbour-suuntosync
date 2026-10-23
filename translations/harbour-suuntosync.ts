@@ -759,6 +759,14 @@ exists - %2 bytes
         <source>Sleep synced. No new recovery samples.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Nothing new on the watch - all %1 of its workouts are already here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 more not tried - the watch disconnected</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

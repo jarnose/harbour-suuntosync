@@ -6402,14 +6402,20 @@ void AppController::startWatchWorkoutSync()
             // forum thread. So anything that is a long run of hex is left
             // out: that covers the serial, both MACs and the internal id,
             // and keeps "Suunto", "Race", "Tianjin" and "2.53.42".
+            // A long run with a digit in it is an identifier. The first
+            // version of this asked for *hex*, and a real watch answered
+            // `02157200W45305800000100023835C52045` - a serial with a
+            // letter outside a-f in it, which sailed straight through and
+            // into a log meant for public pasting. Model names ("Suunto",
+            // "Ibiza") have no digits; versions ("2.26.8") are short.
             const auto isIdentifier = [](const QString &candidate) {
                 if (candidate.size() < 10)
                     return false;
                 for (QChar c : candidate) {
-                    if (!isxdigit(c.toLatin1()))
-                        return false;
+                    if (c.isDigit())
+                        return true;
                 }
-                return true;
+                return false;
             };
             for (char c : raw) {
                 if (c >= 0x20 && c < 0x7f) {
@@ -6444,10 +6450,39 @@ void AppController::startWatchWorkoutSyncAfterInfo()
             return;
         }
 
+        // **Only what is not already here.** Every sync used to re-fetch
+        // every workout the watch still holds: a user's log shows
+        // eighteen of them taking 132 seconds on the link, and the
+        // connection dropped before the last three arrived. A workout's
+        // payload does not change once recorded, so one that is already
+        // stored with its data is skipped.
+        //
+        // "With its data": a row whose payload is missing - an older sync,
+        // or one that failed halfway - is fetched again. That is what
+        // makes this safe to skip on.
         QVector<QString> logbookIds;
+        int alreadyStored = 0;
         logbookIds.reserve(static_cast<int>(entries.size()));
-        for (const LogEntries::Entry &entry : entries)
-            logbookIds.append(QString::number(entry.id));
+        for (const LogEntries::Entry &entry : entries) {
+            const QString id = QString::number(entry.id);
+            QByteArray stored;
+            if (m_workoutStore->loadSmlSources(QStringLiteral("ble_%1").arg(id),
+                                                &stored, nullptr)
+                    && !stored.isEmpty()) {
+                ++alreadyStored;
+                continue;
+            }
+            logbookIds.append(id);
+        }
+
+        if (logbookIds.isEmpty()) {
+            m_workoutSyncInProgress = false;
+            m_workoutSyncSession.reset();
+            emit workoutSyncInProgressChanged();
+            emit errorOccurred(tr("Nothing new on the watch - all %1 of its workouts are "
+                                   "already here.").arg(alreadyStored));
+            return;
+        }
 
         // Read the watch's own field table first, once per watch: which
         // chunk carries GPS or heart rate is per model, and decoding with
@@ -6630,6 +6665,25 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
             (bool ok, const std::vector<uint8_t> &data, const QString &error) mutable {
         if (!ok) {
             failuresCopy.append(tr("%1: %2").arg(logbookId, error));
+
+            // **Stop when the link is gone.** A user's log shows the
+            // watch dropping mid-sync and this loop then marching through
+            // the remaining entries, each one failing with "Not
+            // connected" in turn - three error lines for one cause, and
+            // several more seconds of a session that cannot work. The
+            // ones not attempted are still listed, because a sync that
+            // says "15 of 18" without saying why is worse than one that
+            // does.
+            if (!m_whiteboardClient->isReady() || !m_watchConnected) {
+                const int remaining = logbookIds.size() - index - 1;
+                if (remaining > 0) {
+                    failuresCopy.append(tr("%1 more not tried - the watch "
+                                            "disconnected").arg(remaining));
+                }
+                fetchWatchEntryAt(logbookIds, logbookIds.size(), succeeded, failuresCopy);
+                return;
+            }
+
             fetchWatchEntryAt(logbookIds, index + 1, succeeded, failuresCopy);
             return;
         }

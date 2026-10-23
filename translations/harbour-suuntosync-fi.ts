@@ -588,80 +588,12 @@ löytyy - %2 tavua
         <translation>%1: tallennus epäonnistui (%2)</translation>
     </message>
     <message>
-        <source>Enter the client id of your own Strava application first.</source>
-        <translation type="vanished">Syötä ensin oman Strava-sovelluksesi client id.</translation>
-    </message>
-    <message>
-        <source>Both the client secret and the code from the browser are needed.</source>
-        <translation type="vanished">Tarvitaan sekä client secret että selaimesta kopioitu koodi.</translation>
-    </message>
-    <message>
-        <source>Strava refused the code: %1</source>
-        <translation type="vanished">Strava hylkäsi koodin: %1</translation>
-    </message>
-    <message>
-        <source>Could not store the Strava secret: %1</source>
-        <translation type="vanished">Stravan salaisuuden tallennus ei onnistunut: %1</translation>
-    </message>
-    <message>
-        <source>Could not store the Strava authorisation: %1</source>
-        <translation type="vanished">Stravan valtuutuksen tallennus ei onnistunut: %1</translation>
-    </message>
-    <message>
-        <source>Strava connected.</source>
-        <translation type="vanished">Strava yhdistetty.</translation>
-    </message>
-    <message>
-        <source>Strava disconnected.</source>
-        <translation type="vanished">Stravan yhteys katkaistu.</translation>
-    </message>
-    <message>
-        <source>No Strava client id.</source>
-        <translation type="vanished">Stravan client id puuttuu.</translation>
-    </message>
-    <message>
-        <source>Could not read the Strava secret: %1</source>
-        <translation type="vanished">Stravan salaisuuden luku ei onnistunut: %1</translation>
-    </message>
-    <message>
-        <source>Strava is not connected: %1</source>
-        <translation type="vanished">Stravaa ei ole yhdistetty: %1</translation>
-    </message>
-    <message>
-        <source>Connect Strava in the settings first.</source>
-        <translation type="vanished">Yhdistä Strava ensin asetuksista.</translation>
-    </message>
-    <message>
-        <source>Strava already has this workout.</source>
-        <translation type="vanished">Stravassa on tämä harjoitus jo.</translation>
-    </message>
-    <message>
-        <source>There is no FIT file for this workout: sync it from the watch, or sign in to the Suunto cloud so it can be exported.</source>
-        <translation type="vanished">Tälle harjoitukselle ei ole FIT-tiedostoa: synkronoi se kellosta tai kirjaudu Suunnon pilveen, josta sen voi viedä.</translation>
-    </message>
-    <message>
-        <source>Sent to Strava</source>
-        <translation type="vanished">Lähetetty Stravaan</translation>
-    </message>
-    <message>
-        <source>Strava took the file and is still processing it (%1).</source>
-        <translation type="vanished">Strava otti tiedoston vastaan ja käsittelee sitä vielä (%1).</translation>
-    </message>
-    <message>
-        <source>no status</source>
-        <translation type="vanished">ei tilaa</translation>
-    </message>
-    <message>
         <source>%1 is not a plugin file.</source>
         <translation>%1 ei ole liitännäistiedosto.</translation>
     </message>
     <message>
         <source>The watch no longer has %1. Refresh the list.</source>
         <translation>Kellossa ei ole enää tiedostoa %1. Päivitä lista.</translation>
-    </message>
-    <message>
-        <source>Could not read the watch&apos;s plugin list: %1</source>
-        <translation type="vanished">Kellon liitännäislistan luku ei onnistunut: %1</translation>
     </message>
     <message>
         <source>That entry has no id to remove.</source>
@@ -678,18 +610,6 @@ löytyy - %2 tavua
     <message>
         <source>Could not remove %1. Uninstall: %2. Delete: %3</source>
         <translation>Kohteen %1 poisto ei onnistunut. Poisto listalta: %2. Tiedoston poisto: %3</translation>
-    </message>
-    <message>
-        <source>Refresh the list first - the watch has to say where plugins live.</source>
-        <translation type="vanished">Päivitä lista ensin - kellon pitää kertoa mihin liitännäiset menevät.</translation>
-    </message>
-    <message>
-        <source>Could not read %1: %2</source>
-        <translation type="vanished">Kohteen %1 luku ei onnistunut: %2</translation>
-    </message>
-    <message>
-        <source>Wrote %1 bytes to %2</source>
-        <translation type="vanished">Kirjoitettiin %1 tavua tiedostoon %2</translation>
     </message>
     <message>
         <source>Enter the network&apos;s name.</source>
@@ -780,10 +700,6 @@ löytyy - %2 tavua
         <translation>%1 Sään synkronointi ei onnistunut: %2</translation>
     </message>
     <message>
-        <source>%1 Weather sync asked, watch answered %2 bytes: %3. The forecast comes over the watch&apos;s own WiFi, so look at the watch&apos;s weather view in a minute.</source>
-        <translation type="vanished">%1 Sään synkronointi pyydetty, kello vastasi %2 tavua: %3. Ennuste tulee kellon omaa wifiä pitkin, joten katso kellon sääsivua hetken päästä.</translation>
-    </message>
-    <message>
         <source>Map catalogue failed: %1</source>
         <translation>Karttaluettelon haku ei onnistunut: %1</translation>
     </message>
@@ -812,10 +728,6 @@ löytyy - %2 tavua
         <translation>%1 %2 Kello ei ottanut karttavalintaa vastaan: %3</translation>
     </message>
     <message>
-        <source>%1 %2 The watch is downloading; it now holds %3 area(s).</source>
-        <translation type="vanished">%1 %2 Kello lataa; sillä on nyt %3 aluetta.</translation>
-    </message>
-    <message>
         <source>%1 The watch was not told: %2</source>
         <translation>%1 Kellolle ei kerrottu: %2</translation>
     </message>
@@ -826,22 +738,6 @@ löytyy - %2 tavua
     <message>
         <source>Could not read the watch&apos;s event log: %1</source>
         <translation>Kellon tapahtumalokin luku ei onnistunut: %1</translation>
-    </message>
-    <message>
-        <source>The watch&apos;s log read as %1 bytes with no weather or WiFi lines in it; %2 text runs in total.</source>
-        <translation type="vanished">Kellon loki luki %1 tavua eikä siinä ollut sää- tai wifi-rivejä; tekstijaksoja yhteensä %2.</translation>
-    </message>
-    <message>
-        <source>Watch log (%1 of %2 matching lines): %3</source>
-        <translation type="vanished">Kellon loki (%1 / %2 osuvaa riviä): %3</translation>
-    </message>
-    <message>
-        <source>The watch&apos;s log read as %1 bytes with no weather or WiFi lines in it; %2 text runs in total. Saved: %3</source>
-        <translation type="vanished">Kellon loki luki %1 tavua eikä siinä ollut sää- tai wifi-rivejä; tekstijaksoja yhteensä %2. Tallennettu: %3</translation>
-    </message>
-    <message>
-        <source>Watch log (%1 of %2 matching lines, %3 bytes saved to %4): %5</source>
-        <translation type="vanished">Kellon loki (%1 / %2 osuvaa riviä, %3 tavua tallennettu kohteeseen %4): %5</translation>
     </message>
     <message>
         <source>unreadable (%1 bytes)</source>
@@ -870,6 +766,14 @@ löytyy - %2 tavua
     <message>
         <source>Sleep synced. No new recovery samples.</source>
         <translation>Uni synkronoitu. Ei uusia palautumisnäytteitä.</translation>
+    </message>
+    <message>
+        <source>Nothing new on the watch - all %1 of its workouts are already here.</source>
+        <translation>Kellossa ei ole uutta - kaikki %1 harjoitusta on jo täällä.</translation>
+    </message>
+    <message>
+        <source>%1 more not tried - the watch disconnected</source>
+        <translation>%1 muuta jäi yrittämättä - kellon yhteys katkesi</translation>
     </message>
 </context>
 <context>
@@ -1030,10 +934,6 @@ löytyy - %2 tavua
         <translation>Viimeisin syke</translation>
     </message>
     <message>
-        <source>Earlier nights</source>
-        <translation type="vanished">Aiemmat yöt</translation>
-    </message>
-    <message>
         <source>Calories</source>
         <translation>Kalorit</translation>
     </message>
@@ -1136,18 +1036,6 @@ löytyy - %2 tavua
         <translation>SuuntoPlus</translation>
     </message>
     <message>
-        <source>Syncing…</source>
-        <translation type="vanished">Synkronoidaan…</translation>
-    </message>
-    <message>
-        <source>Sync workouts from cloud</source>
-        <translation type="vanished">Synkronoi harjoitukset pilvestä</translation>
-    </message>
-    <message>
-        <source>Sync from watch to phone</source>
-        <translation type="vanished">Synkronoi kellosta puhelimeen</translation>
-    </message>
-    <message>
         <source>Import a FIT file</source>
         <translation>Tuo FIT-tiedosto</translation>
     </message>
@@ -1215,24 +1103,12 @@ löytyy - %2 tavua
         <source>Pair a Suunto watch or sign in to your Suunto account to get started</source>
         <translation>Parita Suunto-kello tai kirjaudu Suunto-tilille aloittaaksesi</translation>
     </message>
-    <message>
-        <source>Strava</source>
-        <translation type="vanished">Strava</translation>
-    </message>
     <message numerus="yes">
         <source>%n workout(s) newer than these figures have no training stress score yet - sync the cloud.</source>
         <translation>
             <numerusform>%n harjoitus on näitä lukuja uudempi eikä sille ole vielä kuormalukemaa - synkronoi pilvi.</numerusform>
             <numerusform>%n harjoitusta on näitä lukuja uudempia eikä niille ole vielä kuormalukemaa - synkronoi pilvi.</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>Syncing from the cloud…</source>
-        <translation type="vanished">Synkronoidaan pilvestä…</translation>
-    </message>
-    <message>
-        <source>Syncing from the watch…</source>
-        <translation type="vanished">Synkronoidaan kellosta…</translation>
     </message>
     <message>
         <source>Syncing workouts from the cloud…</source>
@@ -1287,10 +1163,6 @@ löytyy - %2 tavua
 </context>
 <context>
     <name>MdsWhiteboardClient</name>
-    <message>
-        <source>No bulk data arrived before the silence timeout</source>
-        <translation type="vanished">Joukkodataa ei saapunut ennen aikakatkaisua</translation>
-    </message>
     <message>
         <source>Disconnected</source>
         <translation>Yhteys katkaistu</translation>
@@ -1567,10 +1439,6 @@ löytyy - %2 tavua
         <translation>Offline-kartat</translation>
     </message>
     <message>
-        <source>The watch downloads the maps itself over WiFi. Adding a region puts it in your map library and tells the watch to go and look; nothing is downloaded by the phone.</source>
-        <translation type="vanished">Kello lataa kartat itse wifin yli. Alueen lisääminen vie sen karttakirjastoosi ja kertoo kellolle, että kirjasto muuttui; puhelin ei lataa mitään.</translation>
-    </message>
-    <message>
         <source>Connect the watch and pull down to refresh.</source>
         <translation>Yhdistä kello ja päivitä vetämällä alas.</translation>
     </message>
@@ -1631,34 +1499,6 @@ löytyy - %2 tavua
     <message>
         <source>Pair a watch</source>
         <translation>Parita kello</translation>
-    </message>
-    <message>
-        <source>Logbook id</source>
-        <translation type="vanished">Harjoituksen tunnus</translation>
-    </message>
-    <message>
-        <source>e.g. 1785740504</source>
-        <translation type="vanished">esim. 1785740504</translation>
-    </message>
-    <message>
-        <source>Resource path</source>
-        <translation type="vanished">Resurssipolku</translation>
-    </message>
-    <message>
-        <source>Probe</source>
-        <translation type="vanished">Kokeile</translation>
-    </message>
-    <message>
-        <source>Fetch descriptors</source>
-        <translation type="vanished">Hae kenttäkuvaukset</translation>
-    </message>
-    <message>
-        <source>Fetch and save</source>
-        <translation type="vanished">Hae ja tallenna</translation>
-    </message>
-    <message>
-        <source>e.g. /Device/GNSS/ExtendedEphemerisData/Format</source>
-        <translation type="vanished">esim. /Device/GNSS/ExtendedEphemerisData/Format</translation>
     </message>
     <message>
         <source>Notification title</source>
@@ -2008,58 +1848,6 @@ löytyy - %2 tavua
         <translation>Lähettää kysymättä jokaisen synkronoidun harjoituksen, jota Suunnon pilvessä ei vielä ole.</translation>
     </message>
     <message>
-        <source>Send to Strava after a sync</source>
-        <translation type="vanished">Lähetä Stravaan synkronoinnin jälkeen</translation>
-    </message>
-    <message>
-        <source>Only the workouts that sync just brought in, one at a time.</source>
-        <translation type="vanished">Vain juuri synkronoinnissa tulleet harjoitukset, yksi kerrallaan.</translation>
-    </message>
-    <message>
-        <source>Strava</source>
-        <translation type="vanished">Strava</translation>
-    </message>
-    <message>
-        <source>Connected. Workouts are sent as FIT files, which is what Strava reads natively.</source>
-        <translation type="vanished">Yhdistetty. Harjoitukset lähetetään FIT-tiedostoina, joita Strava lukee suoraan.</translation>
-    </message>
-    <message>
-        <source>Strava needs an API application of your own. Create one at strava.com/settings/api, set its callback domain to localhost, and copy the client id and secret here.</source>
-        <translation type="vanished">Strava vaatii oman API-sovelluksen. Luo se osoitteessa strava.com/settings/api, aseta callback-domainiksi localhost ja kopioi client id ja secret tähän.</translation>
-    </message>
-    <message>
-        <source>Client id</source>
-        <translation type="vanished">Client id</translation>
-    </message>
-    <message>
-        <source>Open the Strava authorisation page</source>
-        <translation type="vanished">Avaa Stravan valtuutussivu</translation>
-    </message>
-    <message>
-        <source>After allowing access the browser lands on a page that will not load. Its address contains code=… - copy that value here.</source>
-        <translation type="vanished">Kun olet myöntänyt oikeudet, selain päätyy sivulle joka ei lataudu. Sen osoitteessa on code=… - kopioi se arvo tähän.</translation>
-    </message>
-    <message>
-        <source>Client secret</source>
-        <translation type="vanished">Client secret</translation>
-    </message>
-    <message>
-        <source>Code from the browser</source>
-        <translation type="vanished">Koodi selaimesta</translation>
-    </message>
-    <message>
-        <source>Connecting…</source>
-        <translation type="vanished">Yhdistetään…</translation>
-    </message>
-    <message>
-        <source>Connect Strava</source>
-        <translation type="vanished">Yhdistä Strava</translation>
-    </message>
-    <message>
-        <source>Disconnect Strava</source>
-        <translation type="vanished">Katkaise Stravan yhteys</translation>
-    </message>
-    <message>
         <source>Watch WiFi</source>
         <translation>Kellon wifi</translation>
     </message>
@@ -2116,10 +1904,6 @@ löytyy - %2 tavua
         <translation>Anna kellolle pilvitunnukset</translation>
     </message>
     <message>
-        <source>Refresh the watch&apos;s weather</source>
-        <translation type="vanished">Päivitä kellon sää</translation>
-    </message>
-    <message>
         <source>Offline maps for the watch</source>
         <translation>Kellon offline-kartat</translation>
     </message>
@@ -2166,10 +1950,6 @@ löytyy - %2 tavua
     <message>
         <source>Upload health data to the cloud</source>
         <translation>Lähetä terveysdata pilveen</translation>
-    </message>
-    <message>
-        <source>All four, in that order</source>
-        <translation type="vanished">Kaikki neljä, tässä järjestyksessä</translation>
     </message>
     <message>
         <source>Everything, both directions</source>
@@ -2248,21 +2028,6 @@ löytyy - %2 tavua
     </message>
 </context>
 <context>
-    <name>StravaClient</name>
-    <message>
-        <source>Strava&apos;s answer carried no tokens. Check the client id and secret, and that the code was not already used - each one works once.</source>
-        <translation type="vanished">Stravan vastauksessa ei ollut tunnisteita. Tarkista client id ja secret sekä se, ettei koodia ole jo käytetty - jokainen toimii kerran.</translation>
-    </message>
-    <message>
-        <source>Strava refused the stored authorisation. Connect the account again.</source>
-        <translation type="vanished">Strava hylkäsi tallennetun valtuutuksen. Yhdistä tili uudelleen.</translation>
-    </message>
-    <message>
-        <source>Strava accepted the file but named no upload.</source>
-        <translation type="vanished">Strava otti tiedoston vastaan mutta ei kertonut latauksen tunnistetta.</translation>
-    </message>
-</context>
-<context>
     <name>SuuntoCloudClient</name>
     <message>
         <source>This watch asks for GPS assist format %1, which isn&apos;t implemented</source>
@@ -2307,14 +2072,6 @@ löytyy - %2 tavua
     <message>
         <source>No account email to build a TOTP from.</source>
         <translation>Ei tilin sähköpostia josta muodostaa TOTP.</translation>
-    </message>
-    <message>
-        <source>%1 (%2)</source>
-        <translation type="vanished">%1 (%2)</translation>
-    </message>
-    <message>
-        <source>No watchKey in the answer: %1</source>
-        <translation type="vanished">Vastauksessa ei ollut watchKey-kenttää: %1</translation>
     </message>
     <message>
         <source>%1 (%2 bytes of answer)</source>
@@ -2394,10 +2151,6 @@ löytyy - %2 tavua
     <message>
         <source>Remove from the watch&apos;s list</source>
         <translation>Poista kellon listalta</translation>
-    </message>
-    <message>
-        <source>Save the watch&apos;s plugin registry</source>
-        <translation type="vanished">Tallenna kellon liitännäisrekisteri</translation>
     </message>
 </context>
 <context>
@@ -2583,10 +2336,6 @@ löytyy - %2 tavua
     <message>
         <source>All recorded fields (%1)</source>
         <translation>Kaikki tallennetut kentät (%1)</translation>
-    </message>
-    <message>
-        <source>Send to Strava</source>
-        <translation type="vanished">Lähetä Stravaan</translation>
     </message>
 </context>
 </TS>

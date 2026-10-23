@@ -122,7 +122,12 @@ Confirmed on real hardware, not just in tests:
   reported.
 - **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
   each entry, and decodes it: route, heart rate, altitude, cadence, laps,
-  per-sample charts and the watch's own summary totals.
+  per-sample charts and the watch's own summary totals. Only the entries
+  that are not already stored: a workout's payload does not change once
+  the watch has recorded it, and re-fetching a full logbook kept the BLE
+  link busy for minutes, which is long enough for it to drop. If it does
+  drop, the sync stops there and says how many it did not reach, rather
+  than failing the rest of the list one by one against a dead link.
 - **Two watch models, a Suunto Race and a Suunto 9 Baro.** SBEM chunk ids
   are per model — a Race carries GPS in chunk 0x0c and heart rate in 0x12,
   a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever

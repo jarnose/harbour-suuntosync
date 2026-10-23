@@ -1995,3 +1995,41 @@ being listed - and on the 9 Baro it did stop. The raw `/Data` and
 hand, and did: three workouts went from rows of zeros to full data without
 the watch present. The mechanism was right; the reason given for needing it
 was not.
+
+## A watch sync fetches only what is missing (2026-10-23)
+
+Every watch sync re-fetched every entry the watch still listed. The cloud
+side had the same bug and had already been fixed - `since` was hard-coded
+to 0, see `docs/workout-upload.md` - but the watch side was never looked
+at, because on a Race holding three or four workouts nobody would notice.
+
+A user's log made it visible. An "Ibiza" watch (firmware 2.26.8) held
+eighteen, and the sync spent **132 seconds** on the link re-downloading
+all of them. At the end of it the BLE connection dropped: one entry failed
+with a stream-start timeout and the next two with "Kirjoitus epäonnistui:
+Not connected". Fifteen of eighteen stored.
+
+Two changes, both in `AppController`:
+
+- **Skip what is already here.** `startWatchWorkoutSyncAfterInfo()` now
+  leaves out an id whose `ble_<id>` row already has its `/Data` payload
+  stored. A workout's payload does not change once the watch has recorded
+  it, which is what makes this safe - unlike the cloud's `since`, where
+  an *edited* workout has to come back (and does, measured). A row whose
+  payload is missing, from an older version or a sync that failed halfway,
+  is still fetched.
+
+- **Stop when the link drops.** `fetchWatchEntryAt()` used to carry on to
+  the next entry after any failure. Once the link is gone every remaining
+  entry fails the same way, so one dropped connection produced a string of
+  identical errors and kept a dead session open for the rest of the list.
+  It now checks `MdsWhiteboardClient::isReady()` and `m_watchConnected`
+  and stops, naming the number it did not try.
+
+**Also from that log**, and worth recording as a redaction lesson: the
+`/Info` line the app logs for diagnosis drops identifiers by looking for
+runs of ten or more **hex** characters. That watch's serial is
+`02157200W45305800000100023835C52045` - the `W` is not a hex digit, so the
+whole serial sailed through into a line written to be pasted on a public
+forum, which is where it ended up. The rule is now "a long run containing
+a digit": model names carry no digits and version strings are short.

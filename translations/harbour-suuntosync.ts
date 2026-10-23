@@ -751,6 +751,10 @@ exists - %2 bytes
         <source>%1 Subscribed to /Weather/Sync (%2 bytes: %3). The watch fetches the forecast itself over WiFi now that it has a credential; look at its weather view in a minute.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>%1 bytes, nothing printable</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -792,6 +796,10 @@ exists - %2 bytes
     </message>
     <message>
         <source>Nothing synced yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>steps</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1000,10 +1008,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Syncing…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Sync workouts from cloud</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1093,6 +1097,14 @@ exists - %2 bytes
             <numerusform></numerusform>
         </translation>
     </message>
+    <message>
+        <source>Syncing from the cloud…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syncing from the watch…</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MapCanvas</name>
@@ -1118,10 +1130,6 @@ exists - %2 bytes
 </context>
 <context>
     <name>MdsWhiteboardClient</name>
-    <message>
-        <source>No bulk data arrived before the silence timeout</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Disconnected</source>
         <translation type="unfinished"></translation>
@@ -1374,6 +1382,10 @@ exists - %2 bytes
         <source>The render request failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>No bulk data arrived before the silence timeout (%1, trigger answered %2, %3 chunks seen)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OfflineMapsPage</name>
@@ -1452,34 +1464,6 @@ exists - %2 bytes
     <name>PairingPage</name>
     <message>
         <source>Pair a watch</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Logbook id</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>e.g. 1785740504</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Resource path</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Probe</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fetch descriptors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fetch and save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>e.g. /Device/GNSS/ExtendedEphemerisData/Format</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1899,6 +1883,42 @@ exists - %2 bytes
     </message>
     <message>
         <source>Let the watch fetch its weather</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show today&apos;s steps too</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Under whatever the cover shows - the day&apos;s steps and last night&apos;s sleep are not alternatives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cover button</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>What the cover&apos;s one button does.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync workouts from the watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync health data from the watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Upload workouts to the cloud</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Upload health data to the cloud</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All four, in that order</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -94,6 +94,31 @@ Page {
         if (status === PageStatus.Active && !pageStack.nextPage(page)) {
             pageStack.pushAttached(Qt.resolvedUrl("HealthPage.qml"))
         }
+        // The list opened and came back from Health scrolled away from the
+        // top, so the title and the watch's status were off screen until
+        // you scrolled up - reported from the forum thread. The header is
+        // this list's own, and it grows after the first layout as the data
+        // arrives: the error line, the watch line, the fitness figures and
+        // the month's totals each appear when their source answers, and a
+        // ListView keeps its content offset while the content above it
+        // gets taller.
+        //
+        // **The mechanism is a reading, not a measurement** - it fits the
+        // code and the symptom, and this is a mitigation either way: on
+        // becoming active, after the relayout, put the view back at the
+        // top. Deferred by a zero-length timer because doing it inside the
+        // status change happens before the header has resized.
+        // Activating, not just Active: on Active the page is already on
+        // screen and the correction is a visible jump - a tenth of a
+        // second of it, reported. During the transition it is not seen.
+        if (status === PageStatus.Activating || status === PageStatus.Active)
+            pinTimer.restart()
+    }
+
+    Timer {
+        id: pinTimer
+        interval: 0
+        onTriggered: listView.positionViewAtBeginning()
     }
 
     Connections {
@@ -149,15 +174,22 @@ Page {
             // and with three of them that stopped being guessable.
             MenuItem {
                 visible: AppController.cloudSignedIn
+                // Which sync is running, not just that one is: both
+                // entries said "Syncing…" before, and a reader of the
+                // forum thread pointed out that this tells you nothing.
                 text: AppController.workoutSyncInProgress
-                      ? qsTr("Syncing…") : qsTr("Sync workouts from cloud")
+                       && AppController.workoutSyncKind === "cloud"
+                      ? qsTr("Syncing from the cloud…")
+                      : qsTr("Sync workouts from cloud")
                 enabled: !AppController.workoutSyncInProgress
                 onClicked: AppController.syncCloudWorkouts()
             }
             MenuItem {
                 visible: AppController.watchConnected
                 text: AppController.workoutSyncInProgress
-                      ? qsTr("Syncing…") : qsTr("Sync from watch to phone")
+                       && AppController.workoutSyncKind === "watch"
+                      ? qsTr("Syncing from the watch…")
+                      : qsTr("Sync from watch to phone")
                 enabled: !AppController.workoutSyncInProgress
                 onClicked: AppController.syncWatchWorkouts()
             }

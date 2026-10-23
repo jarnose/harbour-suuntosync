@@ -863,6 +863,10 @@ löytyy - %2 tavua
         <source>%1 Subscribed to /Weather/Sync (%2 bytes: %3). The watch fetches the forecast itself over WiFi now that it has a credential; look at its weather view in a minute.</source>
         <translation>%1 Tilattu /Weather/Sync (%2 tavua: %3). Kello hakee ennusteen itse wifillä nyt kun sillä on tunniste; katso sen sääsivua hetken päästä.</translation>
     </message>
+    <message>
+        <source>%1 bytes, nothing printable</source>
+        <translation>%1 tavua, ei luettavaa tekstiä</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -905,6 +909,10 @@ löytyy - %2 tavua
     <message>
         <source>Nothing synced yet</source>
         <translation>Ei vielä synkronoitua</translation>
+    </message>
+    <message>
+        <source>steps</source>
+        <translation>askelta</translation>
     </message>
 </context>
 <context>
@@ -1125,7 +1133,7 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>Syncing…</source>
-        <translation>Synkronoidaan…</translation>
+        <translation type="vanished">Synkronoidaan…</translation>
     </message>
     <message>
         <source>Sync workouts from cloud</source>
@@ -1214,6 +1222,14 @@ löytyy - %2 tavua
             <numerusform>%n harjoitusta on näitä lukuja uudempia eikä niille ole vielä kuormalukemaa - synkronoi pilvi.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Syncing from the cloud…</source>
+        <translation>Synkronoidaan pilvestä…</translation>
+    </message>
+    <message>
+        <source>Syncing from the watch…</source>
+        <translation>Synkronoidaan kellosta…</translation>
+    </message>
 </context>
 <context>
     <name>MapCanvas</name>
@@ -1241,7 +1257,7 @@ löytyy - %2 tavua
     <name>MdsWhiteboardClient</name>
     <message>
         <source>No bulk data arrived before the silence timeout</source>
-        <translation>Joukkodataa ei saapunut ennen aikakatkaisua</translation>
+        <translation type="vanished">Joukkodataa ei saapunut ennen aikakatkaisua</translation>
     </message>
     <message>
         <source>Disconnected</source>
@@ -1495,6 +1511,10 @@ löytyy - %2 tavua
         <source>The render request failed: %1</source>
         <translation>Renderöintipyyntö ei onnistunut: %1</translation>
     </message>
+    <message>
+        <source>No bulk data arrived before the silence timeout (%1, trigger answered %2, %3 chunks seen)</source>
+        <translation>Joukkodataa ei saapunut ennen aikakatkaisua (%1, laukaisin vastasi %2, %3 lohkoa nähty)</translation>
+    </message>
 </context>
 <context>
     <name>OfflineMapsPage</name>
@@ -1582,31 +1602,31 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>Logbook id</source>
-        <translation>Harjoituksen tunnus</translation>
+        <translation type="vanished">Harjoituksen tunnus</translation>
     </message>
     <message>
         <source>e.g. 1785740504</source>
-        <translation>esim. 1785740504</translation>
+        <translation type="vanished">esim. 1785740504</translation>
     </message>
     <message>
         <source>Resource path</source>
-        <translation>Resurssipolku</translation>
+        <translation type="vanished">Resurssipolku</translation>
     </message>
     <message>
         <source>Probe</source>
-        <translation>Kokeile</translation>
+        <translation type="vanished">Kokeile</translation>
     </message>
     <message>
         <source>Fetch descriptors</source>
-        <translation>Hae kenttäkuvaukset</translation>
+        <translation type="vanished">Hae kenttäkuvaukset</translation>
     </message>
     <message>
         <source>Fetch and save</source>
-        <translation>Hae ja tallenna</translation>
+        <translation type="vanished">Hae ja tallenna</translation>
     </message>
     <message>
         <source>e.g. /Device/GNSS/ExtendedEphemerisData/Format</source>
-        <translation>esim. /Device/GNSS/ExtendedEphemerisData/Format</translation>
+        <translation type="vanished">esim. /Device/GNSS/ExtendedEphemerisData/Format</translation>
     </message>
     <message>
         <source>Notification title</source>
@@ -2082,6 +2102,42 @@ löytyy - %2 tavua
     <message>
         <source>Let the watch fetch its weather</source>
         <translation>Anna kellon hakea sää</translation>
+    </message>
+    <message>
+        <source>Show today&apos;s steps too</source>
+        <translation>Näytä myös tämän päivän askeleet</translation>
+    </message>
+    <message>
+        <source>Under whatever the cover shows - the day&apos;s steps and last night&apos;s sleep are not alternatives.</source>
+        <translation>Sen alle mitä kansi muuten näyttää - päivän askeleet ja viime yön uni eivät ole toisensa poissulkevia.</translation>
+    </message>
+    <message>
+        <source>Cover button</source>
+        <translation>Kannen nappi</translation>
+    </message>
+    <message>
+        <source>What the cover&apos;s one button does.</source>
+        <translation>Mitä kannen nappi tekee.</translation>
+    </message>
+    <message>
+        <source>Sync workouts from the watch</source>
+        <translation>Synkronoi harjoitukset kellosta</translation>
+    </message>
+    <message>
+        <source>Sync health data from the watch</source>
+        <translation>Synkronoi terveysdata kellosta</translation>
+    </message>
+    <message>
+        <source>Upload workouts to the cloud</source>
+        <translation>Lähetä harjoitukset pilveen</translation>
+    </message>
+    <message>
+        <source>Upload health data to the cloud</source>
+        <translation>Lähetä terveysdata pilveen</translation>
+    </message>
+    <message>
+        <source>All four, in that order</source>
+        <translation>Kaikki neljä, tässä järjestyksessä</translation>
     </message>
 </context>
 <context>

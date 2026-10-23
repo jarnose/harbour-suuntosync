@@ -47,8 +47,23 @@ class AppController : public QObject
     Q_PROPERTY(bool cloudLoginInProgress READ isCloudLoginInProgress NOTIFY cloudLoginInProgressChanged)
     Q_PROPERTY(QObject *workoutModel READ workoutModelObject CONSTANT)
     Q_PROPERTY(bool workoutSyncInProgress READ isWorkoutSyncInProgress NOTIFY workoutSyncInProgressChanged)
+    // Which of the two syncs is running - "cloud" or "watch". Both share
+    // the flag above, so without this the pull-down showed "Syncing…" on
+    // both entries and a forum reader quite reasonably called that
+    // confusing. Notified by the same signal, because it only ever changes
+    // in step with the flag.
+    Q_PROPERTY(QString workoutSyncKind READ workoutSyncKind NOTIFY workoutSyncInProgressChanged)
     Q_PROPERTY(bool cloudSamplesInProgress READ isCloudSamplesInProgress NOTIFY cloudSamplesInProgressChanged)
     Q_PROPERTY(bool healthSyncInProgress READ isHealthSyncInProgress NOTIFY healthSyncInProgressChanged)
+    // The workout upload had no property of its own - the page watched its
+    // progress signal instead. The cover's "sync everything" needs to know
+    // when it *ends*, so the flag is a property now, with a signal.
+    Q_PROPERTY(bool uploadInProgress READ isUploadInProgress NOTIFY uploadInProgressChanged)
+
+    // What the cover's one button does: "watchWorkouts" (the default and
+    // what it always did), "watchHealth", "uploadWorkouts", "uploadHealth"
+    // or "all".
+    Q_PROPERTY(QString coverAction READ coverAction WRITE setCoverAction NOTIFY coverModeChanged)
     // What the cover shows. Stored in QSettings; see coverMode().
     // Whether to draw a base map under a workout's track, and where its
     // tiles come from. Off by default: it is somebody else's bandwidth, and
@@ -64,6 +79,10 @@ class AppController : public QObject
     // saying when it was asked for beats implying it is live.
     Q_PROPERTY(qint64 recordsFetchedAt READ recordsFetchedAt NOTIFY personalRecordsChanged)
     Q_PROPERTY(QString coverMode READ coverMode WRITE setCoverMode NOTIFY coverModeChanged)
+    // Steps on the cover, on top of whatever coverMode shows - "also", as
+    // the forum request put it, rather than a sixth mode that would make
+    // the day's steps and last night's sleep mutually exclusive.
+    Q_PROPERTY(bool coverSteps READ coverSteps WRITE setCoverSteps NOTIFY coverModeChanged)
     Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
     Q_PROPERTY(bool gpsUpdateInProgress READ isGpsUpdateInProgress NOTIFY gpsUpdateInProgressChanged)
     // The watch's WiFi. The SSID is an ordinary setting and readable; the
@@ -90,8 +109,19 @@ public:
     // Defined in the .cpp - see deviceModelObject()'s comment, same reason.
     QObject *workoutModelObject() const;
     bool isWorkoutSyncInProgress() const { return m_workoutSyncInProgress; }
+    QString workoutSyncKind() const { return m_workoutSyncKind; }
     bool isCloudSamplesInProgress() const { return m_cloudSamplesInProgress; }
     bool isHealthSyncInProgress() const { return m_healthSyncInProgress; }
+    bool isUploadInProgress() const { return m_uploadInProgress; }
+    QString coverAction() const { return m_coverAction; }
+    void setCoverAction(const QString &action);
+
+    // Runs whatever coverAction names. For "all" it runs the four in turn,
+    // each one waiting for the last to finish, because they share the
+    // watch and the two watch steps each take the link for themselves.
+    // A step whose precondition fails - no watch connected, not signed in
+    // - is skipped rather than failing the chain.
+    Q_INVOKABLE void runCoverAction();
     bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
     bool baseMapEnabled() const { return m_baseMapEnabled; }
     void setBaseMapEnabled(bool enabled);
@@ -125,6 +155,8 @@ public:
     // and so a mode added later cannot reinterpret a stored index: a value
     // this build does not know simply draws the empty state.
     QString coverMode() const { return m_coverMode; }
+    bool coverSteps() const { return m_coverSteps; }
+    void setCoverSteps(bool enabled);
     void setCoverMode(const QString &mode);
 
     // Whether connecting to the watch should start a sync by itself.
@@ -824,6 +856,7 @@ signals:
     // signal rather than a property because the page shows the whole
     // transcript: each step's own words are the measurement.
     void wifiResult(const QString &message);
+    void uploadInProgressChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
@@ -928,11 +961,14 @@ private:
     WorkoutStore *m_workoutStore;
     WorkoutListModel *m_workoutModel;
     bool m_workoutSyncInProgress = false;
+    QString m_workoutSyncKind;
     bool m_cloudSamplesInProgress = false;
 
     // Guards against a second tap while a POST is in flight - the server
     // has no idempotency key, so a double send would create two workouts.
     bool m_uploadInProgress = false;
+    QStringList m_coverChain;
+    QString m_coverAction;
 
     bool m_baseMapEnabled = false;
     QString m_mapTileUrl;
@@ -1007,6 +1043,7 @@ private:
     QHash<QString, quint32> m_suuntoPlusRegistry;
     QString m_suuntoPlusLocation;
     QString m_coverMode;
+    bool m_coverSteps = false;
     bool m_syncOnConnect = false;
 
     HealthStore *m_healthStore;
@@ -1082,6 +1119,10 @@ private:
     // After the library changes: tells the watch to look again, and reads
     // back how many areas it holds. The watch does the downloading.
     void notifyWatchMapsChanged(const QString &soFar);
+    void setUploadInProgress(bool busy);
+    // The next step of a cover chain, when nothing else is running. Called
+    // again by whichever "in progress" signal clears.
+    void startNextCoverStep();
     QString wifiEnablePath() const;
     // The three steps of sendWifiToWatch(), each its own method because
     // every one of them waits for the watch: switch WiFi on, fetch the
@@ -1115,6 +1156,10 @@ private:
     // is in hand. Split out so the entry point can be the one place that
     // takes the session, rather than every branch of the chain below.
     void startWatchWorkoutSync();
+    // The rest of it, after the one /Info read that identifies the watch in
+    // the journal. Split so that read is unmissable rather than buried in
+    // a callback chain.
+    void startWatchWorkoutSyncAfterInfo();
     // The health sync is three resources read one after another, and its
     // in-progress flag clears between them - so the session is a parameter
     // here rather than riding with the flag. It did ride with the flag for

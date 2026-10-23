@@ -58,6 +58,10 @@ Page {
         Column {
             id: column
             width: parent.width
+            // Buttons have no margins of their own, so a run of them -
+            // the watch section has four, the WiFi section six - came out
+            // as one solid block. Reported from the forum thread.
+            spacing: Theme.paddingMedium
 
             PageHeader { title: qsTr("Settings") }
 
@@ -474,6 +478,50 @@ Page {
             }
 
             SectionHeader { text: qsTr("Cover") }
+
+            ComboBox {
+                width: parent.width
+                label: qsTr("Cover button")
+                description: qsTr("What the cover's one button does.")
+                currentIndex: {
+                    var a = AppController.coverAction
+                    if (a === "watchHealth") return 1
+                    if (a === "uploadWorkouts") return 2
+                    if (a === "uploadHealth") return 3
+                    if (a === "all") return 4
+                    return 0
+                }
+                menu: ContextMenu {
+                    MenuItem {
+                        text: qsTr("Sync workouts from the watch")
+                        onClicked: AppController.coverAction = "watchWorkouts"
+                    }
+                    MenuItem {
+                        text: qsTr("Sync health data from the watch")
+                        onClicked: AppController.coverAction = "watchHealth"
+                    }
+                    MenuItem {
+                        text: qsTr("Upload workouts to the cloud")
+                        onClicked: AppController.coverAction = "uploadWorkouts"
+                    }
+                    MenuItem {
+                        text: qsTr("Upload health data to the cloud")
+                        onClicked: AppController.coverAction = "uploadHealth"
+                    }
+                    MenuItem {
+                        text: qsTr("All four, in that order")
+                        onClicked: AppController.coverAction = "all"
+                    }
+                }
+            }
+
+            TextSwitch {
+                text: qsTr("Show today's steps too")
+                description: qsTr("Under whatever the cover shows - the day's steps "
+                                  + "and last night's sleep are not alternatives.")
+                checked: AppController.coverSteps
+                onClicked: AppController.coverSteps = !AppController.coverSteps
+            }
 
             ComboBox {
                 width: parent.width

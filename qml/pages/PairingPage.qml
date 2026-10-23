@@ -41,6 +41,9 @@ Page {
 
         header: Column {
             width: parent.width
+            // Buttons carry no margins of their own, so this page's own
+            // sat against each other.
+            spacing: Theme.paddingMedium
 
             PageHeader {
                 title: qsTr("Pair a watch")
@@ -59,68 +62,15 @@ Page {
                 text: page.lastError
             }
 
-            // Next validation probe after Test Whiteboard - see
-            // AppController::testLogbookFetch()'s doc comment for exactly
-            // what this exercises and what's still experimental about it.
-            // Needs a real logbook id (the numeric suffix of
-            // /Logbook/byId/<id>/Data - itself that workout's Unix start
-            // timestamp in seconds) - typed in by hand for now since
-            // there's no on-device /Entries listing UI yet, only
-            // testWhiteboard()'s raw-bytes probe of that same resource.
-            Row {
-                visible: AppController.watchConnected
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                spacing: Theme.paddingSmall
-
-                TextField {
-                    id: logbookIdField
-                    width: parent.width - testLogbookButton.width - parent.spacing
-                    label: qsTr("Logbook id")
-                    placeholderText: qsTr("e.g. 1785740504")
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                    EnterKey.enabled: text.length > 0
-                    EnterKey.onClicked: testLogbookButton.clicked()
-                }
-
-                Button {
-                    id: testLogbookButton
-                    anchors.verticalCenter: logbookIdField.verticalCenter
-                    enabled: logbookIdField.text.length > 0
-                    text: qsTr("Fetch and save")
-                    onClicked: AppController.testLogbookFetch(logbookIdField.text)
-                }
-            }
-
-            Row {
-                visible: AppController.watchConnected
-                // Ask the watch whether it has a resource at all. A model
-                // that does not answers with the six-byte f5 error, so a
-                // question that used to need adb and a capture takes two
-                // seconds here.
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                spacing: Theme.paddingSmall
-
-                TextField {
-                    id: probePathField
-                    width: parent.width - probeButton.width - parent.spacing
-                    label: qsTr("Resource path")
-                    placeholderText: qsTr("e.g. /Device/GNSS/ExtendedEphemerisData/Format")
-                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                    EnterKey.enabled: text.length > 0
-                    EnterKey.onClicked: probeButton.clicked()
-                }
-
-                Button {
-                    id: probeButton
-                    anchors.verticalCenter: probePathField.verticalCenter
-                    enabled: probePathField.text.length > 0
-                    text: qsTr("Probe")
-                    onClicked: AppController.probePath(probePathField.text)
-                }
-            }
+            // The logbook-id and resource-path probes used to be here.
+            // They were development instruments - type a workout's id to
+            // fetch one, type a path to ask whether the watch has it - and
+            // a user on the forum reported them for what they were: two
+            // text fields with no explanation of what to put in them or
+            // whether they were required. The real actions exist now
+            // ("Sync from watch" on the main page), so they are gone
+            // rather than explained. probePath() and testLogbookFetch()
+            // remain on AppController for the next protocol question.
 
             // The notification encoder's first contact with a watch. Every
             // byte of it was built against three captured requests and
@@ -191,16 +141,13 @@ Page {
                 }
             }
 
-            Button {
-                // The watch's own field table. Needed per watch model: a
-                // Suunto 9 Baro transfers workouts perfectly and decodes
-                // them to all zeros, because the compiled-in table is a
-                // Race's. Takes any logbook id from this watch.
-                x: Theme.horizontalPageMargin
-                enabled: logbookIdField.text.length > 0
-                text: qsTr("Fetch descriptors")
-                onClicked: AppController.testDescriptorsFetch(logbookIdField.text)
-            }
+            // "Fetch descriptors" stood here and read the logbook-id field
+            // that went with the probes above - so removing them left its
+            // `enabled` binding pointing at nothing, which QML reports at
+            // runtime and no amount of reading the page would have shown.
+            // It is gone rather than rewired: "Sync from watch" reads the
+            // watch's own field table itself, once per watch, which is the
+            // only reason this button existed.
         }
 
         PullDownMenu {

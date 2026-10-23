@@ -574,6 +574,12 @@ private:
     bool m_bulkFetchActive = false;
     std::vector<uint8_t> m_bulkBuffer;
     DataCallback m_bulkCallback;
+    // Only for the timeout's own message - see the constructor. A report
+    // that names the resource, the trigger's status and the chunk count is
+    // worth a dozen rounds of asking.
+    QString m_bulkPath;
+    int m_bulkChunkCount = 0;
+    quint16 m_bulkTriggerStatus = 0;
     QTimer m_bulkSilenceTimer;
     // The GET ack the stream was started from, kept so the matching stop
     // can be built from it. Cleared once the stop has been sent, so a late

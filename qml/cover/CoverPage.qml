@@ -50,10 +50,31 @@ CoverBackground {
         visible: AppController.coverMode !== "nothing"
     }
 
+    // The cover's action strip owns the bottom of the cover, and content
+    // centred in the *whole* cover runs under it - last night's sleep did,
+    // by about a third of the button's height. So there is one content
+    // area, from under the title to above the strip, and every mode is
+    // centred in that.
+    //
+    // The clearance is measured on the device rather than taken from the
+    // theme: Silica does not publish the strip's height, and
+    // Theme.itemSizeSmall alone still left the lowest line a few pixels
+    // under the button.
+    Item {
+        id: content
+        anchors {
+            top: title.bottom
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+            bottomMargin: Theme.itemSizeSmall + Theme.paddingLarge
+        }
+    }
+
     // ---- latest workout ----
     Column {
         anchors {
-            centerIn: parent
+            centerIn: content
             verticalCenterOffset: Theme.paddingSmall
         }
         width: parent.width - 2 * Theme.paddingMedium
@@ -95,7 +116,7 @@ CoverBackground {
     // ---- lifetime totals ----
     Column {
         anchors {
-            centerIn: parent
+            centerIn: content
             verticalCenterOffset: Theme.paddingSmall
         }
         width: parent.width - 2 * Theme.paddingMedium
@@ -136,7 +157,7 @@ CoverBackground {
     // as a high fitness with a low one, which is the whole point of form.
     Column {
         anchors {
-            centerIn: parent
+            centerIn: content
             verticalCenterOffset: Theme.paddingSmall
         }
         width: parent.width - 2 * Theme.paddingLarge
@@ -183,7 +204,7 @@ CoverBackground {
     // ---- last night ----
     Column {
         anchors {
-            centerIn: parent
+            centerIn: content
             verticalCenterOffset: Theme.paddingSmall
         }
         width: parent.width - 2 * Theme.paddingMedium
@@ -221,7 +242,7 @@ CoverBackground {
 
     // Nothing to show yet - better than an empty cover that looks broken.
     Label {
-        anchors.centerIn: parent
+        anchors.centerIn: content
         width: parent.width - 2 * Theme.paddingMedium
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.Wrap
@@ -240,13 +261,45 @@ CoverBackground {
         font.pixelSize: Theme.fontSizeExtraSmall
     }
 
+    // Steps, under whatever the chosen mode draws. Its own anchor at the
+    // bottom rather than a sixth mode, because the day's steps and last
+    // night's sleep are not alternatives - that was the point of the
+    // request.
+    Label {
+        anchors {
+            bottom: content.bottom
+            horizontalCenter: parent.horizontalCenter
+        }
+        width: parent.width - 2 * Theme.paddingMedium
+        horizontalAlignment: Text.AlignHCenter
+        visible: AppController.coverSteps && cover.summary.hasSteps === true
+        text: cover.summary.hasSteps
+              ? Math.round(cover.summary.steps) + " " + qsTr("steps") : ""
+        color: Theme.secondaryHighlightColor
+        font.pixelSize: Theme.fontSizeExtraSmall
+    }
+
+    // What the button does is a setting - the five things worth doing from
+    // the cover are not interchangeable, and which one matters depends on
+    // how the watch is used. See AppController::coverAction().
     CoverActionList {
         id: syncAction
-        enabled: AppController.watchConnected && !AppController.workoutSyncInProgress
+        // Enabled when the chosen action has something to work with: the
+        // watch for the two reads, an account for the two uploads, either
+        // for "all". And never while something is already running.
+        enabled: !AppController.workoutSyncInProgress
+                 && !AppController.healthSyncInProgress
+                 && !AppController.uploadInProgress
+                 && (AppController.coverAction === "all"
+                     ? (AppController.watchConnected || AppController.cloudSignedIn)
+                     : (AppController.coverAction === "uploadWorkouts"
+                        || AppController.coverAction === "uploadHealth"
+                        ? AppController.cloudSignedIn
+                        : AppController.watchConnected))
 
         CoverAction {
             iconSource: "image://theme/icon-cover-sync"
-            onTriggered: AppController.syncWatchWorkouts()
+            onTriggered: AppController.runCoverAction()
         }
     }
 }

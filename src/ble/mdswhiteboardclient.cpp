@@ -57,6 +57,10 @@ constexpr uint16_t kPageStatusContinue = 100;
 // last page can't loop forever.
 constexpr size_t kMaxPagedBytes = 1024 * 1024;
 
+// Defined further down, with the status constants it reads against; used
+// up here by the bulk fetch's own diagnostics.
+uint16_t statusOf(const Mds::Frame &frame);
+
 } // namespace
 
 MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
@@ -66,9 +70,19 @@ MdsWhiteboardClient::MdsWhiteboardClient(QObject *parent)
 
     m_bulkSilenceTimer.setSingleShot(true);
     connect(&m_bulkSilenceTimer, &QTimer::timeout, this, [this]() {
+        // What the report of this error needs to say. A user on the forum
+        // hit it on a Suunto 5 and the message was one sentence that named
+        // no step - so it now carries the resource, the trigger's own
+        // answer and the byte count, which between them say whether the
+        // watch refused the request or simply never streamed.
         endBulkStream(!m_bulkBuffer.empty(),
-                m_bulkBuffer.empty() ? tr("No bulk data arrived before the silence timeout")
-                                      : QString());
+                m_bulkBuffer.empty()
+                        ? tr("No bulk data arrived before the silence timeout "
+                              "(%1, trigger answered %2, %3 chunks seen)")
+                                .arg(m_bulkPath)
+                                .arg(m_bulkTriggerStatus)
+                                .arg(m_bulkChunkCount)
+                        : QString());
     });
 }
 
@@ -526,8 +540,8 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
             const std::vector<uint8_t> ackBody = ackFrame.body;
             getRaw([ackBody](uint16_t requestId) {
                 return Mds::encodeStreamStartTrigger(requestId, ackBody);
-            }, [this, callback, ackBody](bool triggerOk, const Mds::Frame &,
-                                           const QString &triggerError) {
+            }, [this, path, callback, ackBody](bool triggerOk, const Mds::Frame &frame,
+                                                 const QString &triggerError) {
                 if (!triggerOk) {
                     callback(false, {}, tr("Stream-start trigger failed: %1").arg(triggerError));
                     return;
@@ -536,6 +550,9 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
                 m_bulkBuffer.clear();
                 m_bulkCallback = callback;
                 m_bulkAckBody = ackBody;
+                m_bulkPath = path;
+                m_bulkChunkCount = 0;
+                m_bulkTriggerStatus = statusOf(frame);
                 armBulkSilenceTimer();
             });
         } catch (const std::exception &e) {
@@ -1677,6 +1694,7 @@ void MdsWhiteboardClient::readWatchFile(const QString &filename, DataCallback ca
 
 void MdsWhiteboardClient::appendBulkChunk(const std::vector<uint8_t> &body)
 {
+    ++m_bulkChunkCount;
     if (body.size() < kMdsChunkHeaderSize)
         return;
     const uint16_t chunkSize = static_cast<uint16_t>(body[kMdsChunkSizeOffset]

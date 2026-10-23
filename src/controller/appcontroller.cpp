@@ -53,6 +53,7 @@
 #include "../fit/fitencoder.h"
 #include "../fit/watchactivity.h"
 
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <cstring>
@@ -1012,6 +1013,16 @@ AppController::AppController(QObject *parent)
     connect(this, &AppController::whiteboardTestResult, this, [](const QString &summary) {
         qWarning().noquote() << summary;
     });
+    // The cover's "sync everything" is a queue, and these three signals are
+    // what say a step has finished. One connection each rather than a timer:
+    // polling for idleness would be a guess about how long a step takes.
+    const auto step = [this]() {
+        if (!m_coverChain.isEmpty())
+            startNextCoverStep();
+    };
+    connect(this, &AppController::workoutSyncInProgressChanged, this, step);
+    connect(this, &AppController::healthSyncInProgressChanged, this, step);
+    connect(this, &AppController::uploadInProgressChanged, this, step);
     // The WiFi transcript especially: it is hex, it is long, and reading it
     // off a phone screen and typing it out again is how a measurement
     // acquires typos. Jarno asked for this after transcribing three.
@@ -1069,6 +1080,9 @@ AppController::AppController(QObject *parent)
         QSettings settings(settingsPath(), QSettings::IniFormat);
         m_coverMode = settings.value(QStringLiteral("cover/mode"),
                                       QStringLiteral("latest")).toString();
+        m_coverSteps = settings.value(QStringLiteral("cover/steps"), false).toBool();
+        m_coverAction = settings.value(QStringLiteral("cover/action"),
+                                        QStringLiteral("watchWorkouts")).toString();
         m_syncOnConnect = settings.value(QStringLiteral("sync/onConnect"), false).toBool();
         m_autoUploadSuunto =
                 settings.value(QStringLiteral("upload/autoSuunto"), false).toBool();
@@ -2958,7 +2972,7 @@ void AppController::uploadAllWorkouts()
         return;
     }
 
-    m_uploadInProgress = true;
+    setUploadInProgress(true);
     uploadWorkoutAt(keys, 0, 0, QStringList());
 }
 
@@ -2966,7 +2980,7 @@ void AppController::uploadWorkoutAt(const QVector<QString> &keys, int index, int
                                      const QStringList &failures)
 {
     if (index >= keys.size()) {
-        m_uploadInProgress = false;
+        setUploadInProgress(false);
         emit workoutUploadProgress(keys.size(), keys.size());
         if (failures.isEmpty()) {
             emit errorOccurred(tr("Uploaded %1 workouts to Suunto.").arg(succeeded));
@@ -3049,18 +3063,18 @@ void AppController::uploadWorkoutToCloud(const QString &key)
         return;
     }
 
-    m_uploadInProgress = true;
+    setUploadInProgress(true);
     m_tokenVault->loadSecret(CloudAccountStore::TokenSecretName,
             [this, key, zip](bool ok, const QByteArray &data, const QString &vaultError) {
         if (!ok) {
-            m_uploadInProgress = false;
+            setUploadInProgress(false);
             emit workoutUploaded(key, false,
                                   tr("Could not read the stored session: %1").arg(vaultError));
             return;
         }
         m_cloudClient->uploadWorkout(QString::fromUtf8(data), zip,
                 [this, key](bool uploadOk, const QString &cloudKey, const QString &error) {
-            m_uploadInProgress = false;
+            setUploadInProgress(false);
             if (!uploadOk) {
                 emit workoutUploaded(key, false, error);
                 return;
@@ -3441,6 +3455,80 @@ QString AppController::defaultMapTileUrl() const
     return kDefaultMapTileUrl;
 }
 
+void AppController::setUploadInProgress(bool busy)
+{
+    if (busy == m_uploadInProgress)
+        return;
+    m_uploadInProgress = busy;
+    emit uploadInProgressChanged();
+}
+
+void AppController::setCoverAction(const QString &action)
+{
+    if (action == m_coverAction)
+        return;
+    m_coverAction = action;
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("cover/action"), action);
+    emit coverModeChanged();
+}
+
+void AppController::runCoverAction()
+{
+    // "all" is the four steps in the order that makes sense: read from the
+    // watch first, then send what was read onwards. The other values are
+    // one step each.
+    if (m_coverAction == QStringLiteral("all")) {
+        m_coverChain = QStringList{ QStringLiteral("watchWorkouts"),
+                                     QStringLiteral("watchHealth"),
+                                     QStringLiteral("uploadWorkouts"),
+                                     QStringLiteral("uploadHealth") };
+    } else {
+        m_coverChain = QStringList{ m_coverAction.isEmpty()
+                ? QStringLiteral("watchWorkouts") : m_coverAction };
+    }
+    startNextCoverStep();
+}
+
+void AppController::startNextCoverStep()
+{
+    // Anything running means this is not the moment: whichever flag is up
+    // will call back here when it clears.
+    if (m_workoutSyncInProgress || m_healthSyncInProgress || m_uploadInProgress)
+        return;
+
+    while (!m_coverChain.isEmpty()) {
+        const QString step = m_coverChain.takeFirst();
+        // A step whose precondition fails is skipped, not reported: the
+        // cover's one button is not the place to explain that the watch is
+        // out of range, and the next step may well be able to run.
+        if (step == QStringLiteral("watchWorkouts")) {
+            if (!m_watchConnected)
+                continue;
+            syncWatchWorkouts();
+            return;
+        }
+        if (step == QStringLiteral("watchHealth")) {
+            if (!m_watchConnected)
+                continue;
+            syncWatchHealth();
+            return;
+        }
+        if (step == QStringLiteral("uploadWorkouts")) {
+            if (!m_cloudAccount.isSignedIn() || m_workoutStore->keysPendingUpload().isEmpty())
+                continue;
+            uploadAllWorkouts();
+            return;
+        }
+        if (step == QStringLiteral("uploadHealth")) {
+            if (!m_cloudAccount.isSignedIn() || m_healthStore->pendingUploadCount() == 0)
+                continue;
+            uploadHealthToCloud();
+            return;
+        }
+    }
+}
+
 void AppController::setCoverMode(const QString &mode)
 {
     if (mode == m_coverMode)
@@ -3448,6 +3536,18 @@ void AppController::setCoverMode(const QString &mode)
     m_coverMode = mode;
     QSettings(settingsPath(), QSettings::IniFormat)
             .setValue(QStringLiteral("cover/mode"), mode);
+    emit coverModeChanged();
+}
+
+void AppController::setCoverSteps(bool enabled)
+{
+    if (enabled == m_coverSteps)
+        return;
+    m_coverSteps = enabled;
+    QSettings(settingsPath(), QSettings::IniFormat)
+            .setValue(QStringLiteral("cover/steps"), enabled);
+    // The same signal coverMode uses: the cover re-reads its summary on
+    // it, which is exactly what a change here needs.
     emit coverModeChanged();
 }
 
@@ -4366,6 +4466,21 @@ QVariantMap AppController::coverSummary() const
         out.insert(QStringLiteral("hasProgress"), false);
     }
 
+    // Today's steps and calories, for the cover's own line. The day's
+    // samples are 144 ten-minute buckets at most, and dailyHealth() is the
+    // one place that knows where a local day starts - so the cover reads
+    // the same figures the health page's own list does rather than summing
+    // them a second way.
+    const QVariantList today = dailyHealth(1);
+    if (!today.isEmpty()) {
+        const QVariantMap day = today.first().toMap();
+        out.insert(QStringLiteral("hasSteps"), day.value(QStringLiteral("hasActivity")).toBool());
+        out.insert(QStringLiteral("steps"), day.value(QStringLiteral("steps")));
+        out.insert(QStringLiteral("energyKcal"), day.value(QStringLiteral("energyKcal")));
+    } else {
+        out.insert(QStringLiteral("hasSteps"), false);
+    }
+
     const QVector<HealthEntry> nights = m_healthStore->load(QStringLiteral("sleep"), 1, nullptr);
     if (!nights.isEmpty()) {
         const QJsonObject o = QJsonDocument::fromJson(nights.first().data).object();
@@ -4783,6 +4898,7 @@ void AppController::startCloudSync(bool full)
     if (!m_cloudAccount.isSignedIn() || m_workoutSyncInProgress)
         return;
 
+    m_workoutSyncKind = QStringLiteral("cloud");
     m_workoutSyncInProgress = true;
     emit workoutSyncInProgressChanged();
 
@@ -6216,6 +6332,7 @@ void AppController::syncWatchWorkouts()
 
     withWatchSession([this](const WatchSession &session) {
         m_workoutSyncSession = session;
+        m_workoutSyncKind = QStringLiteral("watch");
         m_workoutSyncInProgress = true;
         emit workoutSyncInProgressChanged();
         startWatchWorkoutSync();
@@ -6223,6 +6340,62 @@ void AppController::syncWatchWorkouts()
 }
 
 void AppController::startWatchWorkoutSync()
+{
+    // **Who is this watch.** One read, logged, before anything else: a
+    // forum report of a failing sync on a Suunto 5 could not be acted on
+    // because nothing in the journal said which watch it was or what
+    // firmware it ran. The official app reads /Info at the same point in
+    // its own sync, so the resource exists on these models; its payload
+    // shape is not decoded here, so the printable runs are logged as they
+    // arrive. Failure is ignored - this identifies, it does not gate.
+    m_whiteboardClient->readValue(QStringLiteral("/Info"),
+            [this](bool ok, const std::vector<uint8_t> &body, const QString &error) {
+        if (!ok) {
+            qWarning().noquote() << QStringLiteral("watch /Info unavailable: %1").arg(error);
+        } else {
+            const QByteArray raw(reinterpret_cast<const char *>(body.data()),
+                                  static_cast<int>(body.size()));
+            QStringList words;
+            QString word;
+            // **Identifiers are dropped on the way to the log.** A real
+            // read of this resource answers brand, model, variant,
+            // firmware - and the serial, the BLE MAC and the WiFi MAC. The
+            // first four are what a bug report needs; the rest identify
+            // the person, and this line exists to be pasted into a public
+            // forum thread. So anything that is a long run of hex is left
+            // out: that covers the serial, both MACs and the internal id,
+            // and keeps "Suunto", "Race", "Tianjin" and "2.53.42".
+            const auto isIdentifier = [](const QString &candidate) {
+                if (candidate.size() < 10)
+                    return false;
+                for (QChar c : candidate) {
+                    if (!isxdigit(c.toLatin1()))
+                        return false;
+                }
+                return true;
+            };
+            for (char c : raw) {
+                if (c >= 0x20 && c < 0x7f) {
+                    word.append(QLatin1Char(c));
+                    continue;
+                }
+                if (word.size() >= 3 && !isIdentifier(word))
+                    words.append(word);
+                word.clear();
+            }
+            if (word.size() >= 3 && !isIdentifier(word))
+                words.append(word);
+            // No hex fallback either: the raw bytes carry the same
+            // identifiers the filter just removed.
+            qWarning().noquote() << QStringLiteral("watch /Info: %1").arg(
+                    words.isEmpty() ? tr("%1 bytes, nothing printable").arg(raw.size())
+                                     : words.join(QStringLiteral(" | ")));
+        }
+        startWatchWorkoutSyncAfterInfo();
+    });
+}
+
+void AppController::startWatchWorkoutSyncAfterInfo()
 {
     m_whiteboardClient->fetchLogEntries(QStringLiteral("/Logbook/Entries"),
             [this](bool ok, const std::vector<LogEntries::Entry> &entries, const QString &error) {

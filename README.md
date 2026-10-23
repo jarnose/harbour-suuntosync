@@ -23,8 +23,8 @@ Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.5.1-1.aarch64.rpm
-devel-su pkcon install-local -y suuntosync-notifyd-1.5.1-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.5.2-1.aarch64.rpm
+devel-su pkcon install-local -y suuntosync-notifyd-1.5.2-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
@@ -54,7 +54,12 @@ Confirmed on real hardware, not just in tests:
   once, which is what says the 42- and 7-day time constants are right and
   not just the level.
   Nothing here invents a training load from duration or heart rate; a figure
-  that looked like Suunto's and was not would be worse than none.
+  that looked like Suunto's and was not would be worse than none. Only the
+  cloud scores a workout, so an upload now reads itself back - the cloud
+  scores it immediately, measured - and the page says how many workouts are
+  newer than the figures when something has not been scored yet. Without
+  that, three workouts read off the watch left these numbers eight days
+  behind in silence.
 
   Computing them here rather than asking for them is not a shortcut: a
   capture of the official app with every screen opened shows it fetching no
@@ -90,6 +95,12 @@ Confirmed on real hardware, not just in tests:
   Maps, which is the one map application here with a registered URI handler -
   it takes a single coordinate, so it shows the place and not the outing. See
   `docs/base-map.md`.
+- **One sync action, which depends on what is reachable.** With a watch and
+  an account it reads both, in both directions — the watch's workouts and
+  health data, the cloud's, and anything this phone has not sent up yet.
+  With only one of the two it offers that side alone. Health data is
+  included either way, which it was not when the pull-down had two entries
+  that each did half the job and both reported themselves as "Syncing…".
 - **A sync when the watch connects**, off by default, because a sync is
   minutes of radio time and the watch coming into range is not always a
   reason to start one. It syncs the workouts and not the health data: that
@@ -99,7 +110,16 @@ Confirmed on real hardware, not just in tests:
   totals, fitness/fatigue/form, last night's sleep, or nothing — because
   there is no one right answer: somebody training for a distance wants the
   totals, somebody tracking recovery wants last night, and somebody who
-  only uses the app to sync wants neither.
+  only uses the app to sync wants neither. Today's steps are a separate
+  switch, drawn under whichever of those is chosen, because the day's steps
+  and last night's sleep are not alternatives.
+
+  **What its one button does is a setting too**: workouts from the watch,
+  health data from the watch, either of those up to the cloud, or
+  everything in both directions. "Everything" is a queue — the two watch
+  steps each take the Bluetooth link for themselves — and a step with
+  nothing to do, or no watch, or no account, is skipped rather than
+  reported.
 - **Workouts from the watch over BLE.** Lists the watch's logbook, fetches
   each entry, and decodes it: route, heart rate, altitude, cadence, laps,
   per-sample charts and the watch's own summary totals.
@@ -242,6 +262,13 @@ Confirmed on real hardware, not just in tests:
   and every field was cross-checked against the cloud's own entries for the
   same buckets.
 
+  The page shows **thirty days of it**: a chart of any two of calories,
+  steps, sleep duration and sleep quality — each series on its own scale,
+  because none of the four share a unit — and under it one row per day
+  carrying both halves, the day's steps and calories with that night's
+  sleep beneath them. A day with no samples breaks the line rather than
+  being drawn as a day of no steps.
+
 - **SuuntoPlus apps, watch faces and guides** — browsed, added to the
   account's library, installed on the watch and removed again, with no
   Android app anywhere in it. The library page groups the three kinds under
@@ -310,18 +337,23 @@ Confirmed on real hardware, not just in tests:
   Secrets vault beside the account's own), and the watch is given two cloud
   settings: the API address, and **a credential of its own**, which `GET
   userlogin` mints against an `x-totp` header — sixteen characters, written
-  as `WatchUserKey …`. Then `/Weather/Sync` makes the watch refresh its
-  forecast, and the maps page puts regions in the account's map library and
-  tells the watch the library changed.
+  as `WatchUserKey …`. The maps page then puts regions in the account's map
+  library and tells the watch the library changed.
 
-  The maps are confirmed on a real watch, end to end. The weather is
-  **not** confirmed as *caused* by this: the watch's weather view had been
-  saying "update the weather from the Suunto app" that morning and showed a
-  forecast after one tap here, but the forecast's own observation time
-  predates the tap, and a later pair of taps moved nothing readable at all.
-  So the credential write is what the watch needs and the rest is an
-  observation, not a mechanism - see `docs/watch-push-resources.md`, which
-  says what would settle it. A map region added here reached the watch: the
+  **The weather is the watch's own errand, on the watch's own clock.** The
+  router's resolver caught it asking for `weather.sports-tracker.com` at
+  **04:34**, the morning after the credential was written from here, and
+  its weather app showed a forecast. Nothing the phone sends triggers that
+  fetch — not this app, and not the official one either: two captures, one
+  with the watch's WiFi off and one with it on, show no weather pushed over
+  Bluetooth at all. So the credential is the whole of the phone's part, and
+  that is what this writes. `/Weather/Sync` is in there too, because the
+  official app subscribes to it at the same point, but it is a
+  subscription and not a command — see `docs/watch-push-resources.md`,
+  which also records that the watch's own "Synk." date never moves and is
+  vestigial on both sides.
+
+  A map region added here reached the watch: the
   watch asks you to accept the download on its own screen, shows the
   progress there, and `/MapsDownload/NumberOfAreas` then counts exactly
   the regions the cloud calls `FINISHED` — two numbers that agree without

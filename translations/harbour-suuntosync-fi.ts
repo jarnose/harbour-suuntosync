@@ -1141,11 +1141,11 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>Sync workouts from cloud</source>
-        <translation>Synkronoi harjoitukset pilvestä</translation>
+        <translation type="vanished">Synkronoi harjoitukset pilvestä</translation>
     </message>
     <message>
         <source>Sync from watch to phone</source>
-        <translation>Synkronoi kellosta puhelimeen</translation>
+        <translation type="vanished">Synkronoi kellosta puhelimeen</translation>
     </message>
     <message>
         <source>Import a FIT file</source>
@@ -1228,11 +1228,39 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>Syncing from the cloud…</source>
-        <translation>Synkronoidaan pilvestä…</translation>
+        <translation type="vanished">Synkronoidaan pilvestä…</translation>
     </message>
     <message>
         <source>Syncing from the watch…</source>
-        <translation>Synkronoidaan kellosta…</translation>
+        <translation type="vanished">Synkronoidaan kellosta…</translation>
+    </message>
+    <message>
+        <source>Syncing workouts from the cloud…</source>
+        <translation>Synkronoidaan harjoituksia pilvestä…</translation>
+    </message>
+    <message>
+        <source>Syncing workouts from the watch…</source>
+        <translation>Synkronoidaan harjoituksia kellosta…</translation>
+    </message>
+    <message>
+        <source>Syncing health data…</source>
+        <translation>Synkronoidaan terveysdataa…</translation>
+    </message>
+    <message>
+        <source>Uploading to the cloud…</source>
+        <translation>Lähetetään pilveen…</translation>
+    </message>
+    <message>
+        <source>Sync everything</source>
+        <translation>Synkronoi kaikki</translation>
+    </message>
+    <message>
+        <source>Sync from the watch</source>
+        <translation>Synkronoi kellosta</translation>
+    </message>
+    <message>
+        <source>Sync with the cloud</source>
+        <translation>Synkronoi pilven kanssa</translation>
     </message>
 </context>
 <context>
@@ -2141,7 +2169,11 @@ löytyy - %2 tavua
     </message>
     <message>
         <source>All four, in that order</source>
-        <translation>Kaikki neljä, tässä järjestyksessä</translation>
+        <translation type="vanished">Kaikki neljä, tässä järjestyksessä</translation>
+    </message>
+    <message>
+        <source>Everything, both directions</source>
+        <translation>Kaikki, molempiin suuntiin</translation>
     </message>
 </context>
 <context>

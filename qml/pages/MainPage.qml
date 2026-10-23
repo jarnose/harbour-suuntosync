@@ -62,6 +62,23 @@ Page {
         return ActivityTypes.name(id, source)
     }
 
+    // A chain runs several steps, so the entry says which step is running
+    // rather than merely that something is.
+    property bool syncBusy: AppController.workoutSyncInProgress
+                            || AppController.healthSyncInProgress
+                            || AppController.uploadInProgress
+
+    function syncBusyText() {
+        if (AppController.workoutSyncInProgress) {
+            return AppController.workoutSyncKind === "cloud"
+                   ? qsTr("Syncing workouts from the cloud…")
+                   : qsTr("Syncing workouts from the watch…")
+        }
+        if (AppController.healthSyncInProgress)
+            return qsTr("Syncing health data…")
+        return qsTr("Uploading to the cloud…")
+    }
+
     function formatDuration(seconds) {
         var h = Math.floor(seconds / 3600)
         var m = Math.floor((seconds % 3600) / 60)
@@ -169,29 +186,34 @@ Page {
                 text: qsTr("SuuntoPlus")
                 onClicked: pageStack.push(Qt.resolvedUrl("SuuntoPlusPage.qml"))
             }
-            // The three transfers, named by direction. "Sync workouts" and
-            // "Sync from watch" said nothing about which way data moved,
-            // and with three of them that stopped being guessable.
+            // **One sync entry, not two, and which one depends on what is
+            // reachable.** Two entries that both said "Syncing…" were
+            // reported as confusing from the forum thread, and the deeper
+            // problem was that neither touched health data: a person who
+            // synced from here still had to open the Health page and sync
+            // again there.
+            //
+            // So: no watch means the cloud chain, no account means the
+            // watch chain, both means everything in both directions. Each
+            // chain skips the steps it cannot run, which is what makes one
+            // entry honest in every state.
             MenuItem {
-                visible: AppController.cloudSignedIn
-                // Which sync is running, not just that one is: both
-                // entries said "Syncing…" before, and a reader of the
-                // forum thread pointed out that this tells you nothing.
-                text: AppController.workoutSyncInProgress
-                       && AppController.workoutSyncKind === "cloud"
-                      ? qsTr("Syncing from the cloud…")
-                      : qsTr("Sync workouts from cloud")
-                enabled: !AppController.workoutSyncInProgress
-                onClicked: AppController.syncCloudWorkouts()
+                text: page.syncBusy ? page.syncBusyText() : qsTr("Sync everything")
+                enabled: !page.syncBusy
+                visible: AppController.watchConnected && AppController.cloudSignedIn
+                onClicked: AppController.runSyncChain("all")
             }
             MenuItem {
-                visible: AppController.watchConnected
-                text: AppController.workoutSyncInProgress
-                       && AppController.workoutSyncKind === "watch"
-                      ? qsTr("Syncing from the watch…")
-                      : qsTr("Sync from watch to phone")
-                enabled: !AppController.workoutSyncInProgress
-                onClicked: AppController.syncWatchWorkouts()
+                text: page.syncBusy ? page.syncBusyText() : qsTr("Sync from the watch")
+                enabled: !page.syncBusy
+                visible: AppController.watchConnected && !AppController.cloudSignedIn
+                onClicked: AppController.runSyncChain("watch")
+            }
+            MenuItem {
+                text: page.syncBusy ? page.syncBusyText() : qsTr("Sync with the cloud")
+                enabled: !page.syncBusy
+                visible: !AppController.watchConnected && AppController.cloudSignedIn
+                onClicked: AppController.runSyncChain("cloud")
             }
             MenuItem {
                 // A FIT file from anywhere - Edge Sync writes them to

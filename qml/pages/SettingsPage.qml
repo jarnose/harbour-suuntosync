@@ -509,7 +509,7 @@ Page {
                         onClicked: AppController.coverAction = "uploadHealth"
                     }
                     MenuItem {
-                        text: qsTr("All four, in that order")
+                        text: qsTr("Everything, both directions")
                         onClicked: AppController.coverAction = "all"
                     }
                 }

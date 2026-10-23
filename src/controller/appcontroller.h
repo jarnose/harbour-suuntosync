@@ -122,6 +122,20 @@ public:
     // A step whose precondition fails - no watch connected, not signed in
     // - is skipped rather than failing the chain.
     Q_INVOKABLE void runCoverAction();
+
+    // A named chain of sync steps, run one at a time:
+    //
+    //   "watch"  the watch's workouts, then its health data
+    //   "cloud"  the cloud's workouts and health, then anything this phone
+    //            has not sent up yet
+    //   "all"    both of those, the watch first
+    //
+    // The main page offers exactly one of the three, by what is actually
+    // reachable: no watch means the cloud chain, no account means the
+    // watch chain, both means "all". Steps whose precondition fails are
+    // skipped - which is also what makes "all" safe to offer the moment
+    // either side is available.
+    Q_INVOKABLE void runSyncChain(const QString &name);
     bool isGpsUpdateInProgress() const { return m_gpsUpdateInProgress; }
     bool baseMapEnabled() const { return m_baseMapEnabled; }
     void setBaseMapEnabled(bool enabled);

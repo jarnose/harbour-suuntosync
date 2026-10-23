@@ -1012,14 +1012,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sync workouts from cloud</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sync from watch to phone</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Send %1 workouts from phone to cloud</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1102,11 +1094,31 @@ exists - %2 bytes
         </translation>
     </message>
     <message>
-        <source>Syncing from the cloud…</source>
+        <source>Syncing workouts from the cloud…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Syncing from the watch…</source>
+        <source>Syncing workouts from the watch…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syncing health data…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uploading to the cloud…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync everything</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync from the watch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sync with the cloud</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1922,7 +1934,7 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>All four, in that order</source>
+        <source>Everything, both directions</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

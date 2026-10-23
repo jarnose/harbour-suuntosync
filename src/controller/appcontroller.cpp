@@ -3479,20 +3479,39 @@ void AppController::setCoverAction(const QString &action)
     emit coverModeChanged();
 }
 
-void AppController::runCoverAction()
+void AppController::runSyncChain(const QString &name)
 {
-    // "all" is the four steps in the order that makes sense: read from the
-    // watch first, then send what was read onwards. The other values are
-    // one step each.
-    if (m_coverAction == QStringLiteral("all")) {
+    if (name == QStringLiteral("watch")) {
         m_coverChain = QStringList{ QStringLiteral("watchWorkouts"),
-                                     QStringLiteral("watchHealth"),
+                                     QStringLiteral("watchHealth") };
+    } else if (name == QStringLiteral("cloud")) {
+        m_coverChain = QStringList{ QStringLiteral("cloudWorkouts"),
+                                     QStringLiteral("cloudHealth"),
                                      QStringLiteral("uploadWorkouts"),
                                      QStringLiteral("uploadHealth") };
     } else {
-        m_coverChain = QStringList{ m_coverAction.isEmpty()
-                ? QStringLiteral("watchWorkouts") : m_coverAction };
+        // Both directions, the watch first: read what it has, then settle
+        // up with the cloud in both directions.
+        m_coverChain = QStringList{ QStringLiteral("watchWorkouts"),
+                                     QStringLiteral("watchHealth"),
+                                     QStringLiteral("cloudWorkouts"),
+                                     QStringLiteral("cloudHealth"),
+                                     QStringLiteral("uploadWorkouts"),
+                                     QStringLiteral("uploadHealth") };
     }
+    startNextCoverStep();
+}
+
+void AppController::runCoverAction()
+{
+    // "all" is the whole chain, the same one the main page's own entry
+    // runs. Every other value is a single step.
+    if (m_coverAction == QStringLiteral("all")) {
+        runSyncChain(QStringLiteral("all"));
+        return;
+    }
+    m_coverChain = QStringList{ m_coverAction.isEmpty()
+            ? QStringLiteral("watchWorkouts") : m_coverAction };
     startNextCoverStep();
 }
 
@@ -3518,6 +3537,18 @@ void AppController::startNextCoverStep()
             if (!m_watchConnected)
                 continue;
             syncWatchHealth();
+            return;
+        }
+        if (step == QStringLiteral("cloudWorkouts")) {
+            if (!m_cloudAccount.isSignedIn())
+                continue;
+            syncCloudWorkouts();
+            return;
+        }
+        if (step == QStringLiteral("cloudHealth")) {
+            if (!m_cloudAccount.isSignedIn())
+                continue;
+            syncHealthData();
             return;
         }
         if (step == QStringLiteral("uploadWorkouts")) {

@@ -867,6 +867,10 @@ löytyy - %2 tavua
         <source>%1 bytes, nothing printable</source>
         <translation>%1 tavua, ei luettavaa tekstiä</translation>
     </message>
+    <message>
+        <source>Sleep synced. No new recovery samples.</source>
+        <translation>Uni synkronoitu. Ei uusia palautumisnäytteitä.</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

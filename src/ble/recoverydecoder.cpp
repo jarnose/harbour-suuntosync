@@ -62,6 +62,24 @@ size_t findRecordStart(const std::vector<uint8_t> &payload)
         if (second - first == kSampleIntervalSeconds)
             return pos;
     }
+
+    // **A reply with exactly one record has no rhythm to find.** The rule
+    // above needs two timestamps an interval apart, so a single-record
+    // reply was always thrown away - measured on a real sync: 19 bytes,
+    // reported as "no readable samples", which is eleven bytes of header
+    // and one eight-byte record.
+    //
+    // So, only when the pair rule finds nothing: a plausible timestamp
+    // whose position leaves a whole number of records behind it. That is
+    // weaker than the rhythm, and deliberately a fallback rather than the
+    // first test - with two or more records the rhythm is unambiguous and
+    // this is not needed.
+    for (size_t pos = 0; pos + kRecordSize <= payload.size(); ++pos) {
+        if ((payload.size() - pos) % kRecordSize != 0)
+            continue;
+        if (plausibleTimestamp(timestampAt(payload, pos)))
+            return pos;
+    }
     return payload.size(); // nothing recognisable
 }
 

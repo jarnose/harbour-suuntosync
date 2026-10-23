@@ -106,6 +106,34 @@ int main()
         }
     }
 
+    // One record, which is what a real sync answered with on 2026-10-23:
+    // eleven bytes of header and a single eight-byte sample, reported then
+    // as "no readable samples" because the rhythm rule needs two
+    // timestamps an interval apart. The fallback reads it; the pair rule
+    // still owns every case with two or more.
+    {
+        std::vector<uint8_t> one(11, 0x00);
+        const uint32_t when = 1792442400; // plausible and recent
+        one.push_back(static_cast<uint8_t>(when & 0xFF));
+        one.push_back(static_cast<uint8_t>((when >> 8) & 0xFF));
+        one.push_back(static_cast<uint8_t>((when >> 16) & 0xFF));
+        one.push_back(static_cast<uint8_t>((when >> 24) & 0xFF));
+        one.push_back(62);   // balance
+        one.push_back(2);    // stress state
+        one.push_back(0x00);
+        one.push_back(0x00);
+        const std::vector<RecoveryMoments::Sample> decoded = RecoveryMoments::decode(one);
+        check(decoded.size() == 1, "a single-record reply decodes to one sample");
+        check(!decoded.empty()
+                       && decoded.front().timestampMs == static_cast<int64_t>(when) * 1000,
+               "and keeps its timestamp");
+
+        // Header only - the watch saying there is nothing newer than the
+        // cursor - stays empty rather than reading a sample out of it.
+        check(RecoveryMoments::decode(std::vector<uint8_t>(11, 0x00)).empty(),
+               "a header-only reply decodes to none");
+    }
+
     if (g_failures == 0) {
         std::printf("\nAll assertions passed.\n");
         return 0;

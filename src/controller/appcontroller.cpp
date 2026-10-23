@@ -3240,8 +3240,14 @@ void AppController::fetchWatchRecovery(const WatchSession &session)
 
         const std::vector<RecoveryMoments::Sample> samples = RecoveryMoments::decode(data);
         if (samples.empty()) {
-            emit errorOccurred(tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
-                                .arg(data.size()));
+            // A reply with the header and nothing after it is the watch
+            // saying there is nothing newer than the cursor - which is not
+            // the same as a payload it could not read, and the old wording
+            // called both the same thing.
+            emit errorOccurred(data.size() < 2 * 8
+                    ? tr("Sleep synced. No new recovery samples.")
+                    : tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
+                            .arg(data.size()));
             fetchWatchActivity(session);
             return;
         }

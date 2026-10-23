@@ -755,6 +755,10 @@ exists - %2 bytes
         <source>%1 bytes, nothing printable</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Sleep synced. No new recovery samples.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

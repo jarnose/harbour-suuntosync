@@ -767,6 +767,10 @@ exists - %2 bytes
         <source>%1 more not tried - the watch disconnected</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>No new nights on the watch.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1408,6 +1412,10 @@ exists - %2 bytes
     </message>
     <message>
         <source>No bulk data arrived before the silence timeout (%1, trigger answered %2, %3 chunks seen)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paged read at offset %1 was refused with status %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

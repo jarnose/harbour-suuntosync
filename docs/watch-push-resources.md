@@ -1212,3 +1212,54 @@ is vestigial on both sides: the firmware draws it and does not refresh it.
 **The practical consequence is nil.** The watch's weather works, this app
 does everything the official app does for it, and that date tells nobody
 anything about how fresh the forecast is.
+
+## The health chain's first link cancelled the other two (2026-10-24)
+
+Two forum reports, one cause.
+
+A user wrote that steps and calories update on the first sync of the
+morning and then never again - the watch said 5290 and the app stayed at
+"400 something" all day. The data was arriving; the app simply stopped
+asking.
+
+Health is three resources read in a chain, because the whiteboard link
+takes one request at a time: sleep (a rendered file), then recovery
+(`/Activity/Moments/Sync/Data`), then daily activity
+(`/Activity/TrendData`). None of the three depends on the one before it -
+the chain is about the link, not about the data.
+
+But the sleep step's three early exits each `return`ed, so **anything the
+sleep step did not accomplish cancelled recovery and daily activity with
+it.** And the commonest sleep outcome of the day is nothing at all: the
+cursor is `newestTimestamp("sleep")`, so after the morning's sync there is
+no night newer than it, `nights` comes back empty, and the chain stops
+there. Every later sync that day read no activity, and the step count
+froze at whatever the morning had.
+
+The telling part is that `fetchWatchRecovery()` already got this right -
+"daily activity is a third resource again, so it still gets its turn" is
+in its own comment. One link of the chain had the rule and the other did
+not, which is the shape of mistake worth recording: the inconsistency was
+visible in the source the whole time and nothing failed loudly enough to
+point at it. An empty night is also no longer worded as a failure.
+
+### A ten-byte reply is an answer, not a broken page
+
+The second report, from a Monza on firmware 2.23.20, was
+`Palautuminen epäonnistui: Sivutettu luku kohdasta 0 palautti vain 10
+tavua`. Ten bytes is this protocol's status-only reply - handle(6),
+status(2), type(2), no value - which is what the watch sends when the
+resource has nothing for the cursor. `readPages()` required the full
+19-byte page header and called everything shorter malformed, so a watch
+with no recovery data recorded reported a failure.
+
+It now reads the status word out of a short reply: an ordinary 2xx ends
+the paging with whatever was collected (and the recovery handler already
+says "No new recovery samples" for an empty result), while anything else
+is reported *with the status*, which is more use than a byte count. Only
+a reply too short to hold the status word itself is unreadable.
+
+This is the third time in this project that an empty reply has been read
+as a broken one - `/Activity/TrendData` was declared "a different
+structure" for the same reason, and libmds.so has a dedicated
+`"Empty array was returned"` string because the official app hit it too.

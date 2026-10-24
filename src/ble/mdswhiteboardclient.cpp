@@ -657,7 +657,19 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
             callback(false, {}, tr("Paged read at offset %1 failed: %2").arg(offset).arg(error));
             return;
         }
-        if (frame.body.size() < kPagedHeaderSize) {
+        // A reply too short to be a page is not necessarily a broken one.
+        // Ten bytes is this protocol's status-only answer - handle(6),
+        // status(2), type(2) and no value - and that is what a watch sends
+        // when the resource has nothing for the cursor it was given. A
+        // user's Monza answered exactly that for recovery, and this check
+        // turned "nothing recorded" into "Palautuminen epäonnistui".
+        //
+        // So a short reply that still carries a readable status is an
+        // answer: an ordinary 2xx ends the paging with whatever was
+        // collected, and anything else is reported with the status in it,
+        // which is more use than a byte count. Shorter than the status
+        // word itself is the only genuinely unreadable case.
+        if (frame.body.size() < kPagedStatusOffset + 2) {
             callback(false, {}, tr("Paged read at offset %1 returned only %2 bytes")
                                          .arg(offset).arg(frame.body.size()));
             return;
@@ -665,6 +677,16 @@ void MdsWhiteboardClient::readPages(PageRequestEncoder encoder, uint32_t offset,
 
         const uint16_t status = static_cast<uint16_t>(frame.body[kPagedStatusOffset]
                 | (static_cast<uint16_t>(frame.body[kPagedStatusOffset + 1]) << 8));
+
+        if (frame.body.size() < kPagedHeaderSize) {
+            if (status >= 200 && status < 300) {
+                callback(true, collected, QString());
+            } else {
+                callback(false, {}, tr("Paged read at offset %1 was refused with status %2")
+                                             .arg(offset).arg(status));
+            }
+            return;
+        }
         collected.insert(collected.end(), frame.body.begin() + kPagedHeaderSize, frame.body.end());
         const size_t payloadSize = frame.body.size() - kPagedHeaderSize;
 

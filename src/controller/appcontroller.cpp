@@ -3168,16 +3168,38 @@ void AppController::startWatchHealthSync(const WatchSession &session)
         m_healthSyncInProgress = false;
         emit healthSyncInProgressChanged();
 
+        // **Every exit from here chains on.** Sleep is the first of three
+        // resources and the other two do not depend on it, but each of
+        // these branches used to `return` - so one sleep step that did
+        // nothing cancelled recovery and daily activity with it.
+        //
+        // The second sync of a day hits this every time: the cursor is
+        // already past last night, so there is no new night, so nights is
+        // empty, so the steps and calories froze at whatever the morning's
+        // first sync had read. That is a user's bug report, not a
+        // hypothetical. fetchWatchRecovery() already got this right for
+        // the recovery -> activity link; this link was simply left behind.
         if (!ok) {
             emit errorOccurred(tr("Could not read sleep from the watch: %1").arg(error));
+            fetchWatchRecovery(session);
             return;
         }
 
         const std::vector<SleepTimeline::Night> nights =
                 SleepTimeline::decode(Sbem::parseContainer(data));
         if (nights.empty()) {
-            emit errorOccurred(tr("The watch returned %1 bytes but no readable nights.")
-                                .arg(data.size()));
+            // A rendered file with no night in it is the normal answer to
+            // "anything newer than last night?" and should not read like a
+            // failure. The byte count is what separates the two, and the
+            // threshold is a judgement rather than a measurement: an empty
+            // container is the SBEM header and little else, where a real
+            // night runs to kilobytes.
+            if (data.size() < 64)
+                emit errorOccurred(tr("No new nights on the watch."));
+            else
+                emit errorOccurred(tr("The watch returned %1 bytes but no readable nights.")
+                                    .arg(data.size()));
+            fetchWatchRecovery(session);
             return;
         }
 
@@ -3206,6 +3228,7 @@ void AppController::startWatchHealthSync(const WatchSession &session)
         // fromWatch: these rows are candidates for pushing to the cloud.
         if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save sleep data: %1").arg(storeError));
+            fetchWatchRecovery(session);
             return;
         }
         emit healthDataChanged();

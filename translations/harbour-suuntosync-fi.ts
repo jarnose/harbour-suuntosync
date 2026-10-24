@@ -775,6 +775,10 @@ löytyy - %2 tavua
         <source>%1 more not tried - the watch disconnected</source>
         <translation>%1 muuta jäi yrittämättä - kellon yhteys katkesi</translation>
     </message>
+    <message>
+        <source>No new nights on the watch.</source>
+        <translation>Kellossa ei ole uusia öitä.</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1418,6 +1422,10 @@ löytyy - %2 tavua
     <message>
         <source>No bulk data arrived before the silence timeout (%1, trigger answered %2, %3 chunks seen)</source>
         <translation>Joukkodataa ei saapunut ennen aikakatkaisua (%1, laukaisin vastasi %2, %3 lohkoa nähty)</translation>
+    </message>
+    <message>
+        <source>Paged read at offset %1 was refused with status %2</source>
+        <translation>Sivutettu luku kohdasta %1 hylättiin, tila %2</translation>
     </message>
 </context>
 <context>

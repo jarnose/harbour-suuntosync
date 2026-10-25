@@ -31,3 +31,9 @@ install_manifest.txt
 /harbour-suuntosync
 suuntosync-notifyd
 *_autogen/
+
+# The daemon RPM is copied here to be embedded in the application; it is a
+# build product passing through, not source. See DAEMON_RPM in CMakeLists.txt.
+daemon/embed/
+daemon-embed/
+qrc_daemon-rpm.cpp

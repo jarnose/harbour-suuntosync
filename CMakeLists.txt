@@ -151,6 +151,84 @@ target_compile_definitions(harbour-suuntosync PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:QT_QML_DEBUG>
 )
 
+# -DDAEMON_RPM=<path to suuntosync-notifyd-*.rpm> embeds that package in the
+# application binary as a Qt resource, and the application grows a Settings
+# entry that writes it out and asks the system to install it.
+#
+# Why that is worth doing: the daemon cannot be sandboxed, so it cannot be
+# a Store package, and an application in the Store therefore cannot offer
+# notifications at all. Shipping the daemon's RPM *inside* the application
+# and handing it to the OS's own installer is how harbour-situations2
+# application does it - verified by reading the installed binary, which
+# carries a 32 kB binary RPM at a Qt resource path and links exactly one
+# relevant symbol, QDesktopServices::openUrl. The application installs
+# nothing itself; it opens a file and the system asks the user.
+#
+# Optional on purpose. The daemon's RPM is the product of a *separate* build
+# of this same tree (-DBUILD_APP=OFF -DBUILD_DAEMON=ON, its own spec), so
+# requiring it here would make the application unbuildable on its own and
+# the ordering circular. Without it the application builds exactly as
+# before and the Settings entry is absent rather than broken.
+set(DAEMON_RPM "" CACHE FILEPATH
+    "suuntosync-notifyd RPM to embed in the application for in-app install")
+
+# A conventional path as well as the option, because the package build does
+# not reach the cmake command line: rpm/harbour-suuntosync.spec calls
+# %cmake, and threading an option through it would mean an rpm macro, an
+# sfdk argument and a CI incantation that all have to agree. Dropping the
+# file here instead needs none of that - the spec is untouched and the
+# tarball carries it.
+#
+# CI builds the daemon's package first and copies it to this path; see
+# .github/workflows/build.yml. Gitignored: a built RPM has no business in
+# the source tree, it is only passing through.
+if(NOT DAEMON_RPM AND EXISTS "${CMAKE_SOURCE_DIR}/daemon/embed/suuntosync-notifyd.rpm")
+    set(DAEMON_RPM "${CMAKE_SOURCE_DIR}/daemon/embed/suuntosync-notifyd.rpm")
+endif()
+
+if(DAEMON_RPM)
+    if(NOT EXISTS "${DAEMON_RPM}")
+        message(FATAL_ERROR "DAEMON_RPM does not exist: ${DAEMON_RPM}")
+    endif()
+    # Read the first four bytes and insist on the RPM lead's magic
+    # (ed ab ee db). A path typo that pointed at a tarball would otherwise
+    # produce an application that offers an install and hands the installer
+    # something it cannot read - a failure that would only show up on a
+    # phone, which is the expensive place to find it.
+    file(READ "${DAEMON_RPM}" DAEMON_RPM_LEAD HEX LIMIT 4)
+    if(NOT DAEMON_RPM_LEAD STREQUAL "edabeedb")
+        message(FATAL_ERROR
+                "DAEMON_RPM is not an RPM (lead is 0x${DAEMON_RPM_LEAD}, "
+                "expected 0xedabeedb): ${DAEMON_RPM}")
+    endif()
+
+    # The .qrc is generated rather than committed, because it has to name a
+    # path only known at configure time, and the RPM is copied beside it
+    # under a stable name so the resource path does not carry a version.
+    #
+    # "daemon-embed", not "rpms": sfdk builds in the source directory, so
+    # this lands next to rpm/ and a one-letter difference between a source
+    # directory and a generated one is a trap. The *resource* path is set by
+    # the prefix below and does not follow this name - it stays /rpms, which
+    # is what AppController reads.
+    configure_file("${DAEMON_RPM}"
+                    "${CMAKE_CURRENT_BINARY_DIR}/daemon-embed/suuntosync-notifyd.rpm"
+                    COPYONLY)
+    # The <file> path is relative to the .qrc, so both land in the same
+    # generated directory.
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/daemon-embed/daemon-rpm.qrc"
+            "<RCC>\n"
+            "  <qresource prefix=\"/rpms\">\n"
+            "    <file>suuntosync-notifyd.rpm</file>\n"
+            "  </qresource>\n"
+            "</RCC>\n")
+
+    qt5_add_resources(DAEMON_RPM_RESOURCE "${CMAKE_CURRENT_BINARY_DIR}/daemon-embed/daemon-rpm.qrc")
+    target_sources(harbour-suuntosync PRIVATE ${DAEMON_RPM_RESOURCE})
+    target_compile_definitions(harbour-suuntosync PRIVATE SUUNTOSYNC_EMBEDDED_DAEMON_RPM)
+    message(STATUS "Embedding the notification daemon: ${DAEMON_RPM}")
+endif()
+
 target_include_directories(harbour-suuntosync PRIVATE
     $<BUILD_INTERFACE:
     ${SAILFISH_INCLUDE_DIRS}

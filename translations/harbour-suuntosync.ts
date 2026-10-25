@@ -775,6 +775,26 @@ exists - %2 bytes
         <source>The watch gave no daily activity. Steps and calories cannot be read from this watch yet - the log has the details.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>This build carries no notification service to install.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not read the bundled service: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No Downloads folder to write the service to.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved the service to %1, but nothing on the phone offered to install it. Open it from the file manager.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm the install on screen. If it is refused, allow untrusted software in Settings first.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1955,6 +1975,30 @@ exists - %2 bytes
     </message>
     <message>
         <source>Everything, both directions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The notification service is installed. The phone&apos;s own notifications are forwarded to the watch.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Forwarding the phone&apos;s notifications to the watch needs a small second package. It cannot be part of this app: seeing another app&apos;s notification needs a connection the sandbox will not relay. This app carries it and the system installs it - you will be asked to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reinstall the service</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install the service</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>If the install is refused, allow untrusted software in Settings | Untrusted software, then try again.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -22,4 +22,9 @@ ApplicationName=suuntosync
 # Documents: reading a FIT file to import, from ~/Documents (which is
 # where harbour-edgesync exports them). Verified on-device that
 # Documents.permission exists and whitelists ${HOME}/Documents.
-Permissions=Internet;Bluetooth;Secrets;Documents
+# Downloads: writing the bundled suuntosync-notifyd RPM somewhere the
+#   system's package installer can read it. The installer runs outside this
+#   sandbox, so the application's own cache is no use - see
+#   AppController::installNotifyService(). harbour-situations2application
+#   carries this same permission for this same reason.
+Permissions=Internet;Bluetooth;Secrets;Documents;Downloads

@@ -89,15 +89,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build the RPM
-        uses: coderus/github-sfos-build@sfos5
-        with:
-          release: 5.1.0.11
-          arch: ${{ matrix.arch }}
-
-      # The daemon is a second package out of the same tree, and the action
-      # above cannot build it: its docker.sh runs a bare `mb2 build`, with
-      # no way to name a SPEC file. So the same image is driven directly.
+      # **The daemon is built first, and the order matters.** The
+      # application embeds the daemon's RPM so it can offer to install it
+      # from Settings (see DAEMON_RPM in CMakeLists.txt), which means the
+      # package has to exist before the application is configured. Built
+      # second, as it was until this landed, the application would come out
+      # silently without the installer - a build that succeeds and is
+      # missing a feature, which is the worst shape for this to fail in.
+      #
+      # The action below cannot build it: its docker.sh runs a bare
+      # `mb2 build` with no way to name a SPEC file. So the same image is
+      # driven directly.
       #
       # The SPEC is swapped in rather than selected with a flag. mb2 picks
       # the one SPEC in rpm/, so putting the daemon's there and taking the
@@ -120,6 +122,55 @@ jobs:
               mb2 -t SailfishOS-5.1.0.11-${{ matrix.arch }} build
               cp RPMS/*.rpm /workspace/RPMS/
             '
+
+      # Where CMakeLists.txt looks for it. One package per architecture, so
+      # this is the matching one by construction - and the glob is checked
+      # rather than trusted, because `cp` with a glob that matched nothing
+      # would leave the application to build quietly without the installer.
+      - name: Stage the daemon RPM for embedding
+        run: |
+          mkdir -p daemon/embed
+          set -- RPMS/suuntosync-notifyd-*.rpm
+          test -f "$1" || { echo "no daemon RPM to embed"; exit 1; }
+          test $# -eq 1 || { echo "expected one daemon RPM, got $#: $*"; exit 1; }
+          cp "$1" daemon/embed/suuntosync-notifyd.rpm
+          ls -l daemon/embed/
+
+      - name: Build the RPM
+        uses: coderus/github-sfos-build@sfos5
+        with:
+          release: 5.1.0.11
+          arch: ${{ matrix.arch }}
+
+      # Proves the application really carries the package, rather than
+      # trusting that the configure-time message appeared. An RPM's lead
+      # magic is ed ab ee db, and the application's own binary is where it
+      # has to be - not the one in daemon/embed/.
+      - name: Check the daemon is embedded in the application
+        run: |
+          set -eu
+          set -- RPMS/harbour-suuntosync-*.rpm
+          test $# -eq 1 || { echo "expected one application RPM, got $#: $*"; exit 1; }
+          # Unpacked whole rather than asking cpio for one member: whether
+          # the archive spells the path "./usr/bin/..." or "/usr/bin/..."
+          # varies, and a pattern that matches nothing exits 0 with an empty
+          # file, which would pass a weaker check than this one.
+          mkdir -p /tmp/appx
+          ( cd /tmp/appx && rpm2cpio "$OLDPWD/$1" | cpio -idm --quiet )
+          test -s /tmp/appx/usr/bin/harbour-suuntosync \
+              || { echo "could not extract the binary"; exit 1; }
+          cp /tmp/appx/usr/bin/harbour-suuntosync /tmp/app.bin
+          python3 - <<'PY'
+          import struct
+          d = open('/tmp/app.bin', 'rb').read()
+          i = d.find(b'\xed\xab\xee\xdb')
+          assert i > 0, 'no RPM lead magic in the application binary'
+          major, minor, typ, arch = struct.unpack('>BBhh', d[i + 4:i + 10])
+          name = d[i + 10:i + 76].split(b'\x00')[0].decode()
+          assert typ == 0, 'embedded RPM is not a binary package (type %d)' % typ
+          assert name.startswith('suuntosync-notifyd'), 'embedded package is %s' % name
+          print('embedded %s, rpm v%d.%d, archnum %d' % (name, major, minor, arch))
+          PY
 
       - uses: actions/upload-artifact@v4
         with:

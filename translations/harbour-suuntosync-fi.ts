@@ -783,6 +783,26 @@ löytyy - %2 tavua
         <source>The watch gave no daily activity. Steps and calories cannot be read from this watch yet - the log has the details.</source>
         <translation>Kello ei antanut päivittäistä aktiivisuutta. Askeleita ja kaloreita ei pystytä vielä lukemaan tästä kellosta - tarkemmat tiedot ovat logissa.</translation>
     </message>
+    <message>
+        <source>This build carries no notification service to install.</source>
+        <translation>Tämä käännös ei sisällä asennettavaa ilmoituspalvelua.</translation>
+    </message>
+    <message>
+        <source>Could not read the bundled service: %1</source>
+        <translation>Mukana tulevan palvelun lukeminen ei onnistunut: %1</translation>
+    </message>
+    <message>
+        <source>No Downloads folder to write the service to.</source>
+        <translation>Latauskansiota ei löytynyt, joten palvelua ei voitu kirjoittaa.</translation>
+    </message>
+    <message>
+        <source>Saved the service to %1, but nothing on the phone offered to install it. Open it from the file manager.</source>
+        <translation>Palvelu tallennettiin kohteeseen %1, mutta mikään puhelimessa ei tarjoutunut asentamaan sitä. Avaa se tiedostonhallinnasta.</translation>
+    </message>
+    <message>
+        <source>Confirm the install on screen. If it is refused, allow untrusted software in Settings first.</source>
+        <translation>Vahvista asennus näytöltä. Jos se torjutaan, salli ensin epäluotettavat ohjelmat asetuksista.</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1966,6 +1986,30 @@ löytyy - %2 tavua
     <message>
         <source>Everything, both directions</source>
         <translation>Kaikki, molempiin suuntiin</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Ilmoitukset</translation>
+    </message>
+    <message>
+        <source>The notification service is installed. The phone&apos;s own notifications are forwarded to the watch.</source>
+        <translation>Ilmoituspalvelu on asennettu. Puhelimen omat ilmoitukset välitetään kelloon.</translation>
+    </message>
+    <message>
+        <source>Forwarding the phone&apos;s notifications to the watch needs a small second package. It cannot be part of this app: seeing another app&apos;s notification needs a connection the sandbox will not relay. This app carries it and the system installs it - you will be asked to confirm.</source>
+        <translation>Puhelimen ilmoitusten välittäminen kelloon vaatii pienen toisen paketin. Se ei voi olla osa tätä sovellusta: toisen sovelluksen ilmoituksen näkeminen vaatii yhteyden, jota hiekkalaatikko ei välitä. Tämä sovellus kuljettaa paketin mukanaan ja järjestelmä asentaa sen - sinulta kysytään vahvistus.</translation>
+    </message>
+    <message>
+        <source>Reinstall the service</source>
+        <translation>Asenna palvelu uudelleen</translation>
+    </message>
+    <message>
+        <source>Install the service</source>
+        <translation>Asenna palvelu</translation>
+    </message>
+    <message>
+        <source>If the install is refused, allow untrusted software in Settings | Untrusted software, then try again.</source>
+        <translation>Jos asennus torjutaan, salli epäluotettavat ohjelmat kohdasta Asetukset | Epäluotettavat ohjelmat ja yritä uudelleen.</translation>
     </message>
 </context>
 <context>

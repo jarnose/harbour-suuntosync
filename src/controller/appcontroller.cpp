@@ -29,6 +29,8 @@
 #include <QDebug>
 #include <QTimeZone>
 #include <QStandardPaths>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QtMath>
 #include <QVariantMap>
 #include <QJsonArray>
@@ -3707,6 +3709,107 @@ void AppController::forgetWifiCredentials()
         emit wifiChanged();
         emit errorOccurred(tr("Forgot the network."));
     });
+}
+
+// ---- the notification daemon ----
+
+namespace {
+
+// The resource path the generated .qrc declares - see DAEMON_RPM in
+// CMakeLists.txt. Named once, here, so a rename cannot leave the writer
+// and the reader disagreeing silently.
+const char *const kDaemonResource = ":/rpms/suuntosync-notifyd.rpm";
+
+} // namespace
+
+bool AppController::isNotifyServiceInstallable() const
+{
+#ifdef SUUNTOSYNC_EMBEDDED_DAEMON_RPM
+    // The macro says the build embedded one; this says the resource is
+    // really there. They can only disagree through a build mistake, and
+    // this is the cheap place to catch it.
+    return QFile::exists(QString::fromLatin1(kDaemonResource));
+#else
+    return false;
+#endif
+}
+
+bool AppController::hasNotifyServiceRun() const
+{
+    // The daemon's own log, in the cache directory both halves share - see
+    // the header for why this is the only signal available from inside the
+    // sandbox, and what it does and does not prove.
+    const QString dir =
+            QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    return QFile::exists(QDir(dir).filePath(QStringLiteral("suuntosync-notifyd.log")));
+}
+
+void AppController::installNotifyService()
+{
+    if (!isNotifyServiceInstallable()) {
+        emit errorOccurred(tr("This build carries no notification service to install."));
+        return;
+    }
+
+    QFile resource(QString::fromLatin1(kDaemonResource));
+    if (!resource.open(QIODevice::ReadOnly)) {
+        emit errorOccurred(tr("Could not read the bundled service: %1")
+                                    .arg(resource.errorString()));
+        return;
+    }
+    const QByteArray rpm = resource.readAll();
+    resource.close();
+
+    // **Not the application's own cache.** The system's installer runs
+    // outside this sandbox and cannot see into it, so the file has to land
+    // somewhere shared - which is what the Downloads permission is for, and
+    // where the phone already keeps the RPMs it was given by other means.
+    const QString dir =
+            QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (dir.isEmpty() || !QDir().mkpath(dir)) {
+        emit errorOccurred(tr("No Downloads folder to write the service to."));
+        return;
+    }
+
+    // A fixed name, so repeated installs replace the file instead of
+    // littering the folder with one copy per attempt. The version is in
+    // the package's own metadata, which is what the installer shows.
+    const QString path = QDir(dir).filePath(QStringLiteral("suuntosync-notifyd.rpm"));
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        emit errorOccurred(tr("Could not write %1: %2").arg(path, out.errorString()));
+        return;
+    }
+    const qint64 written = out.write(rpm);
+    out.close();
+    if (written != rpm.size()) {
+        emit errorOccurred(tr("Only %1 of %2 bytes reached %3")
+                                    .arg(written).arg(rpm.size()).arg(path));
+        return;
+    }
+
+    // Hand it to the system. openUrl() returning true means the request was
+    // accepted, not that anything was installed - the installer's own
+    // dialog is next and the user answers it, which is exactly why this is
+    // allowed from a sandboxed application.
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path))) {
+        emit errorOccurred(tr("Saved the service to %1, but nothing on the phone "
+                               "offered to install it. Open it from the file "
+                               "manager.").arg(path));
+        return;
+    }
+
+    // Said rather than assumed: an unsigned package is refused outright
+    // unless the phone allows them, and the refusal does not explain
+    // itself. harbour-situations2application warns about the same setting
+    // for the same reason.
+    emit errorOccurred(tr("Confirm the install on screen. If it is refused, allow "
+                           "untrusted software in Settings first."));
+}
+
+void AppController::refreshNotifyServiceState()
+{
+    emit notifyServiceSeenChanged();
 }
 
 void AppController::finishWifi(const QString &message)

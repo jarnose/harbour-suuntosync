@@ -779,6 +779,10 @@ löytyy - %2 tavua
         <source>No new nights on the watch.</source>
         <translation>Kellossa ei ole uusia öitä.</translation>
     </message>
+    <message>
+        <source>The watch gave no daily activity. Steps and calories cannot be read from this watch yet - the log has the details.</source>
+        <translation>Kello ei antanut päivittäistä aktiivisuutta. Askeleita ja kaloreita ei pystytä vielä lukemaan tästä kellosta - tarkemmat tiedot ovat logissa.</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

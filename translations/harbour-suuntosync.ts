@@ -771,6 +771,10 @@ exists - %2 bytes
         <source>No new nights on the watch.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>The watch gave no daily activity. Steps and calories cannot be read from this watch yet - the log has the details.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

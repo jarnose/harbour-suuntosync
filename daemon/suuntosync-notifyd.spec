@@ -25,15 +25,34 @@
 
 Name:       suuntosync-notifyd
 Summary:    Forwards phone notifications to a Suunto watch
-Version:    1.5.4
+Version:    1.5.5
 Release:    1
 License:    MIT
 URL:        https://github.com/jarnose/harbour-suuntosync
 Source0:    %{name}-%{version}.tar.bz2
 
-# The application owns the pairing and the database this reads; without it
-# there is no watch to send to and nothing to configure.
-Requires:   harbour-suuntosync
+# **Deliberately not Requires: harbour-suuntosync**, although the
+# application is what owns the pairing and the database this reads.
+#
+# An RPM dependency here blocks the thing a user actually does: removing
+# the application from the app grid fails outright, with no explanation,
+# because an installed package requires it. `pkcon remove` works from a
+# terminal only because it asks whether to take the dependant too, and the
+# app grid has no way to ask. No arrangement of packages makes removing
+# the application also remove this one - a subpackage would not either -
+# so the choice is between blocking the removal and leaving this behind,
+# and leaving it behind is plainly better.
+#
+# Recommends: was considered and rejected. zypper re-evaluates weak
+# dependencies, so an application removed from the app grid could be
+# pulled back in by this package on a later refresh - worse than the bug
+# being fixed.
+#
+# Left behind, this daemon keeps working: the paired-watch row lives in
+# the user's own data directory, which an RPM removal does not touch, so
+# notifications still reach the watch. What it cannot do is be
+# reconfigured. It is removed on its own:
+#   devel-su pkcon remove suuntosync-notifyd
 Requires:   systemd-user-session-targets
 
 BuildRequires:  pkgconfig(Qt5Core)

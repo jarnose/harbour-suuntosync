@@ -995,6 +995,27 @@ void MdsWhiteboardClient::fetchActivityFragment(qint64 cursorMs,
         }
 
         const std::vector<ActivityTrend::Sample> fragment = ActivityTrend::decode(body);
+
+        // **A reply nobody could read must not be silent.** The decoder
+        // locates the record array by its own rhythm - two records exactly
+        // forty bytes apart, ten minutes apart - which is what makes it
+        // robust on a Race and what makes it find nothing at all on a
+        // watch whose records are a different size. The caller then sees
+        // an empty list, which is indistinguishable from "nothing new",
+        // and a user sees a step count that never changes and no error.
+        //
+        // That is a real report from a Suunto 5. So when bytes arrive and
+        // none of them parse, the head of the reply goes to the journal:
+        // it is the one thing needed to work out another generation's
+        // record layout, and it is the step counts, not a GPS track.
+        if (fragment.empty() && body.size() > static_cast<size_t>(kActivityStatusOffset) + 2) {
+            QByteArray head(reinterpret_cast<const char *>(body.data()),
+                             static_cast<int>(std::min<size_t>(body.size(), 64)));
+            qWarning().noquote()
+                    << QStringLiteral("activity: %1 bytes, no readable records; head %2")
+                               .arg(body.size()).arg(QString::fromLatin1(head.toHex()));
+        }
+
         uint16_t status = 0;
         if (body.size() >= static_cast<size_t>(kActivityStatusOffset) + 2) {
             status = static_cast<uint16_t>(body[kActivityStatusOffset]

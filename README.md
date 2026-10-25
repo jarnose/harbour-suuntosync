@@ -17,19 +17,33 @@ Two packages, and the second is optional:
 | package | what it is |
 |---|---|
 | `harbour-suuntosync` | the application. It needs nothing else — every feature below is in it. |
-| `suuntosync-notifyd` | forwards the phone's own notifications to the watch. Install the application first — this one depends on it. |
+| `suuntosync-notifyd` | forwards the phone's own notifications to the watch. Install the application first: it owns the pairing this one reads. |
 
 Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.5.2-1.aarch64.rpm
-devel-su pkcon install-local -y suuntosync-notifyd-1.5.2-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.5.5-1.aarch64.rpm
+devel-su pkcon install-local -y suuntosync-notifyd-1.5.5-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
 builds signed by nobody, not Store packages. `-y` accepts that; leave it
 off to be asked.
+
+**Removing them is two steps**, because they are two packages. The
+application uninstalls from its own icon in the app grid; the daemon does
+not appear there, having no icon, and goes separately:
+
+```
+devel-su pkcon remove suuntosync-notifyd
+```
+
+The daemon used to declare an RPM dependency on the application, which
+made removing the application from the app grid fail with no explanation.
+It no longer does. Left installed on its own it keeps forwarding
+notifications - the pairing lives in the user's data directory, which an
+uninstall does not touch - but there is nothing left to configure it with.
 
 Two things before the app is useful:
 

@@ -3332,8 +3332,19 @@ void AppController::fetchWatchActivity(const WatchSession &session)
             return;
         }
         if (samples.empty()) {
-            // Not an error: an up-to-date watch legitimately has nothing
-            // newer than the last bucket already stored.
+            // Usually not an error: a watch synced ten minutes ago has no
+            // newer bucket. But if this resource has never produced a
+            // single row on this watch, it is not "up to date" - it is not
+            // working, and staying silent about it is how a user ends up
+            // reporting a step count that has not moved since pairing
+            // rather than an error anyone could act on. The decoder logs
+            // the head of an unreadable reply; this is the part the user
+            // can see.
+            if (m_healthStore->newestTimestamp(QStringLiteral("activity")) == 0) {
+                emit errorOccurred(tr("The watch gave no daily activity. Steps and "
+                                       "calories cannot be read from this watch yet - "
+                                       "the log has the details."));
+            }
             emit healthDataChanged();
             return;
         }

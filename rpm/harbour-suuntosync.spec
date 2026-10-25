@@ -1,7 +1,7 @@
 Name:       harbour-suuntosync
 
 Summary:    Suunto Sync
-Version:    1.5.4
+Version:    1.5.5
 Release:    1
 License:    MIT
 URL:        https://github.com/jarnose/harbour-suuntosync

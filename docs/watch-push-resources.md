@@ -1263,3 +1263,32 @@ This is the third time in this project that an empty reply has been read
 as a broken one - `/Activity/TrendData` was declared "a different
 structure" for the same reason, and libmds.so has a dedicated
 `"Empty array was returned"` string because the official app hit it too.
+
+## When daily activity cannot be read at all (2026-10-25)
+
+A Suunto 5 user reports a step count that has not moved since the watch
+was paired. The sleep-chain fix above is the first candidate - on that
+generation the rendered-file fetch is also what produced "no bulk data
+arrived before the timeout", so a sleep step that failed every time took
+daily activity down with it every time, which freezes the count for good
+rather than for a day. That has to be ruled out on a current build before
+anything else is worth investigating.
+
+If it is not that, the next suspect is the record layout.
+`ActivityTrend::decode()` locates the record array by its own rhythm -
+two records exactly **forty** bytes apart whose timestamps are one
+ten-minute interval apart - and forty is measured on a Race, from one
+reply. A watch whose records are a different width matches nothing, the
+decoder returns an empty list, and an empty list used to be
+indistinguishable from "nothing newer than the cursor".
+
+So two things changed:
+
+- `fetchActivityFragment()` logs the reply's size and its first 64 bytes
+  as hex **when bytes arrived and none of them parsed**. That is the one
+  thing needed to work out another generation's layout, and it is step
+  counts rather than a GPS track. It is silent whenever the decode works.
+- The empty case is reported to the user, but only when this resource has
+  never produced a single row on this watch. "Nothing newer than ten
+  minutes ago" stays quiet; "this has never worked here" does not, because
+  the alternative is a user reporting a frozen number instead of an error.

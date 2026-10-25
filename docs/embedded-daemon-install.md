@@ -111,15 +111,53 @@ The embedded package is architecture-specific, and the matrix gives one per
 architecture, so the aarch64 application carries the aarch64 daemon by
 construction.
 
+## Confirmed on hardware, 2026-10-25
+
+Installed from the application's own Settings entry on the test phone,
+starting from a state with no daemon package installed at all:
+
+```
+rpm -q suuntosync-notifyd
+  suuntosync-notifyd-1.5.6+embedded.daemon.install.…20ab616-1.aarch64
+systemctl --user is-enabled / is-active
+  enabled / active
+~/Downloads/suuntosync-notifyd.rpm
+  231442 bytes          <- the embedded resource's own length, exactly
+~/.cache/io.github.jarnose/suuntosync/suuntosync-notifyd.log
+  48324 bytes, group privileged
+```
+
+Two of the three open questions answered, and they were the two that
+mattered:
+
+- **The installer accepts a file a sandboxed application wrote to
+  `~/Downloads` and opened.** No special handling, no file manager detour.
+- **`%post` behaves the same under PackageKit as under
+  `pkcon install-local`.** The unit came out enabled and active, and the
+  log file's group being `privileged` says the setgid bit in `%files`
+  survived this route too - which is the part that would have failed
+  quietly, showing up only as calls with no contact name.
+
+The deployed binary carries what was built: an RPM lead at byte 1270820 of
+a 2292584-byte binary, `rpm v3.0`, type 0, archnum 19, the Qt resource's
+big-endian length prefix reading 231442.
+
+One note on reading a binary for the resource *path*: this project stores
+it as a plain `const char *`, so it is ASCII, where Qt's `QStringLiteral`
+would make it UTF-16. A UTF-16 search finds nothing and means nothing -
+the same trap as reading Situations' binary, hit twice in one day.
+
+### The staged file is left behind, on purpose
+
+`~/Downloads/suuntosync-notifyd.rpm` stays after a successful install.
+`openUrl()` is asynchronous - it hands the request over and returns - so
+deleting the file afterwards would race whatever is about to read it. The
+fixed filename is what keeps this from accumulating: a second install
+replaces the file instead of leaving one copy per attempt.
+
 ## What is still unproven
 
-Everything above builds and the embedding is verified in the artifact. Not
-yet confirmed on a phone:
-
-- that Sailfish's installer accepts a file opened from
-  `~/Downloads` by a sandboxed application;
-- that the daemon's `%post`, which calls `systemctl-user`, behaves the same
-  when PackageKit runs it as it does under `pkcon install-local`;
-- whether Jolla's Store review accepts an embedded RPM. Situations being in
-  the Store doing exactly this is the evidence that matters, but it is not
-  a guarantee for another application.
+Whether Jolla's Store review accepts an embedded RPM. Situations being in
+the Store doing exactly this is the evidence that matters, but it is not a
+guarantee for another application, and it is not a question any amount of
+testing here can answer.

@@ -31,20 +31,6 @@ devel-su pkcon install-local -y suuntosync-notifyd-1.5.6-1.aarch64.rpm
 builds signed by nobody, not Store packages. `-y` accepts that; leave it
 off to be asked.
 
-**Removing them is two steps**, because they are two packages. The
-application uninstalls from its own icon in the app grid; the daemon does
-not appear there, having no icon, and goes separately:
-
-```
-devel-su pkcon remove suuntosync-notifyd
-```
-
-The daemon used to declare an RPM dependency on the application, which
-made removing the application from the app grid fail with no explanation.
-It no longer does. Left installed on its own it keeps forwarding
-notifications - the pairing lives in the user's data directory, which an
-uninstall does not touch - but there is nothing left to configure it with.
-
 Two things before the app is useful:
 
 - **Pair the watch in Settings → Bluetooth first.** The app connects to a
@@ -54,6 +40,67 @@ Two things before the app is useful:
 - **A Suunto account** is needed for anything cloud-side — the workout
   list, health upload, SuuntoPlus. Reading workouts, sleep and settings
   off the watch, and writing GPS assist data to it, need no account at all.
+
+### Removing it again
+
+**Two packages, so two removals.** The application uninstalls from its own
+icon in the app grid, the way any application does. The daemon has no icon
+and never appears there, so it goes from a terminal:
+
+```
+devel-su pkcon remove suuntosync-notifyd
+```
+
+That stops and disables the service first, so nothing is left running.
+
+Either order works, and neither needs the other. The daemon used to
+declare an RPM dependency on the application, which made removing the
+application from the app grid fail with no explanation at all; it no
+longer does. Left installed on its own the daemon keeps forwarding
+notifications - the pairing it reads lives in the user's own data
+directory - but nothing remains to configure it with.
+
+**An uninstall does not delete your data**, and that surprises people who
+expect a phone to behave the way Android does. RPM removes only the files
+it installed: the binary, the icons, the service file. Everything the
+application wrote while running belongs to the user, not to the package,
+so the package manager has no record of it and leaves it alone - which is
+why reinstalling finds every workout, the paired watch and the signed-in
+account exactly as they were. It is also why an upgrade does not wipe
+anything.
+
+The other side of that is worth stating plainly: **removing the
+application for privacy reasons removes no private data.** The workouts,
+their GPS tracks, the sleep and recovery history, the Wi-Fi password and
+the cloud session key all stay on the phone.
+
+A deliberate clean-up, in this order:
+
+1. In the app, **sign out** of the Suunto account (Settings → the account),
+   and if a Wi-Fi network was saved for the watch, **"Forget the
+   network"**. Both delete a secret from the Sailfish Secrets store, which
+   is a separate daemon's storage that neither an uninstall nor the `rm`
+   below can reach.
+2. Remove the packages, as above.
+3. Delete what is left:
+
+```
+rm -rf ~/.local/share/io.github.jarnose/suuntosync \
+       ~/.cache/io.github.jarnose/suuntosync \
+       ~/.config/io.github.jarnose/suuntosync \
+       ~/.config/io.github.jarnose/suuntosync.conf
+```
+
+| what | where |
+|---|---|
+| workouts, routes, sample curves, sleep and recovery | `~/.local/share/io.github.jarnose/suuntosync/suuntosync.sqlite` |
+| settings, which watch is paired | `~/.config/io.github.jarnose/suuntosync.conf` |
+| map tiles, the daemon's log, and raw watch replies saved for diagnosis - a rendered sleep file, a workout's samples | `~/.cache/io.github.jarnose/suuntosync/` |
+| cloud session key, Wi-Fi password | Sailfish Secrets, collection `SuuntoSyncSecrets` - step 1, not a file to delete |
+
+The database is also the only copy of some workouts: the watch prunes its
+own logbook, so a workout synced from it and then deleted here may exist
+nowhere else. Worth copying off the phone first if that matters.
 
 ## What works
 

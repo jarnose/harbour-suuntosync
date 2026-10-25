@@ -23,8 +23,8 @@ Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.5.5-1.aarch64.rpm
-devel-su pkcon install-local -y suuntosync-notifyd-1.5.5-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.5.6-1.aarch64.rpm
+devel-su pkcon install-local -y suuntosync-notifyd-1.5.6-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI

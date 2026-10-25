@@ -4922,21 +4922,43 @@ void AppController::loadCachedWorkouts()
             hide.insert(cloudKey);
     }
 
-    // The pairs this app did not create itself - a workout the watch sent
-    // to the cloud by some other route - have no such mapping, and for
-    // those the only cross-reference is the start time. The window is
-    // WorkoutSummary's own 90 seconds, already measured and already used
-    // by the month totals and the progress figures, so the list now
-    // counts a workout the same way they do.
+    // The pairs this app did not create itself - a workout that reached the
+    // cloud by some other route, or the same outing imported from a FIT
+    // file as well as synced - have no such mapping, and for those the only
+    // cross-reference is the start time. The window is WorkoutSummary's own
+    // 90 seconds, already measured and already used by the month totals and
+    // the progress figures, so the list counts a workout the same way they
+    // do.
     //
-    // Deliberately one-directional: a cloud row is hidden when a local one
-    // sits beside it, never the other way round. The 1179 cloud-only rows
-    // here are nobody's duplicate and must stay.
+    // **Which copy wins is a question of source, not of direction.** This
+    // used to hide a cloud row when any local row sat beside it and nothing
+    // else, which left the one case it did not anticipate showing twice: a
+    // ride synced from the watch *and* imported from a FIT file. Both are
+    // local, so neither hid the other. That is a real report.
+    //
+    // So each source has a rank, and a row is hidden when the same outing
+    // is also present under a *higher-ranked* one. The watch's own copy
+    // outranks everything: its route, curves and laps are stored under its
+    // key. A file import outranks the cloud, having come from the device
+    // that recorded it.
+    //
+    // Equal ranks never collapse, which is the part worth keeping: two
+    // cloud rows an hour apart in 2019 are two entries in the account, not
+    // a duplicate this app invented, and it is not for the app to decide
+    // one of them is not real.
+    const auto rank = [](const QString &source) {
+        if (source == QStringLiteral("ble"))
+            return 3;
+        if (source == QStringLiteral("fit"))
+            return 2;
+        if (source == QStringLiteral("cloud"))
+            return 1;
+        return 0;
+    };
+
     for (const Workout &workout : workouts) {
-        if (workout.source == QStringLiteral("cloud"))
-            continue;
         for (const Workout &other : workouts) {
-            if (other.source != QStringLiteral("cloud"))
+            if (rank(other.source) >= rank(workout.source))
                 continue;
             if (std::llabs(other.startTime - workout.startTime)
                     <= WorkoutSummary::kSameWorkoutWindowMs)
@@ -4947,7 +4969,7 @@ void AppController::loadCachedWorkouts()
     QVector<Workout> shown;
     shown.reserve(workouts.size());
     for (const Workout &workout : workouts) {
-        if (workout.source == QStringLiteral("cloud") && hide.contains(workout.key))
+        if (hide.contains(workout.key))
             continue;
         shown.append(workout);
     }

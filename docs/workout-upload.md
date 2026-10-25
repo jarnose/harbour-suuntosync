@@ -1396,3 +1396,41 @@ upload ever come back unscored, the cursor is the cloud's own
 `lastModified`, so the workout arrives again on an ordinary sync once the
 score exists, and until then the main page says how many workouts are
 newer than the figures.
+
+## One row per outing, whatever recorded it (2026-10-25)
+
+The list collapses copies of the same outing, and the first version of
+that rule was written for the case it was reported for: a watch workout
+uploaded from here comes back from the next cloud sync as a second row, so
+a cloud row was hidden when a local one sat beside it. One-directional, on
+purpose - the eleven hundred cloud-only rows in this account are nobody's
+duplicate.
+
+It showed a ride twice anyway. `ble_1792068690` and `fit_1792068684`, six
+seconds apart, 4991 m and 5149 m: the same ride synced from the watch
+**and** imported from a FIT file. Both are local, so neither hid the
+other, and the rule had no opinion about them.
+
+Measured in the real database rather than reasoned about: 1207 rows, and
+exactly one such pair. The cloud copy of that ride was being hidden
+correctly the whole time, which is why this looked like the old bug coming
+back when it was a different one.
+
+So the question is not direction but **source**: each gets a rank, and a
+row is hidden when the same outing is present under a higher-ranked one.
+
+| source | rank | why |
+|---|---|---|
+| `ble` | 3 | the watch's own copy; route, curves and laps are stored under its key |
+| `fit` | 2 | came from the device that recorded it |
+| `cloud` | 1 | the round trip |
+
+**Equal ranks never collapse**, and that is the part to keep. Nine pairs
+of cloud rows in 2018-2019 share a start time, one of each pair carrying
+zero distance - real duplicates in the account, from long before any of
+this. Two cloud entries are two entries, and it is not for this app to
+decide that one of them is not real.
+
+Re-run against the same 1207 rows: 19 hidden where 18 were before, all
+fourteen watch rows kept, and the only groups still showing more than one
+row are cloud-and-cloud.

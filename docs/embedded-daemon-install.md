@@ -147,6 +147,41 @@ it as a plain `const char *`, so it is ASCII, where Qt's `QStringLiteral`
 would make it UTF-16. A UTF-16 search finds nothing and means nothing -
 the same trap as reading Situations' binary, hit twice in one day.
 
+### It comes up by itself after a reboot
+
+Asked a day later, and the phone had rebooted in between, so this is a
+measurement rather than a reading of the unit file:
+
+```
+uptime -s                                       2026-10-26 21:51:54
+ActiveEnterTimestamp                     Mon 2026-10-26 21:52:32 EET
+NRestarts                                                         0
+log: watching the session bus via BecomeMonitor   2026-10-26 21:52:32
+```
+
+Thirty-eight seconds after boot, which is the user session coming up, and
+no restarts since. The daemon's own log line agrees to the second, and says
+`BecomeMonitor` rather than legacy eavesdropping - so it is monitoring the
+way it is supposed to, not falling back.
+
+**Comparing the two timestamps is the check**, because `active` on its own
+does not say who started it: a service somebody started by hand looks
+exactly as active as one that came up at boot.
+
+What this rests on is a single symlink:
+
+```
+~/.config/systemd/user/user-session.target.wants/suuntosync-notifyd.service
+  -> /usr/lib/systemd/user/suuntosync-notifyd.service
+```
+
+It lives in the user's own configuration, not in the package, which is why
+`%post` runs `systemctl-user enable` on every install and why it survives
+the package being removed - the same reason a daemon left behind keeps
+working. `%preun` unlinks it only on a real removal (`$1 = 0`), not on an
+upgrade. If this ever stops starting at boot, that symlink is the first
+thing to look at.
+
 ### The staged file is left behind, on purpose
 
 `~/Downloads/suuntosync-notifyd.rpm` stays after a successful install.

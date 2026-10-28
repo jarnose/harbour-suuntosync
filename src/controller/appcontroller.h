@@ -84,6 +84,10 @@ class AppController : public QObject
     // the day's steps and last night's sleep mutually exclusive.
     Q_PROPERTY(bool coverSteps READ coverSteps WRITE setCoverSteps NOTIFY coverModeChanged)
     Q_PROPERTY(bool syncOnConnect READ syncOnConnect WRITE setSyncOnConnect NOTIFY syncOnConnectChanged)
+    // The notification daemon, which is a second package this application
+    // can carry and offer to install. See installNotifyService().
+    Q_PROPERTY(bool notifyServiceInstallable READ isNotifyServiceInstallable CONSTANT)
+    Q_PROPERTY(bool notifyServiceSeen READ hasNotifyServiceRun NOTIFY notifyServiceSeenChanged)
     Q_PROPERTY(bool gpsUpdateInProgress READ isGpsUpdateInProgress NOTIFY gpsUpdateInProgressChanged)
     // The watch's WiFi. The SSID is an ordinary setting and readable; the
     // passphrase lives in the Secrets vault and is not, so the page only
@@ -675,6 +679,48 @@ public:
     Q_INVOKABLE void setWifiCredentials(const QString &ssid, const QString &passphrase);
     Q_INVOKABLE void forgetWifiCredentials();
 
+    // ---- the notification daemon ----
+    //
+    // Notifications live in a second package, suuntosync-notifyd, because
+    // seeing another application's notification needs a D-Bus monitor
+    // connection that Sailjail will not relay - so that half cannot be
+    // sandboxed, cannot be a Store package, and an application installed
+    // from the Store could otherwise never offer notifications at all.
+    //
+    // The way out, taken from harbour-situations2application (which is in
+    // Jolla's own Store doing exactly this): the daemon's RPM is embedded
+    // in this binary as a Qt resource, and installing it means writing it
+    // out and asking the *system* to open it. The system's own installer
+    // then asks the user. This application installs nothing itself, which
+    // is the whole point - it opens a file.
+    //
+    // `notifyServiceInstallable` is false in a build with no RPM embedded
+    // (see DAEMON_RPM in CMakeLists.txt), and the Settings entry is then
+    // absent rather than offering something that cannot work.
+    bool isNotifyServiceInstallable() const;
+
+    // Whether the daemon has ever run on this phone. Deliberately not
+    // "is it installed": from inside the sandbox there is no way to ask.
+    // Firejail runs this application with --private-bin, so /usr/bin holds
+    // one file and stat() on the daemon's binary is meaningless, and
+    // ~/.config/systemd is outside the jail's whitelist. What *is* visible
+    // is the daemon's own log, which it writes into the directory both
+    // halves share. Its presence proves the daemon ran; its absence does
+    // not quite prove the daemon is missing, so this only decides whether
+    // to offer the install, never to refuse it.
+    bool hasNotifyServiceRun() const;
+
+    // Writes the embedded RPM where the system installer can read it -
+    // which is not this application's own cache, since the installer runs
+    // outside the sandbox - and opens it. Needs the Downloads permission
+    // for exactly that reason.
+    Q_INVOKABLE void installNotifyService();
+
+    // The install happens in another process, so nothing here is told when
+    // it finishes. The Settings page calls this when it becomes visible
+    // again, which is when the user is back from the installer.
+    Q_INVOKABLE void refreshNotifyServiceState();
+
     // Turns the watch's WiFi on and tells it to join the stored network.
     // Reports what the watch answered at each step, because none of this
     // has been measured yet - see docs/wifi-and-offline-maps.md.
@@ -873,6 +919,7 @@ signals:
     void uploadInProgressChanged();
     void coverModeChanged();
     void syncOnConnectChanged();
+    void notifyServiceSeenChanged();
     // -1 when the watch could not be asked at all, otherwise its own value.
     // `detail` says why on -1, because a switch that is simply absent is
     // indistinguishable from a feature that was never built - which is how

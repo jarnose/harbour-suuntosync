@@ -20,6 +20,14 @@ Page {
         knownWatches = AppController.knownWatches()
     }
 
+    // The installer is another process and tells this one nothing, so the
+    // "is it there" signal is re-read whenever the page becomes visible -
+    // which is when the user is back from it.
+    onStatusChanged: {
+        if (status === PageStatus.Active)
+            AppController.refreshNotifyServiceState()
+    }
+
     Component.onCompleted: {
         refreshKnownWatches()
         // Asking attaches to the watch for the one read and lets go again,
@@ -548,6 +556,56 @@ Page {
                     var modes = ["latest", "totals", "progress", "sleep", "nothing"]
                     AppController.coverMode = modes[currentIndex]
                 }
+            }
+
+            // ---- notifications ----
+            //
+            // The whole section is absent in a build that carries no
+            // service to install, rather than present and inert. See
+            // AppController::installNotifyService().
+            SectionHeader {
+                text: qsTr("Notifications")
+                visible: AppController.notifyServiceInstallable
+            }
+
+            Label {
+                visible: AppController.notifyServiceInstallable
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: AppController.notifyServiceSeen
+                      ? qsTr("The notification service is installed. The phone's own "
+                             + "notifications are forwarded to the watch.")
+                      : qsTr("Forwarding the phone's notifications to the watch needs a "
+                             + "small second package. It cannot be part of this app: "
+                             + "seeing another app's notification needs a connection the "
+                             + "sandbox will not relay. This app carries it and the "
+                             + "system installs it - you will be asked to confirm.")
+            }
+
+            Button {
+                visible: AppController.notifyServiceInstallable
+                x: Theme.horizontalPageMargin
+                text: AppController.notifyServiceSeen
+                      ? qsTr("Reinstall the service")
+                      : qsTr("Install the service")
+                onClicked: AppController.installNotifyService()
+            }
+
+            Label {
+                // Said before the attempt, not only after a refusal: an
+                // unsigned package is rejected without explaining itself.
+                visible: AppController.notifyServiceInstallable
+                         && !AppController.notifyServiceSeen
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: qsTr("If the install is refused, allow untrusted software in "
+                           + "Settings | Untrusted software, then try again.")
             }
 
             // ---- about ----

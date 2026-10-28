@@ -12,24 +12,43 @@ to every release:
 Take aarch64 for any current device; armv7hl is for the older ones and is
 built blind, since there is none here to test on.
 
-Two packages, and the second is optional:
-
-| package | what it is |
-|---|---|
-| `harbour-suuntosync` | the application. It needs nothing else — every feature below is in it. |
-| `suuntosync-notifyd` | forwards the phone's own notifications to the watch. Install the application first: it owns the pairing this one reads. |
+**One package.** `harbour-suuntosync` is the application, and everything
+below works from it alone.
 
 Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.5.6-1.aarch64.rpm
-devel-su pkcon install-local -y suuntosync-notifyd-1.5.6-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.6.0-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
 builds signed by nobody, not Store packages. `-y` accepts that; leave it
 off to be asked.
+
+### Notifications need a service, and the app installs it
+
+Forwarding the phone's own notifications to the watch needs a second
+program that runs **outside** the Sailjail sandbox. That part cannot
+change: seeing another application's notification means becoming a D-Bus
+monitor, and the sandbox's proxy relays only the sandboxed application's
+own traffic.
+
+What changed is that it is no longer something to go and find. The
+application carries that package inside itself and offers to install it:
+
+> **Settings → Notifications → Install the service**
+
+The phone's own installer asks you to confirm — the application does not
+install anything itself, it writes the package out and asks the system to
+open it, which is what keeps the application sandboxed. The phone has to
+be allowing untrusted software for it to go through (Settings → Untrusted
+software), because these builds are signed by nobody.
+
+`suuntosync-notifyd` is still published alongside each release for anyone
+who would rather install it from a terminal; it is the same package the
+application carries. `docs/embedded-daemon-install.md` has the whole
+mechanism, and the measurements behind it.
 
 Two things before the app is useful:
 
@@ -43,9 +62,11 @@ Two things before the app is useful:
 
 ### Removing it again
 
-**Two packages, so two removals.** The application uninstalls from its own
-icon in the app grid, the way any application does. The daemon has no icon
-and never appears there, so it goes from a terminal:
+**Two packages, so two removals** — even though only one was downloaded,
+because installing the service really does install a second package. The
+application uninstalls from its own icon in the app grid, the way any
+application does. The service has no icon and never appears there, so it
+goes from a terminal:
 
 ```
 devel-su pkcon remove suuntosync-notifyd

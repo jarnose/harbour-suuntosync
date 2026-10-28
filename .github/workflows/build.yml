@@ -200,12 +200,28 @@ jobs:
             Unsigned RPMs built by GitHub Actions for Sailfish OS 5.1.0.11,
             aarch64 and armv7hl.
 
-            - `harbour-suuntosync` - the application. Sandboxed, and all of
-              it works without the daemon below.
-            - `suuntosync-notifyd` - optional. Forwards the phone's own
-              notifications to the watch, which needs to run outside the
-              Sailjail sandbox and is therefore a separate package. Install
-              the application first; this one depends on it.
+            **There is no second package to install any more.** Forwarding
+            the phone's notifications to the watch still needs a service
+            that runs outside the Sailjail sandbox - that part cannot
+            change, because seeing another app's notification needs a
+            connection the sandbox will not relay. What has changed is that
+            the application now carries that service's package inside
+            itself and offers to install it: **Settings -> Notifications ->
+            Install the service**. The phone's own installer asks you to
+            confirm, and it has to be allowed to install untrusted
+            software (Settings -> Untrusted software) because these builds
+            are signed by nobody.
+
+            So download one file:
+
+            - `harbour-suuntosync` - the application. Everything except
+              notification forwarding works without any of the above.
+
+            `suuntosync-notifyd` is still published here for anyone who
+            would rather install it from a terminal, and it is the same
+            package the application carries. It no longer declares a
+            dependency on the application, so the application can be
+            uninstalled from the app grid while it is present.
 
             Install with `devel-su pkcon install-local <file>.rpm`, which
             will warn that the package is untrusted. It is right: these are

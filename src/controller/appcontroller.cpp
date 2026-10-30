@@ -3563,39 +3563,62 @@ void AppController::startNextCoverStep()
         // A step whose precondition fails is skipped, not reported: the
         // cover's one button is not the place to explain that the watch is
         // out of range, and the next step may well be able to run.
+        //
+        // **Not reported to the user, but not silent either.** A Race sync
+        // that found nothing new went straight past the watch's health
+        // data with no trace of having done so - one tap, no error, no
+        // sleep or recovery lines, and nothing anywhere saying a step had
+        // been dropped. A skipped step is a decision and it belongs in the
+        // journal; the toast it never showed is still not shown.
+        const auto skip = [&step](const char *why) {
+            qWarning().noquote() << QStringLiteral("sync chain: skipped %1 (%2)")
+                                             .arg(step, QString::fromLatin1(why));
+        };
         if (step == QStringLiteral("watchWorkouts")) {
-            if (!m_watchConnected)
+            if (!m_watchConnected) {
+                skip("watch not connected");
                 continue;
+            }
             syncWatchWorkouts();
             return;
         }
         if (step == QStringLiteral("watchHealth")) {
-            if (!m_watchConnected)
+            if (!m_watchConnected) {
+                skip("watch not connected");
                 continue;
+            }
             syncWatchHealth();
             return;
         }
         if (step == QStringLiteral("cloudWorkouts")) {
-            if (!m_cloudAccount.isSignedIn())
+            if (!m_cloudAccount.isSignedIn()) {
+                skip("not signed in");
                 continue;
+            }
             syncCloudWorkouts();
             return;
         }
         if (step == QStringLiteral("cloudHealth")) {
-            if (!m_cloudAccount.isSignedIn())
+            if (!m_cloudAccount.isSignedIn()) {
+                skip("not signed in");
                 continue;
+            }
             syncHealthData();
             return;
         }
         if (step == QStringLiteral("uploadWorkouts")) {
-            if (!m_cloudAccount.isSignedIn() || m_workoutStore->keysPendingUpload().isEmpty())
+            if (!m_cloudAccount.isSignedIn() || m_workoutStore->keysPendingUpload().isEmpty()) {
+                skip(m_cloudAccount.isSignedIn() ? "nothing pending" : "not signed in");
                 continue;
+            }
             uploadAllWorkouts();
             return;
         }
         if (step == QStringLiteral("uploadHealth")) {
-            if (!m_cloudAccount.isSignedIn() || m_healthStore->pendingUploadCount() == 0)
+            if (!m_cloudAccount.isSignedIn() || m_healthStore->pendingUploadCount() == 0) {
+                skip(m_cloudAccount.isSignedIn() ? "nothing pending" : "not signed in");
                 continue;
+            }
             uploadHealthToCloud();
             return;
         }

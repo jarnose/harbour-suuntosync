@@ -3163,6 +3163,13 @@ void AppController::startWatchHealthSync(const WatchSession &session)
     if (since == 0)
         since = QDateTime::currentMSecsSinceEpoch() - 14LL * 24 * 3600 * 1000;
 
+    // **Where the health chain stopped, if it stops.** A Race sync logged
+    // nothing at all between entering this step and the session being
+    // released - no sleep line, no error, no skip - and there was no way
+    // to tell whether the fetch was never made or never answered. One line
+    // per resource, before the request, settles that.
+    qWarning().noquote() << QStringLiteral("health: asking for sleep since %1").arg(since);
+
     m_whiteboardClient->fetchTimelineFile(
             QStringLiteral("/Daily/Sleep/Timeline/Data"),
             QStringLiteral("mdsSlp.sbm"), since,
@@ -3251,6 +3258,8 @@ void AppController::fetchWatchRecovery(const WatchSession &session)
     m_healthSyncInProgress = true;
     emit healthSyncInProgressChanged();
 
+    qWarning().noquote() << QStringLiteral("health: asking for recovery since %1").arg(since);
+
     // Seconds, not milliseconds - see fetchRecoveryMoments().
     m_whiteboardClient->fetchRecoveryMoments(since / 1000,
             [this, session](bool ok, const std::vector<uint8_t> &data, const QString &error) {
@@ -3322,6 +3331,8 @@ void AppController::fetchWatchActivity(const WatchSession &session)
     // Milliseconds here, where recovery counts seconds. libmds.so settles
     // it: the official app multiplies its own NewerThan by 1000 before
     // this fetch. See docs/watch-push-resources.md.
+    qWarning().noquote() << QStringLiteral("health: asking for activity since %1").arg(since);
+
     m_whiteboardClient->fetchActivityTrend(since,
             [this, session](bool ok, const std::vector<ActivityTrend::Sample> &samples,
                     const QString &error) {
@@ -6590,30 +6601,42 @@ void AppController::startWatchWorkoutSync()
             // letter outside a-f in it, which sailed straight through and
             // into a log meant for public pasting. Model names ("Suunto",
             // "Ibiza") have no digits; versions ("2.26.8") are short.
-            // **Mostly digits, not merely containing one.** The first rule
-            // here asked for hex and let a serial with a 'W' in it through.
-            // The second asked for any digit at all, which is too greedy
-            // the other way: a Race answers
-            //   Suunto | Race | Tianjin | 2.53.42 | 0827C1 | SIM | ...
-            // and a 9 Baro
-            //   Suunto | Ibiza | 2.26.8 | 3835C2 | SIM | ...
-            // - one field shorter, because the 9 Baro's model name is long
-            // enough and has a digit in it, so the rule ate the single
-            // most useful field in a line written for diagnosis.
+            // **A long unbroken alphanumeric run with a digit in it.**
+            // This rule has now been wrong three times, and each wrong
+            // version is worth keeping because each failed differently:
             //
-            // A serial is overwhelmingly digits; a model name has at most
-            // one. Counting them separates the two cleanly, and it is the
-            // conservative direction that matters: the serial that leaked
-            // onto a public forum is 35 characters of which 32 are digits.
+            //  1. "ten or more hex characters" - a serial containing a 'W'
+            //     walked straight through, onto a public forum.
+            //  2. "ten or more characters containing a digit" - safe, but
+            //     it ate the 9 Baro's model name, which is the single most
+            //     useful field in a line written for diagnosis.
+            //  3. "mostly digits" - keeps model names, and let a MAC
+            //     address through on the very first run: 0C8CDCC2135A is
+            //     twelve characters of which exactly six are digits, and
+            //     "more than half" is false at exactly half. Measured on a
+            //     Race, not reasoned about.
+            //
+            // What actually separates them is not the digits but the
+            // spaces. A serial, a MAC and a timestamp are one unbroken run
+            // of letters and numbers; a model name is words - "Suunto 9
+            // Baro", "Suunto 9 Peak Pro" - and a version has dots in it.
+            // So: long, unbroken, alphanumeric, and containing at least
+            // one digit.
+            //
+            // It errs towards dropping, deliberately. Losing a field from
+            // a diagnostic line costs a question on a forum; leaking a
+            // serial or a MAC cannot be taken back.
             const auto isIdentifier = [](const QString &candidate) {
                 if (candidate.size() < 10)
                     return false;
-                int digits = 0;
+                bool hasDigit = false;
                 for (QChar c : candidate) {
+                    if (!c.isLetterOrNumber())
+                        return false;
                     if (c.isDigit())
-                        ++digits;
+                        hasDigit = true;
                 }
-                return digits * 2 > candidate.size();
+                return hasDigit;
             };
             for (char c : raw) {
                 if (c >= 0x20 && c < 0x7f) {

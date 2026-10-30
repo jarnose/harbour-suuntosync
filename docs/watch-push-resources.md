@@ -1292,3 +1292,38 @@ So two things changed:
   never produced a single row on this watch. "Nothing newer than ten
   minutes ago" stays quiet; "this has never worked here" does not, because
   the alternative is a user reporting a frozen number instead of an error.
+
+## One record is a record (2026-10-30)
+
+`ActivityTrend::decode()` finds the record array by its rhythm: two
+records exactly forty bytes apart whose timestamps are one ten-minute
+interval apart. A reply holding **one** usable record has no rhythm, so
+the whole thing was thrown away and daily activity read as nothing.
+
+Measured, on a 9 Baro that had been flat and was just charged:
+
+```
+activity: 106 bytes, no readable records; head f0050e018000c80001055e24…
+```
+
+106 bytes is the 26-byte header and room for exactly two 40-byte records.
+Status 200. The first record is real - timestamp 2026-10-30 17:12:04.428
+UTC, one step, no energy - and the second is not a record, because the
+watch had nothing else to report. The bytes were there the whole time.
+
+The fix is the one `RecoveryMoments::decode()` already carries, and the
+comment there says why it was needed: a single-record reply has no pair to
+match. This decoder was written from the same shape and did not get it.
+Only when the rhythm rule finds nothing, a plausible timestamp at a
+position leaving a whole number of records behind it is accepted. With two
+or more records the rhythm is unambiguous and the fallback never runs.
+
+`tests/test_activitydecoder.cpp` carries the real reply's first 64 bytes
+and checks it decodes to one sample with that timestamp and that step
+count. It runs before the fixture gate, so it works without the private
+captures.
+
+**This is the likeliest cause of the "steps never update" reports**, and
+it is not about which watch: any reply with a single usable bucket decoded
+to nothing, silently until 1.5.5 started saying so. A watch synced twice in
+quick succession, or one just off the charger, produces exactly that.

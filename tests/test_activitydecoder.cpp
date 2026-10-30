@@ -89,8 +89,46 @@ std::map<int64_t, CloudEntry> readCloudFixture(const std::string &path)
 
 } // namespace
 
+// A reply holding one usable record, built from a real one: a 9 Baro that
+// had been flat and was just charged answered 106 bytes - the 26-byte
+// header and room for two 40-byte records, of which only the first is a
+// record. The decoder found nothing at all, because its rhythm rule needs
+// two timestamps an interval apart. The recovery decoder had the same bug
+// and the same fix; this one was written from the same shape and missed it.
+//
+// The first 64 bytes are the real reply, as the journal printed them. The
+// rest is zero, which is the worst case for the fallback and no weaker
+// than the real tail.
+void checkSingleRecordReply()
+{
+    static const char kHead[] =
+            "f0050e018000c80001055e240000020000000c00000000000000000000000100"
+            "00004c14cc8da101000000000000000000001500000000910040100000000000";
+
+    std::vector<uint8_t> body(106, 0);
+    for (size_t i = 0; i * 2 + 1 < sizeof(kHead) - 1 && i < body.size(); ++i) {
+        body[i] = static_cast<uint8_t>(
+                std::stoi(std::string(kHead + i * 2, 2), nullptr, 16));
+    }
+
+    const std::vector<ActivityTrend::Sample> one = ActivityTrend::decode(body);
+    check(one.size() == 1, "a reply with one usable record decodes to one sample ("
+                             + std::to_string(one.size()) + ")");
+    if (one.size() == 1) {
+        // 2026-10-30 17:12:04.428 UTC, snapped to the ten-minute grid.
+        check(one[0].rawTimestampMs == 1793380324428,
+              "its raw timestamp is the one in the bytes");
+        check(one[0].timestampMs == 1793380200000, "snapped to the grid");
+        check(one[0].stepCount == 1, "one step");
+    }
+}
+
 int main()
 {
+    // Before the fixture gate, so it runs even where the private captures
+    // are not checked out - this one carries its own bytes.
+    checkSingleRecordReply();
+
     std::ifstream in("fixtures/activity_trend.bin", std::ios::binary);
     const std::vector<uint8_t> payload((std::istreambuf_iterator<char>(in)),
                                          std::istreambuf_iterator<char>());

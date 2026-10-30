@@ -91,6 +91,28 @@ size_t findRecordStart(const std::vector<uint8_t> &payload)
         if (intervalsInGap(second - first) == 1)
             return pos;
     }
+
+    // **A reply with one usable record has no rhythm to find**, and the
+    // rule above needs two. The recovery decoder had exactly this bug and
+    // exactly this fix; this decoder was written from the same shape and
+    // did not get it.
+    //
+    // Measured on a 9 Baro that had been flat and was just charged: a
+    // 106-byte reply, status 200, holding room for two 40-byte records
+    // after the 26-byte header - one real (2026-10-30 17:12:04 UTC, one
+    // step, no energy) and one that is not a record. The pair rule threw
+    // the whole thing away, and daily activity read as nothing at all.
+    //
+    // So, only when the pair rule finds nothing: a plausible timestamp at
+    // a position that leaves a whole number of records behind it. Weaker
+    // than the rhythm, and deliberately second - with two or more records
+    // the rhythm is unambiguous and this never runs.
+    for (size_t pos = 0; pos + kRecordSize <= payload.size(); ++pos) {
+        if ((payload.size() - pos) % kRecordSize != 0)
+            continue;
+        if (plausibleTimestamp(timestampAt(payload, pos)))
+            return pos;
+    }
     return payload.size(); // nothing recognisable
 }
 

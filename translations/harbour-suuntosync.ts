@@ -372,10 +372,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Synced %1 of %2 watch workouts. Failed: %3</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>%1: decode failed (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -793,6 +789,14 @@ exists - %2 bytes
     </message>
     <message>
         <source>Confirm the install on screen. If it is refused, allow untrusted software in Settings first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here. Failed: %4</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

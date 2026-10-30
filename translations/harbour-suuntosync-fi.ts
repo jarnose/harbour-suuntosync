@@ -576,10 +576,6 @@ löytyy - %2 tavua
         <translation>Luettiin %1 tallennettua harjoitusta uudelleen tämän kellon omalla kenttätaululla.</translation>
     </message>
     <message>
-        <source>Synced %1 of %2 watch workouts. Failed: %3</source>
-        <translation>Synkronoitiin %1/%2 kellon harjoitusta. Epäonnistui: %3</translation>
-    </message>
-    <message>
         <source>%1: decode failed (%2)</source>
         <translation>%1: purku epäonnistui (%2)</translation>
     </message>
@@ -802,6 +798,14 @@ löytyy - %2 tavua
     <message>
         <source>Confirm the install on screen. If it is refused, allow untrusted software in Settings first.</source>
         <translation>Vahvista asennus näytöltä. Jos se torjutaan, salli ensin epäluotettavat ohjelmat asetuksista.</translation>
+    </message>
+    <message>
+        <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here.</source>
+        <translation>Synkronoitiin %1 kellon %2 harjoituksesta; %3 oli jo täällä.</translation>
+    </message>
+    <message>
+        <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here. Failed: %4</source>
+        <translation>Synkronoitiin %1 kellon %2 harjoituksesta; %3 oli jo täällä. Epäonnistui: %4</translation>
     </message>
 </context>
 <context>

@@ -6619,6 +6619,21 @@ void AppController::startWatchWorkoutSyncAfterInfo()
         // "With its data": a row whose payload is missing - an older sync,
         // or one that failed halfway - is fetched again. That is what
         // makes this safe to skip on.
+        // **What the watch listed, said out loud.** A user reported that a
+        // workout recorded that day never arrived, and the log could not
+        // settle it: a sync that fetched something printed nothing at all,
+        // so there was no way to tell whether the watch had even listed
+        // the entry. The ids are the workouts' own start times, which is
+        // the fact that answers it.
+        QStringList listedIds;
+        listedIds.reserve(static_cast<int>(entries.size()));
+        for (const LogEntries::Entry &entry : entries)
+            listedIds.append(QString::number(entry.id));
+        qWarning().noquote()
+                << QStringLiteral("watch logbook: %1 entries: %2")
+                           .arg(entries.size())
+                           .arg(listedIds.join(QStringLiteral(", ")));
+
         QVector<QString> logbookIds;
         int alreadyStored = 0;
         logbookIds.reserve(static_cast<int>(entries.size()));
@@ -6633,6 +6648,8 @@ void AppController::startWatchWorkoutSyncAfterInfo()
             }
             logbookIds.append(id);
         }
+
+        m_watchSyncAlreadyStored = alreadyStored;
 
         if (logbookIds.isEmpty()) {
             m_workoutSyncInProgress = false;
@@ -6800,10 +6817,24 @@ void AppController::fetchWatchEntryAt(const QVector<QString> &logbookIds, int in
         for (const QString &logbookId : logbookIds)
             syncedKeys.append(QStringLiteral("ble_%1").arg(logbookId));
         autoUploadAfterSync(syncedKeys);
-        if (!failures.isEmpty()) {
-            emit errorOccurred(tr("Synced %1 of %2 watch workouts. Failed: %3")
-                                        .arg(succeeded)
-                                        .arg(logbookIds.size())
+
+        // **One line, always.** Success used to say nothing at all, which
+        // is the wrong way round: the sync whose outcome a user wants
+        // confirmed is the one they think did nothing - and a report of
+        // "today's workout never arrived" could not be answered from a log
+        // that recorded no sync. The counts are the same in both branches
+        // so the two readings can be compared.
+        const int listed = logbookIds.size() + m_watchSyncAlreadyStored;
+        if (failures.isEmpty()) {
+            emit errorOccurred(tr("Synced %1 of the watch's %2 workouts; %3 were "
+                                   "already here.")
+                                        .arg(succeeded).arg(listed)
+                                        .arg(m_watchSyncAlreadyStored));
+        } else {
+            emit errorOccurred(tr("Synced %1 of the watch's %2 workouts; %3 were "
+                                   "already here. Failed: %4")
+                                        .arg(succeeded).arg(listed)
+                                        .arg(m_watchSyncAlreadyStored)
                                         .arg(failures.join(QStringLiteral("; "))));
         }
         return;

@@ -992,6 +992,11 @@ private:
     PairedWatchStore *m_pairedWatchStore;
     PairedWatch m_pairedWatch;
     bool m_watchConnected = false;
+    // How many of the watch's entries the last sync skipped as already
+    // stored, so the summary can say so. Carried on the controller rather
+    // than threaded through fetchWatchEntryAt()'s recursion, which already
+    // has four arguments and gains nothing from a fifth.
+    int m_watchSyncAlreadyStored = 0;
 
     MdsWhiteboardClient *m_whiteboardClient;
     bool m_whiteboardReady = false;

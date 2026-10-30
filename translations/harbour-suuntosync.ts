@@ -799,6 +799,10 @@ exists - %2 bytes
         <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here. Failed: %4</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Read from the watch: %1 nights, %2 recovery, %3 activity.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

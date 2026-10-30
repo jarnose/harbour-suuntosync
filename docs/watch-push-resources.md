@@ -1327,3 +1327,33 @@ captures.
 it is not about which watch: any reply with a single usable bucket decoded
 to nothing, silently until 1.5.5 started saying so. A watch synced twice in
 quick succession, or one just off the charger, produces exactly that.
+
+## Silence is not failure (2026-10-30)
+
+Worth recording because it cost an evening and the wrong conclusion was
+stated twice with confidence.
+
+A Race sync logged nothing at all between entering the watch health step
+and releasing the session - no sleep line, no recovery line, no error.
+That was read as the step never having run, and a chain bug was diagnosed:
+"nothing new on the watch" cancelling the health sync, the same shape as
+the sleep step that really did cancel recovery and activity.
+
+It was wrong. Logging which chain steps get skipped showed no skip for
+`watchHealth`, and then a line before each of the three resources showed
+all three being asked for. **On a Race all three succeed, and every
+success path was silent.** The 9 Baro looked different only because it
+fails two of them - a 404 on sleep, no recovery samples - and failures
+talk.
+
+The evidence against the wrong reading was already in the log and went
+unread: `Lähetettiin 4 terveysmerkintää Suuntoon` after each of those
+syncs. Entries become pending upload only when a watch read stores them,
+so the step had plainly run. A number sitting two lines below the thing
+being explained is not a subtle clue.
+
+So the watch health chain now reports once at the end - nights, recovery
+and activity, with `-` for a step that never got that far, because "no
+recovery" and "never asked for recovery" are different facts. The watch
+workout sync was given the same treatment the same day and for the same
+reason.

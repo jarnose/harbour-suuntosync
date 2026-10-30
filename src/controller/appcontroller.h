@@ -997,6 +997,16 @@ private:
     // than threaded through fetchWatchEntryAt()'s recursion, which already
     // has four arguments and gains nothing from a fifth.
     int m_watchSyncAlreadyStored = 0;
+    // What the three watch health resources stored this run, so the chain
+    // can report once at the end instead of three times or - as it did -
+    // not at all. -1 means the step did not get that far.
+    int m_healthNights = -1;
+    int m_healthRecovery = -1;
+    int m_healthActivity = -1;
+
+    // One line at the end of the watch health chain - see the definition
+    // for why a silent success was worth fixing.
+    void reportWatchHealth();
 
     MdsWhiteboardClient *m_whiteboardClient;
     bool m_whiteboardReady = false;

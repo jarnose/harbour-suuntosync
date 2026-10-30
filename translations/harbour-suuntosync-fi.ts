@@ -807,6 +807,10 @@ löytyy - %2 tavua
         <source>Synced %1 of the watch&apos;s %2 workouts; %3 were already here. Failed: %4</source>
         <translation>Synkronoitiin %1 kellon %2 harjoituksesta; %3 oli jo täällä. Epäonnistui: %4</translation>
     </message>
+    <message>
+        <source>Read from the watch: %1 nights, %2 recovery, %3 activity.</source>
+        <translation>Kellosta luettiin: %1 yötä, %2 palautumista, %3 aktiivisuutta.</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>

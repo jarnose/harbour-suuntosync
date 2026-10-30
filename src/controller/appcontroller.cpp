@@ -3168,6 +3168,9 @@ void AppController::startWatchHealthSync(const WatchSession &session)
     // released - no sleep line, no error, no skip - and there was no way
     // to tell whether the fetch was never made or never answered. One line
     // per resource, before the request, settles that.
+    m_healthNights = -1;
+    m_healthRecovery = -1;
+    m_healthActivity = -1;
     qWarning().noquote() << QStringLiteral("health: asking for sleep since %1").arg(since);
 
     m_whiteboardClient->fetchTimelineFile(
@@ -3203,6 +3206,7 @@ void AppController::startWatchHealthSync(const WatchSession &session)
             // threshold is a judgement rather than a measurement: an empty
             // container is the SBEM header and little else, where a real
             // night runs to kilobytes.
+            m_healthNights = 0;
             if (data.size() < 64)
                 emit errorOccurred(tr("No new nights on the watch."));
             else
@@ -3232,6 +3236,8 @@ void AppController::startWatchHealthSync(const WatchSession &session)
                 entries.append(stageEntry);
             }
         }
+
+        m_healthNights = static_cast<int>(nights.size());
 
         QString storeError;
         // fromWatch: these rows are candidates for pushing to the cloud.
@@ -3274,6 +3280,7 @@ void AppController::fetchWatchRecovery(const WatchSession &session)
 
         const std::vector<RecoveryMoments::Sample> samples = RecoveryMoments::decode(data);
         if (samples.empty()) {
+            m_healthRecovery = 0;
             // A reply with the header and nothing after it is the watch
             // saying there is nothing newer than the cursor - which is not
             // the same as a payload it could not read, and the old wording
@@ -3285,6 +3292,8 @@ void AppController::fetchWatchRecovery(const WatchSession &session)
             fetchWatchActivity(session);
             return;
         }
+
+        m_healthRecovery = static_cast<int>(samples.size());
 
         QVector<HealthEntry> entries;
         entries.reserve(samples.size());
@@ -3342,6 +3351,7 @@ void AppController::fetchWatchActivity(const WatchSession &session)
         if (!ok) {
             emit errorOccurred(tr("Sleep and recovery synced. Daily activity failed: %1")
                                 .arg(error));
+            reportWatchHealth();
             return;
         }
         if (samples.empty()) {
@@ -3358,9 +3368,13 @@ void AppController::fetchWatchActivity(const WatchSession &session)
                                        "calories cannot be read from this watch yet - "
                                        "the log has the details."));
             }
+            m_healthActivity = 0;
             emit healthDataChanged();
+            reportWatchHealth();
             return;
         }
+
+        m_healthActivity = static_cast<int>(samples.size());
 
         QVector<HealthEntry> entries;
         entries.reserve(samples.size());
@@ -3389,10 +3403,33 @@ void AppController::fetchWatchActivity(const WatchSession &session)
         QString storeError;
         if (!m_healthStore->upsert(entries, &storeError, true)) {
             emit errorOccurred(tr("Could not save activity data: %1").arg(storeError));
+            reportWatchHealth();
             return;
         }
         emit healthDataChanged();
+        reportWatchHealth();
     });
+}
+
+// **A health sync that works says nothing, and that was a trap.** On a
+// Race all three resources succeed, so the whole step was silent - and
+// silence got read, twice in one evening, as the step never having run.
+// The upload line afterwards ("sent 4 health entries") was the only trace
+// that it had, and that is far too indirect to reason from.
+//
+// The workout sync was given the same treatment for the same reason. One
+// line, at the end, naming all three - a step that did not get that far
+// says so rather than being left out, because "no recovery" and "never
+// asked for recovery" are different facts.
+void AppController::reportWatchHealth()
+{
+    const auto part = [](int n) {
+        return n < 0 ? QStringLiteral("-") : QString::number(n);
+    };
+    emit errorOccurred(tr("Read from the watch: %1 nights, %2 recovery, %3 activity.")
+                                .arg(part(m_healthNights),
+                                      part(m_healthRecovery),
+                                      part(m_healthActivity)));
 }
 
 void AppController::uploadHealthToCloud()

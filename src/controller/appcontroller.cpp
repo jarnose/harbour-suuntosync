@@ -3285,9 +3285,15 @@ void AppController::fetchWatchRecovery(const WatchSession &session)
             // saying there is nothing newer than the cursor - which is not
             // the same as a payload it could not read, and the old wording
             // called both the same thing.
+            //
+            // It also said "Sleep synced", which this step cannot know and
+            // which was false on a real run: a 9 Baro answered 404 to the
+            // sleep read and then this line announced that sleep had
+            // synced. Each step speaks for itself now, and the summary at
+            // the end of the chain is where the three are put together.
             emit errorOccurred(data.size() < 2 * 8
-                    ? tr("Sleep synced. No new recovery samples.")
-                    : tr("Sleep synced. Recovery returned %1 bytes but no readable samples.")
+                    ? tr("No new recovery samples.")
+                    : tr("Recovery returned %1 bytes but no readable samples.")
                             .arg(data.size()));
             fetchWatchActivity(session);
             return;
@@ -6644,9 +6650,17 @@ void AppController::startWatchWorkoutSync()
             //
             //  1. "ten or more hex characters" - a serial containing a 'W'
             //     walked straight through, onto a public forum.
-            //  2. "ten or more characters containing a digit" - safe, but
-            //     it ate the 9 Baro's model name, which is the single most
-            //     useful field in a line written for diagnosis.
+            //  2. "ten or more characters containing a digit" - which was
+            //     fine, and the reason given for replacing it was wrong.
+            //     The claim was that it ate the 9 Baro's model name,
+            //     invented to explain why the Race's line has one field
+            //     more:
+            //       Race    Suunto | Race | Tianjin | 2.53.42 | ...
+            //       9 Baro  Suunto | Ibiza | 2.26.8 | ...
+            //     The duller cause is the right one - the Race reports a
+            //     marketing name *and* a codename, and the 9 Baro reports
+            //     only a codename. Nothing was being eaten. Changing the
+            //     rule on that reasoning is what let the MAC through.
             //  3. "mostly digits" - keeps model names, and let a MAC
             //     address through on the very first run: 0C8CDCC2135A is
             //     twelve characters of which exactly six are digits, and

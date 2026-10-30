@@ -388,10 +388,6 @@ löytyy - %2 tavua
         <translation>Uni synkronoitu. Palautuminen epäonnistui: %1</translation>
     </message>
     <message>
-        <source>Sleep synced. Recovery returned %1 bytes but no readable samples.</source>
-        <translation>Uni synkronoitu. Palautuminen palautti %1 tavua mutta ei luettavia näytteitä.</translation>
-    </message>
-    <message>
         <source>Could not save recovery data: %1</source>
         <translation>Palautumisdatan tallennus epäonnistui: %1</translation>
     </message>
@@ -760,10 +756,6 @@ löytyy - %2 tavua
         <translation>%1 tavua, ei luettavaa tekstiä</translation>
     </message>
     <message>
-        <source>Sleep synced. No new recovery samples.</source>
-        <translation>Uni synkronoitu. Ei uusia palautumisnäytteitä.</translation>
-    </message>
-    <message>
         <source>Nothing new on the watch - all %1 of its workouts are already here.</source>
         <translation>Kellossa ei ole uutta - kaikki %1 harjoitusta on jo täällä.</translation>
     </message>
@@ -810,6 +802,14 @@ löytyy - %2 tavua
     <message>
         <source>Read from the watch: %1 nights, %2 recovery, %3 activity.</source>
         <translation>Kellosta luettiin: %1 yötä, %2 palautumista, %3 aktiivisuutta.</translation>
+    </message>
+    <message>
+        <source>No new recovery samples.</source>
+        <translation>Ei uusia palautumisnäytteitä.</translation>
+    </message>
+    <message>
+        <source>Recovery returned %1 bytes but no readable samples.</source>
+        <translation>Palautuminen palautti %1 tavua mutta ei luettavia näytteitä.</translation>
     </message>
 </context>
 <context>

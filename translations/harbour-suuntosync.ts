@@ -288,10 +288,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sleep synced. Recovery returned %1 bytes but no readable samples.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Could not save recovery data: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -752,10 +748,6 @@ exists - %2 bytes
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sleep synced. No new recovery samples.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Nothing new on the watch - all %1 of its workouts are already here.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -801,6 +793,14 @@ exists - %2 bytes
     </message>
     <message>
         <source>Read from the watch: %1 nights, %2 recovery, %3 activity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No new recovery samples.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Recovery returned %1 bytes but no readable samples.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

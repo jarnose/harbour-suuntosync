@@ -6567,14 +6567,30 @@ void AppController::startWatchWorkoutSync()
             // letter outside a-f in it, which sailed straight through and
             // into a log meant for public pasting. Model names ("Suunto",
             // "Ibiza") have no digits; versions ("2.26.8") are short.
+            // **Mostly digits, not merely containing one.** The first rule
+            // here asked for hex and let a serial with a 'W' in it through.
+            // The second asked for any digit at all, which is too greedy
+            // the other way: a Race answers
+            //   Suunto | Race | Tianjin | 2.53.42 | 0827C1 | SIM | ...
+            // and a 9 Baro
+            //   Suunto | Ibiza | 2.26.8 | 3835C2 | SIM | ...
+            // - one field shorter, because the 9 Baro's model name is long
+            // enough and has a digit in it, so the rule ate the single
+            // most useful field in a line written for diagnosis.
+            //
+            // A serial is overwhelmingly digits; a model name has at most
+            // one. Counting them separates the two cleanly, and it is the
+            // conservative direction that matters: the serial that leaked
+            // onto a public forum is 35 characters of which 32 are digits.
             const auto isIdentifier = [](const QString &candidate) {
                 if (candidate.size() < 10)
                     return false;
+                int digits = 0;
                 for (QChar c : candidate) {
                     if (c.isDigit())
-                        return true;
+                        ++digits;
                 }
-                return false;
+                return digits * 2 > candidate.size();
             };
             for (char c : raw) {
                 if (c >= 0x20 && c < 0x7f) {

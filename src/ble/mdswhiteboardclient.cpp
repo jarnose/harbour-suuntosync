@@ -581,6 +581,31 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
                     return;
                 }
                 const std::vector<LogEntries::Entry> entries = LogEntries::decode(frame.body);
+
+                // **How many records the reply had room for, beside how
+                // many were decoded.** The decoder trusts a count field in
+                // the reply and reads that many 24-byte records; if the
+                // two numbers disagree, either the watch is reporting
+                // fewer entries than it sent or this decoder is reading
+                // the count from the wrong place on this model. Both are
+                // live possibilities - a user's Suunto 9 is not listing a
+                // workout it has - and neither is visible from the
+                // decoded list alone, because a short list and a correct
+                // short list look identical.
+                //
+                // The layout is the one logentriesdecoder.cpp documents:
+                // 8 prefix + 2 structure header + 16 array metadata, then
+                // the records.
+                constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
+                constexpr size_t kEntriesRecordLen = 24;
+                const size_t roomFor = frame.body.size() > kEntriesRecordsOffset
+                        ? (frame.body.size() - kEntriesRecordsOffset) / kEntriesRecordLen
+                        : 0;
+                qWarning().noquote()
+                        << QStringLiteral("logbook entries: %1 decoded, %2 bytes, "
+                                           "room for %3 records")
+                                   .arg(entries.size()).arg(frame.body.size()).arg(roomFor);
+
                 if (entries.empty()) {
                     callback(false, {}, tr("Entries response didn't decode to any entries "
                                             "(%1 byte body)").arg(frame.body.size()));

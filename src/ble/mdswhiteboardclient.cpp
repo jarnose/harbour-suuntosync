@@ -601,10 +601,30 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
                 const size_t roomFor = frame.body.size() > kEntriesRecordsOffset
                         ? (frame.body.size() - kEntriesRecordsOffset) / kEntriesRecordLen
                         : 0;
+
+                // **And the reply's status word**, which this resource has
+                // never had read off it. The captured reply this decoder
+                // was built from carries 0x00c8 - 200, "here is all of
+                // it" - at the same offset every other reply puts it. The
+                // neighbouring resources both page: /Summary says 100 for
+                // "call again" and /Activity/TrendData says 202. If a
+                // logbook long enough to need a second page says one of
+                // those, this code has been throwing the rest away, and
+                // the newest workouts are the ones that would go missing
+                // because the list is in ascending order.
+                //
+                // Worth reading before guessing again: a Race listing 13
+                // and an Ibiza listing 18 both fitted one reply, so
+                // whatever the limit is, it is not 13.
+                const uint16_t entriesStatus = frame.body.size() >= 8
+                        ? static_cast<uint16_t>(frame.body[6]
+                                | (static_cast<uint16_t>(frame.body[7]) << 8))
+                        : 0;
                 qWarning().noquote()
                         << QStringLiteral("logbook entries: %1 decoded, %2 bytes, "
-                                           "room for %3 records")
-                                   .arg(entries.size()).arg(frame.body.size()).arg(roomFor);
+                                           "room for %3 records, status %4")
+                                   .arg(entries.size()).arg(frame.body.size())
+                                   .arg(roomFor).arg(entriesStatus);
 
                 if (entries.empty()) {
                     callback(false, {}, tr("Entries response didn't decode to any entries "

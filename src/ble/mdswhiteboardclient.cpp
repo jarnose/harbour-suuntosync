@@ -7,6 +7,7 @@
 #include <QDBusInterface>
 #include <QDBusUnixFileDescriptor>
 #include <QDBusReply>
+#include <QByteArray>
 #include <QDebug>
 #include <QTimer>
 
@@ -613,13 +614,45 @@ void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
     const bool first = (pages == 0);
     const std::vector<uint8_t> ack = ackBody;
 
+    if (first && ack.size() >= 8) {
+        // The ack's own first bytes, once per sync. encodeEntriesFetchTrigger
+        // rebuilds this prefix from scratch (F0, handle, 01 80 00) where
+        // every other encoder copies it, and if the two ever disagree the
+        // next page would be malformed for a reason no amount of staring at
+        // the parameter would explain.
+        qWarning().noquote()
+                << QStringLiteral("logbook entries ack prefix: %1")
+                           .arg(QString::fromLatin1(
+                                   QByteArray(reinterpret_cast<const char *>(ack.data()), 8)
+                                           .toHex()));
+    }
+
     getRaw([ack, first, startAfterId](uint16_t requestId) {
         // The first page keeps the proven no-parameter trigger, so a watch
         // whose whole logbook fits in one reply takes exactly the path it
         // always has.
-        return first ? Mds::encodeEntriesFetchTrigger(requestId, ack)
-                      : Mds::encodePagedReadRequest(requestId, ack, startAfterId,
-                                                     Mds::kParamInt32);
+        if (first)
+            return Mds::encodeEntriesFetchTrigger(requestId, ack);
+
+        // **int64, after int32 was refused.** The first attempt sent the
+        // cursor the way /Summary sends its byte offset - kParamInt32, four
+        // bytes - and the watch answered 400 with a ten-byte status-only
+        // reply. So the shape is wrong rather than the idea: page 0 says
+        // 100, which only means something if a second page can be asked
+        // for.
+        //
+        // int64 is the next candidate on evidence rather than on taste.
+        // Every other cursor on this watch is one: sleep counts
+        // milliseconds, recovery counts seconds, daily activity counts
+        // milliseconds, and all three go out as kParamInt64. An entry id is
+        // unix seconds, which is the same kind of number recovery sends.
+        std::vector<uint8_t> value(8);
+        for (int i = 0; i < 8; ++i) {
+            value[i] = static_cast<uint8_t>(
+                    (static_cast<uint64_t>(startAfterId) >> (8 * i)) & 0xFF);
+        }
+        return Mds::encodeParameterisedFetch(requestId, ack,
+                                               { { Mds::kParamInt64, value } });
     }, [this, ack, startAfterId, collected, pages, callback]
             (bool fetchOk, const Mds::Frame &frame, const QString &fetchError) mutable {
         if (!fetchOk) {

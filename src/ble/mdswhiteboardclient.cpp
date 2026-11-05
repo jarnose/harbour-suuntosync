@@ -570,98 +570,99 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
             callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
             return;
         }
-
-        try {
-            const std::vector<uint8_t> ackBody = ackFrame.body;
-            getRaw([ackBody](uint16_t requestId) {
-                return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
-            }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
-                if (!fetchOk) {
-                    callback(false, {}, tr("Entries fetch failed: %1").arg(fetchError));
-                    return;
-                }
-                const std::vector<LogEntries::Entry> entries = LogEntries::decode(frame.body);
-
-                // **How many records the reply had room for, beside how
-                // many were decoded.** The decoder trusts a count field in
-                // the reply and reads that many 24-byte records; if the
-                // two numbers disagree, either the watch is reporting
-                // fewer entries than it sent or this decoder is reading
-                // the count from the wrong place on this model. Both are
-                // live possibilities - a user's Suunto 9 is not listing a
-                // workout it has - and neither is visible from the
-                // decoded list alone, because a short list and a correct
-                // short list look identical.
-                //
-                // The layout is the one logentriesdecoder.cpp documents:
-                // 8 prefix + 2 structure header + 16 array metadata, then
-                // the records.
-                constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
-                constexpr size_t kEntriesRecordLen = 24;
-                const size_t roomFor = frame.body.size() > kEntriesRecordsOffset
-                        ? (frame.body.size() - kEntriesRecordsOffset) / kEntriesRecordLen
-                        : 0;
-
-                // **And the reply's status word**, which this resource has
-                // never had read off it. The captured reply this decoder
-                // was built from carries 0x00c8 - 200, "here is all of
-                // it" - at the same offset every other reply puts it. The
-                // neighbouring resources both page: /Summary says 100 for
-                // "call again" and /Activity/TrendData says 202. If a
-                // logbook long enough to need a second page says one of
-                // those, this code has been throwing the rest away, and
-                // the newest workouts are the ones that would go missing
-                // because the list is in ascending order.
-                //
-                // Worth reading before guessing again: a Race listing 13
-                // and an Ibiza listing 18 both fitted one reply, so
-                // whatever the limit is, it is not 13.
-                const uint16_t entriesStatus = frame.body.size() >= 8
-                        ? static_cast<uint16_t>(frame.body[6]
-                                | (static_cast<uint16_t>(frame.body[7]) << 8))
-                        : 0;
-                qWarning().noquote()
-                        << QStringLiteral("logbook entries: %1 decoded, %2 bytes, "
-                                           "room for %3 records, status %4")
-                                   .arg(entries.size()).arg(frame.body.size())
-                                   .arg(roomFor).arg(entriesStatus);
-
-                if (entries.empty()) {
-                    callback(false, {}, tr("Entries response didn't decode to any entries "
-                                            "(%1 byte body)").arg(frame.body.size()));
-                    return;
-                }
-                callback(true, entries, QString());
-            });
-        } catch (const std::exception &e) {
-            callback(false, {}, tr("Could not build the entries fetch trigger: %1").arg(e.what()));
-        }
+        fetchEntriesPage(ackFrame.body, 0, {}, 0, callback);
     });
 }
 
-void MdsWhiteboardClient::fetchStructuredRaw(const QString &path, DataCallback callback)
+// **/Logbook/Entries is paged, and this code read one page for a year.**
+//
+// The reply carries a status word where every other reply here puts one,
+// and the captured reply this decoder was built from said 200 - "here is
+// all of it". A Race with eighteen workouts says **100**, the same code
+// /Summary uses for "call again", and the eighteen it returned stopped at
+// 3 November while the watch held two newer rides. The list is in
+// ascending order, so it is always the newest workouts that go missing -
+// which is exactly how this was reported, twice, as "it does not find
+// yesterday's or today's".
+//
+// How to ask for the next page is not guesswork: the schema walk captured
+// when this resource was first decoded names the request's own parameters,
+// **StartAfterId** and IncludeSummaryOnly (see docs/logbook-data-format.md).
+// So the cursor is the last id already seen, sent as the single parameter
+// of an ordinary paged read - the same frame /Summary pages with, which is
+// why no new encoder was needed.
+//
+// It is still an inference, so it is bounded on every side: the loop stops
+// on any status that is not 100, on a page that decodes to nothing, on a
+// cursor that does not advance (which is what a wrong parameter would most
+// likely produce - the same page for ever), and on a page count. A wrong
+// guess costs one extra round trip and the list already in hand, not a
+// hang.
+void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
+                                            uint32_t startAfterId,
+                                            std::vector<LogEntries::Entry> collected,
+                                            int pages, EntriesCallback callback)
 {
-    getRaw([path](uint16_t requestId) {
-        return Mds::encodeGetRequest(requestId, path.toStdString());
-    }, [this, path, callback](bool ok, const Mds::Frame &ackFrame, const QString &error) {
-        if (!ok) {
-            callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
+    // The layout logentriesdecoder.cpp documents: 8 prefix + 2 structure
+    // header + 16 array metadata, then 24-byte records.
+    constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
+    constexpr size_t kEntriesRecordLen = 24;
+    constexpr uint16_t kEntriesStatusMore = 100;
+    constexpr int kMaxEntriesPages = 16;
+
+    const bool first = (pages == 0);
+    const std::vector<uint8_t> ack = ackBody;
+
+    getRaw([ack, first, startAfterId](uint16_t requestId) {
+        // The first page keeps the proven no-parameter trigger, so a watch
+        // whose whole logbook fits in one reply takes exactly the path it
+        // always has.
+        return first ? Mds::encodeEntriesFetchTrigger(requestId, ack)
+                      : Mds::encodePagedReadRequest(requestId, ack, startAfterId,
+                                                     Mds::kParamInt32);
+    }, [this, ack, startAfterId, collected, pages, callback]
+            (bool fetchOk, const Mds::Frame &frame, const QString &fetchError) mutable {
+        if (!fetchOk) {
+            // A later page failing is not worth losing the earlier ones
+            // over - the same rule the activity fragment loop uses.
+            if (collected.empty())
+                callback(false, {}, tr("Entries fetch failed: %1").arg(fetchError));
+            else
+                callback(true, collected, QString());
             return;
         }
-        try {
-            const std::vector<uint8_t> ackBody = ackFrame.body;
-            getRaw([ackBody](uint16_t requestId) {
-                return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
-            }, [callback](bool fetchOk, const Mds::Frame &frame, const QString &fetchError) {
-                if (!fetchOk) {
-                    callback(false, {}, tr("Fetch failed: %1").arg(fetchError));
-                    return;
-                }
-                callback(true, frame.body, QString());
-            });
-        } catch (const std::exception &e) {
-            callback(false, {}, tr("Could not build the fetch trigger: %1").arg(e.what()));
+
+        const std::vector<LogEntries::Entry> page = LogEntries::decode(frame.body);
+        const size_t roomFor = frame.body.size() > kEntriesRecordsOffset
+                ? (frame.body.size() - kEntriesRecordsOffset) / kEntriesRecordLen
+                : 0;
+        const uint16_t status = frame.body.size() >= 8
+                ? static_cast<uint16_t>(frame.body[6]
+                        | (static_cast<uint16_t>(frame.body[7]) << 8))
+                : 0;
+        qWarning().noquote()
+                << QStringLiteral("logbook entries page %1: %2 decoded, %3 bytes, "
+                                   "room for %4 records, status %5, after id %6")
+                           .arg(pages).arg(page.size()).arg(frame.body.size())
+                           .arg(roomFor).arg(status).arg(startAfterId);
+
+        for (const LogEntries::Entry &entry : page)
+            collected.push_back(entry);
+
+        if (collected.empty()) {
+            callback(false, {}, tr("Entries response didn't decode to any entries "
+                                    "(%1 byte body)").arg(frame.body.size()));
+            return;
         }
+
+        const uint32_t newest = collected.back().id;
+        if (status != kEntriesStatusMore || page.empty() || newest <= startAfterId
+                || pages + 1 >= kMaxEntriesPages) {
+            callback(true, collected, QString());
+            return;
+        }
+
+        fetchEntriesPage(ack, newest, collected, pages + 1, callback);
     });
 }
 

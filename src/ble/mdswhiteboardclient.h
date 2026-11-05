@@ -101,6 +101,17 @@ public:
     // fetchLogbookData()'s own stream-trigger mechanism for /Entries.
     void fetchLogEntries(const QString &path, EntriesCallback callback);
 
+private:
+    // One page of /Logbook/Entries. The reply carries a status word, and
+    // 100 means "call again" - the same code /Summary uses - which this
+    // code ignored until a Race with eighteen entries listed said 100 and
+    // the two newest workouts were simply absent. See the definition.
+    void fetchEntriesPage(const std::vector<uint8_t> &ackBody, uint32_t startAfterId,
+                           std::vector<LogEntries::Entry> collected, int pages,
+                           EntriesCallback callback);
+
+public:
+
     // The same two-step exchange fetchLogEntries() uses - GET, then a
     // TYPE=0x0D handle fetch built from the ack - but handing back the raw
     // response body instead of running it through LogEntries::decode().

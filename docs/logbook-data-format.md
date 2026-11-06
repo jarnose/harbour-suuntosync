@@ -2033,3 +2033,66 @@ runs of ten or more **hex** characters. That watch's serial is
 whole serial sailed through into a line written to be pasted on a public
 forum, which is where it ended up. The rule is now "a long run containing
 a digit": model names carry no digits and version strings are short.
+
+## `/Logbook/Entries` has a second page, and nobody knows how to ask yet (2026-11-06)
+
+A Race with more than eighteen workouts stops listing at eighteen.
+
+**What was measured, in the order it was found:**
+
+- 30 October, 13 entries, status 200 in the capture this decoder came from
+  and a complete list. 5-6 November, **18 entries, status 100** - the code
+  `/Summary` uses for "call again", which this resource's reply had never
+  had read off it. `18 = 26 + ...` checks out against the byte count every
+  time (458 bytes = 26 + 18 x 24), so the decoder reads what it is given
+  correctly; it is given a page.
+- The list is ascending, so the missing workouts are always the **newest**.
+  The Race's own screen shows four rides the app never receives:
+  6 Nov 07:24, 5 Nov 15:16, 4 Nov 16:04, 4 Nov 07:24. Every one is newer
+  than the last id listed (1793714818, 3 Nov 16:06).
+- The oldest entry fell off between the two lists (2 Oct) while six new
+  ones appeared: 13 - 1 + 6 = 18 again. Worth remembering when reading a
+  list that looks capped: it is a window that moves.
+
+**Four ways of asking for page 1, all refused or useless** - none of them
+a guess to repeat:
+
+| request | reply |
+|---|---|
+| the page-0 frame again, no parameter | the same 18 entries, status 100 |
+| index parameter (`kParamIndex`) = 1 | status 404, 10 bytes |
+| index parameter = 18 | status 404, 10 bytes |
+| `int32` or `int64` = last id seen | status 400, 10 bytes |
+
+`/Logbook/UnsynchronisedLogs`, the one other list `libmds.so` names, answers
+**200 with no entries**.
+
+**Two readings of mine that the evidence does not support, corrected:**
+
+- I called the 404 a find: "400 means malformed, 404 means well-formed but
+  not found, so the index is the right shape and 18 the wrong number". Index 1
+  and index 18 got the *same* 404. Two different values under one type code
+  producing one answer says the value was not what the watch objected to.
+  The likelier reading is that nothing in this request's structure matches
+  type 0x0007 at all. Unverified either way; do not build on it.
+- I called the empty `UnsynchronisedLogs` a dead hypothesis. It is only dead
+  if the official app has not already synced those four rides, because that
+  list is exactly what the official app's sync empties. Whether it had was
+  not known when this was written.
+
+**Ruled out by reading rather than trying:** the ack prefix. The trigger
+rebuilds `f0 24 00 01 80 00` from scratch where other encoders copy it; the
+logged ack prefix is `f02400018000c800`, identical.
+
+**Why the existing captures do not help.** Eight HCI captures of the official
+app syncing exist (`suuntosync-fixtures-private/`). In the 12 October one the
+app sends `f0 24 00 01 80 00 00` for the entry list - zero parameters, the
+same frame this project sends - and goes straight to fetching `Data`. No
+list in any of them reached eighteen, so none contains a second page.
+
+**Next step: a capture of the official app syncing a watch that holds more
+than eighteen.** It is the one source that is not inference, and the first
+time this was needed it is how the `/Entries` shortcut was found.
+`AppController` keeps the four-candidate sweep until then: it costs a second
+of refused requests per sync and, because a page that adds nothing new is
+treated as a refusal, it cannot loop or duplicate.

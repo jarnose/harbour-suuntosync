@@ -106,9 +106,17 @@ private:
     // 100 means "call again" - the same code /Summary uses - which this
     // code ignored until a Race with eighteen entries listed said 100 and
     // the two newest workouts were simply absent. See the definition.
-    void fetchEntriesPage(const std::vector<uint8_t> &ackBody, uint32_t startAfterId,
+    void fetchEntriesPage(const QString &path, const std::vector<uint8_t> &ackBody,
+                           uint32_t startAfterId,
                            std::vector<LogEntries::Entry> collected, int pages,
-                           EntriesCallback callback);
+                           int candidate, EntriesCallback callback);
+
+    // The same page, against a handle already in hand. Split out so the
+    // candidate that re-registers the path can reuse everything after it.
+    void fetchEntriesPageOnHandle(const QString &path, const std::vector<uint8_t> &ackBody,
+                                   uint32_t startAfterId,
+                                   std::vector<LogEntries::Entry> collected, int pages,
+                                   int candidate, EntriesCallback callback);
 
 public:
 

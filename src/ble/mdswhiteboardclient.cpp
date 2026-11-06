@@ -571,7 +571,7 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
             callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
             return;
         }
-        fetchEntriesPage(ackFrame.body, 0, {}, 0, callback);
+        fetchEntriesPage(path, ackFrame.body, 0, {}, 0, 0, callback);
     });
 }
 
@@ -599,18 +599,41 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
 // likely produce - the same page for ever), and on a page count. A wrong
 // guess costs one extra round trip and the list already in hand, not a
 // hang.
-void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
+// The candidates for "give me the next page", tried in order until one is
+// not refused. int32 and int64 have each been refused with 400 on a real
+// Race, so this is not a sweep over guesses with nothing ruled out - it is
+// the two that remain, and the first that works is the answer.
+//
+//  - kParamIndex, the item offset. /Activity/Moments/Sync/Data sends its
+//    cursor this way, and the capture that settled *that* showed 07 00
+//    where /Summary's showed 06 00. An offset of 18 is the next item.
+//  - kParamInt32 again, but against a freshly registered handle. The
+//    handle may be spent by the fetch that used it, in which case every
+//    parameter in the world is refused on the old one and the shape was
+//    never the problem.
+//
+// Each attempt logs its status, so a run says which it was even if none
+// works. What is already in hand is never thrown away for a refused page.
+struct EntriesPageCandidate
+{
+    const char *name;
+    bool freshHandle;
+    uint16_t paramType;
+    bool itemOffset; // the value is a position, not an id
+};
+
+static const EntriesPageCandidate kEntriesPageCandidates[] = {
+    { "index/offset",   false, Mds::kParamIndex, true  },
+    { "int32/fresh id", true,  Mds::kParamInt32, false },
+};
+
+void MdsWhiteboardClient::fetchEntriesPage(const QString &path,
+                                            const std::vector<uint8_t> &ackBody,
                                             uint32_t startAfterId,
                                             std::vector<LogEntries::Entry> collected,
-                                            int pages, EntriesCallback callback)
+                                            int pages, int candidate,
+                                            EntriesCallback callback)
 {
-    // The layout logentriesdecoder.cpp documents: 8 prefix + 2 structure
-    // header + 16 array metadata, then 24-byte records.
-    constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
-    constexpr size_t kEntriesRecordLen = 24;
-    constexpr uint16_t kEntriesStatusMore = 100;
-    constexpr int kMaxEntriesPages = 16;
-
     const bool first = (pages == 0);
     const std::vector<uint8_t> ack = ackBody;
 
@@ -627,34 +650,75 @@ void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
                                            .toHex()));
     }
 
-    getRaw([ack, first, startAfterId](uint16_t requestId) {
-        // The first page keeps the proven no-parameter trigger, so a watch
-        // whose whole logbook fits in one reply takes exactly the path it
-        // always has.
+    const int nCandidates = static_cast<int>(
+            sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
+    const EntriesPageCandidate &cand =
+            kEntriesPageCandidates[qBound(0, candidate, nCandidates - 1)];
+
+    // A spent handle is one of the two things still on the table, so the
+    // candidate that suspects it registers the path again and pages from
+    // that ack instead.
+    if (!first && cand.freshHandle) {
+        const QString resource = path;
+        getRaw([resource](uint16_t requestId) {
+            return Mds::encodeGetRequest(requestId, resource.toStdString());
+        }, [this, path, startAfterId, collected, pages, candidate, callback]
+                (bool ok, const Mds::Frame &freshAck, const QString &error) {
+            if (!ok || freshAck.body.size() < 6) {
+                qWarning().noquote()
+                        << QStringLiteral("logbook entries: re-registering %1 failed: %2")
+                                   .arg(path, error);
+                callback(true, collected, QString());
+                return;
+            }
+            // Same page, same candidate, but now against the new handle -
+            // and flagged as not-fresh so this does not recurse.
+            fetchEntriesPageOnHandle(path, freshAck.body, startAfterId, collected,
+                                      pages, candidate, callback);
+        });
+        return;
+    }
+
+    fetchEntriesPageOnHandle(path, ack, startAfterId, collected, pages, candidate,
+                              callback);
+}
+
+void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
+                                                    const std::vector<uint8_t> &ackBody,
+                                                    uint32_t startAfterId,
+                                                    std::vector<LogEntries::Entry> collected,
+                                                    int pages, int candidate,
+                                                    EntriesCallback callback)
+{
+    constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
+    constexpr size_t kEntriesRecordLen = 24;
+    constexpr uint16_t kEntriesStatusMore = 100;
+    constexpr int kMaxEntriesPages = 16;
+
+    const bool first = (pages == 0);
+    const std::vector<uint8_t> ack = ackBody;
+    const int nCandidates = static_cast<int>(
+            sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
+    const EntriesPageCandidate &cand =
+            kEntriesPageCandidates[qBound(0, candidate, nCandidates - 1)];
+    const uint32_t cursor = cand.itemOffset
+            ? static_cast<uint32_t>(collected.size())
+            : startAfterId;
+
+    getRaw([ack, first, cursor, &cand](uint16_t requestId) {
         if (first)
             return Mds::encodeEntriesFetchTrigger(requestId, ack);
-
-        // **int64, after int32 was refused.** The first attempt sent the
-        // cursor the way /Summary sends its byte offset - kParamInt32, four
-        // bytes - and the watch answered 400 with a ten-byte status-only
-        // reply. So the shape is wrong rather than the idea: page 0 says
-        // 100, which only means something if a second page can be asked
-        // for.
-        //
-        // int64 is the next candidate on evidence rather than on taste.
-        // Every other cursor on this watch is one: sleep counts
-        // milliseconds, recovery counts seconds, daily activity counts
-        // milliseconds, and all three go out as kParamInt64. An entry id is
-        // unix seconds, which is the same kind of number recovery sends.
-        std::vector<uint8_t> value(8);
-        for (int i = 0; i < 8; ++i) {
-            value[i] = static_cast<uint8_t>(
-                    (static_cast<uint64_t>(startAfterId) >> (8 * i)) & 0xFF);
-        }
+        std::vector<uint8_t> value(4);
+        for (int i = 0; i < 4; ++i)
+            value[i] = static_cast<uint8_t>((cursor >> (8 * i)) & 0xFF);
         return Mds::encodeParameterisedFetch(requestId, ack,
-                                               { { Mds::kParamInt64, value } });
-    }, [this, ack, startAfterId, collected, pages, callback]
+                                               { { cand.paramType, value } });
+    }, [this, path, ack, startAfterId, collected, pages, candidate, callback]
             (bool fetchOk, const Mds::Frame &frame, const QString &fetchError) mutable {
+        const int nCands = static_cast<int>(
+                sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
+        const char *candName =
+                kEntriesPageCandidates[qBound(0, candidate, nCands - 1)].name;
         if (!fetchOk) {
             // A later page failing is not worth losing the earlier ones
             // over - the same rule the activity fragment loop uses.
@@ -674,10 +738,28 @@ void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
                         | (static_cast<uint16_t>(frame.body[7]) << 8))
                 : 0;
         qWarning().noquote()
-                << QStringLiteral("logbook entries page %1: %2 decoded, %3 bytes, "
-                                   "room for %4 records, status %5, after id %6")
-                           .arg(pages).arg(page.size()).arg(frame.body.size())
+                << QStringLiteral("logbook entries page %1 [%2]: %3 decoded, %4 bytes, "
+                                   "room for %5 records, status %6, cursor after %7")
+                           .arg(pages).arg(QString::fromLatin1(candName))
+                           .arg(page.size()).arg(frame.body.size())
                            .arg(roomFor).arg(status).arg(startAfterId);
+
+        // A refused page is this candidate's answer, not the resource's.
+        // Try the next way of asking for the *same* page before giving up,
+        // and keep everything already collected either way.
+        if (pages > 0 && page.empty()) {
+            if (candidate + 1 < nCands) {
+                fetchEntriesPage(path, ack, startAfterId, collected, pages,
+                                  candidate + 1, callback);
+                return;
+            }
+            qWarning().noquote()
+                    << QStringLiteral("logbook entries: every way of asking for page %1 "
+                                       "was refused; keeping the %2 already read")
+                               .arg(pages).arg(collected.size());
+            callback(true, collected, QString());
+            return;
+        }
 
         for (const LogEntries::Entry &entry : page)
             collected.push_back(entry);
@@ -695,7 +777,9 @@ void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
             return;
         }
 
-        fetchEntriesPage(ack, newest, collected, pages + 1, callback);
+        // A candidate that worked keeps working: the next page starts from
+        // the one that just answered rather than from the top of the list.
+        fetchEntriesPage(path, ack, newest, collected, pages + 1, candidate, callback);
     });
 }
 

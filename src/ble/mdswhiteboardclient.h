@@ -118,6 +118,11 @@ private:
                                    std::vector<LogEntries::Entry> collected, int pages,
                                    int candidate, EntriesCallback callback);
 
+    // The other list libmds.so names, read when /Logbook/Entries will not
+    // give up a second page. See the definition.
+    void fetchUnsynchronisedLogs(std::vector<LogEntries::Entry> collected,
+                                  EntriesCallback callback);
+
 public:
 
     // The same two-step exchange fetchLogEntries() uses - GET, then a

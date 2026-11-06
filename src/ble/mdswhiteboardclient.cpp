@@ -802,7 +802,19 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
                     << QStringLiteral("logbook entries: every way of asking for page %1 "
                                        "was refused; keeping the %2 already read")
                                .arg(pages).arg(collected.size());
-            callback(true, collected, QString());
+            // **The other list.** Four ways of asking this resource for a
+            // second page are refused, so the question stops being "what
+            // is the cursor" and becomes "is the rest even here".
+            //
+            // /Logbook/UnsynchronisedLogs is not a guess: libmds.so names
+            // it, and docs/logbook-data-format.md records that the
+            // official app fetches it during a sync and that it is a
+            // *separate* resource from /Logbook/Entries - a point that
+            // doc makes while retracting a theory which confused the two.
+            // The workouts missing here are always the newest ones, which
+            // is exactly what a list of not-yet-synchronised logs would
+            // hold.
+            fetchUnsynchronisedLogs(collected, callback);
             return;
         }
 
@@ -2142,5 +2154,70 @@ void MdsWhiteboardClient::removeNotification(quint32 notificationId, DeliveryCal
         // retrying would only register again - which is the thing the watch
         // refuses.
         putRemoval(notificationId, false, callback);
+    });
+}
+
+// Reads /Logbook/UnsynchronisedLogs with the same two-step exchange
+// /Logbook/Entries uses, and merges anything it names that is not already
+// in hand. Logged in full either way: if this resource answers with the
+// same record layout, the entries that /Entries would not hand over are
+// here and nothing else is needed; if it does not, the log says what it
+// did answer and the next step is a capture of the official app rather
+// than a fifth guess at a cursor.
+void MdsWhiteboardClient::fetchUnsynchronisedLogs(std::vector<LogEntries::Entry> collected,
+                                                   EntriesCallback callback)
+{
+    const QString path = QStringLiteral("/Logbook/UnsynchronisedLogs");
+    getRaw([path](uint16_t requestId) {
+        return Mds::encodeGetRequest(requestId, path.toStdString());
+    }, [this, path, collected, callback]
+            (bool ok, const Mds::Frame &ack, const QString &error) mutable {
+        if (!ok || ack.body.size() < 6) {
+            qWarning().noquote()
+                    << QStringLiteral("unsynchronised logs: %1 not available (%2)")
+                               .arg(path, error);
+            callback(true, collected, QString());
+            return;
+        }
+        const std::vector<uint8_t> ackBody = ack.body;
+        getRaw([ackBody](uint16_t requestId) {
+            return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
+        }, [collected, callback](bool fetchOk, const Mds::Frame &frame,
+                                  const QString &fetchError) mutable {
+            if (!fetchOk) {
+                qWarning().noquote()
+                        << QStringLiteral("unsynchronised logs: fetch failed: %1")
+                                   .arg(fetchError);
+                callback(true, collected, QString());
+                return;
+            }
+            const std::vector<LogEntries::Entry> page = LogEntries::decode(frame.body);
+            const uint16_t status = frame.body.size() >= 8
+                    ? static_cast<uint16_t>(frame.body[6]
+                            | (static_cast<uint16_t>(frame.body[7]) << 8))
+                    : 0;
+            QStringList ids;
+            int added = 0;
+            for (const LogEntries::Entry &entry : page) {
+                ids.append(QString::number(entry.id));
+                bool seen = false;
+                for (const LogEntries::Entry &have : collected) {
+                    if (have.id == entry.id) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    collected.push_back(entry);
+                    ++added;
+                }
+            }
+            qWarning().noquote()
+                    << QStringLiteral("unsynchronised logs: %1 decoded, %2 bytes, "
+                                       "status %3, %4 new: %5")
+                               .arg(page.size()).arg(frame.body.size()).arg(status)
+                               .arg(added).arg(ids.join(QStringLiteral(", ")));
+            callback(true, collected, QString());
+        });
     });
 }

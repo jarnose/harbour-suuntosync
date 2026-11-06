@@ -102,26 +102,12 @@ public:
     void fetchLogEntries(const QString &path, EntriesCallback callback);
 
 private:
-    // One page of /Logbook/Entries. The reply carries a status word, and
-    // 100 means "call again" - the same code /Summary uses - which this
-    // code ignored until a Race with eighteen entries listed said 100 and
-    // the two newest workouts were simply absent. See the definition.
-    void fetchEntriesPage(const QString &path, const std::vector<uint8_t> &ackBody,
-                           uint32_t startAfterId,
+    // One page of /Logbook/Entries, and the next, until the watch stops
+    // saying "call again". See the definition for the frame the official
+    // app sends and what it took to find it.
+    void fetchEntriesPage(const std::vector<uint8_t> &ackBody, uint32_t startAfterId,
                            std::vector<LogEntries::Entry> collected, int pages,
-                           int candidate, EntriesCallback callback);
-
-    // The same page, against a handle already in hand. Split out so the
-    // candidate that re-registers the path can reuse everything after it.
-    void fetchEntriesPageOnHandle(const QString &path, const std::vector<uint8_t> &ackBody,
-                                   uint32_t startAfterId,
-                                   std::vector<LogEntries::Entry> collected, int pages,
-                                   int candidate, EntriesCallback callback);
-
-    // The other list libmds.so names, read when /Logbook/Entries will not
-    // give up a second page. See the definition.
-    void fetchUnsynchronisedLogs(std::vector<LogEntries::Entry> collected,
-                                  EntriesCallback callback);
+                           EntriesCallback callback);
 
 public:
 

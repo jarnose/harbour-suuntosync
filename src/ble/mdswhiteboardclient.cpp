@@ -571,172 +571,59 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
             callback(false, {}, tr("GET %1 failed: %2").arg(path, error));
             return;
         }
-        fetchEntriesPage(path, ackFrame.body, 0, {}, 0, 0, callback);
+        fetchEntriesPage(ackFrame.body, 0, {}, 0, callback);
     });
 }
 
-// **/Logbook/Entries is paged, and this code read one page for a year.**
+// **/Logbook/Entries is paged, and the cursor is the last id already seen.**
 //
-// The reply carries a status word where every other reply here puts one,
-// and the captured reply this decoder was built from said 200 - "here is
-// all of it". A Race with eighteen workouts says **100**, the same code
-// /Summary uses for "call again", and the eighteen it returned stopped at
-// 3 November while the watch held two newer rides. The list is in
-// ascending order, so it is always the newest workouts that go missing -
-// which is exactly how this was reported, twice, as "it does not find
-// yesterday's or today's".
+// A Race holding more than eighteen workouts lists eighteen and says
+// status 100 - the same "call again" /Summary uses - and the newest rides
+// were always the ones missing, because the list is ascending. The
+// official app's capture shows exactly how it asks for the rest:
 //
-// How to ask for the next page is not guesswork: the schema walk captured
-// when this resource was first decoded names the request's own parameters,
-// **StartAfterId** and IncludeSummaryOnly (see docs/logbook-data-format.md).
-// So the cursor is the last id already seen, sent as the single parameter
-// of an ordinary paged read - the same frame /Summary pages with, which is
-// why no new encoder was needed.
+//   page 1   f0 24 00 01 80 00
+//   page 2   f0 24 00 01 80 00  01  07 00  82 ea e9 6a
+//                               |   |      '-- 1793714818, little-endian:
+//                               |   |          the last id of page 1
+//                               |   '-- kParamIndex
+//                               '-- one parameter
 //
-// It is still an inference, so it is bounded on every side: the loop stops
-// on any status that is not 100, on a page that decodes to nothing, on a
-// cursor that does not advance (which is what a wrong parameter would most
-// likely produce - the same page for ever), and on a page count. A wrong
-// guess costs one extra round trip and the list already in hand, not a
-// hang.
-// The candidates for "give me the next page", tried in order until one is
-// not refused. Four ways of asking, and two of them are already answered
-// by a real Race - which is why the order starts with the two that are
-// not:
+// which is the ordinary paged-read frame with kParamIndex and the last id
+// as its value. The reply to it is 122 bytes, status 200 - the header and
+// four entries, the four rides that had been missing.
 //
-//   int32 id      -> 400, malformed
-//   int64 id      -> 400, malformed
-//   index 18      -> **404**, and that difference is the find. 400 says
-//                    the request made no sense; 404 says it made sense and
-//                    the thing asked for is not there. So kParamIndex is
-//                    the shape this resource accepts and eighteen is the
-//                    wrong number to put in it.
+// Getting here took four wrong requests, and what they said is worth
+// keeping, because it was readable all along: int32 and int64 carrying the
+// id were refused with 400, a *different type code*; kParamIndex carrying 1
+// and then 18 was refused with 404, the right type code and a value that is
+// not an id. Not-found for a value that is not there. The shape was
+// found on the second guess and the value never tried, and the capture
+// would have said so in one line.
 //
-// What is left to try:
-//
-//   - no parameter at all, the same frame that fetched page 0, on the same
-//     handle. If the cursor lives in the handle rather than in the
-//     request, "ask again" is the whole protocol and every parameter was
-//     always going to be refused.
-//   - the index as a *page* rather than an item: 1, not 18. 404 for 18 is
-//     what a page index would say about a list that has two pages.
-//
-// Nothing already read is thrown away by a refusal, and the loop stops if
-// a page repeats what is already in hand.
-enum class EntriesCursorKind { None, PageNumber, ItemOffset, LastId };
-
-struct EntriesPageCandidate
-{
-    const char *name;
-    bool freshHandle;
-    EntriesCursorKind cursor;
-    uint16_t paramType;
-};
-
-static const EntriesPageCandidate kEntriesPageCandidates[] = {
-    { "repeat",       false, EntriesCursorKind::None,       0                },
-    { "index/page",   false, EntriesCursorKind::PageNumber, Mds::kParamIndex },
-    { "index/offset", false, EntriesCursorKind::ItemOffset, Mds::kParamIndex },
-    { "int32/fresh",  true,  EntriesCursorKind::LastId,     Mds::kParamInt32 },
-};
-
-void MdsWhiteboardClient::fetchEntriesPage(const QString &path,
-                                            const std::vector<uint8_t> &ackBody,
+// Bounded regardless: stop on any status that is not 100, on a page that
+// adds nothing new (an id already collected is dropped, so a repeat cannot
+// duplicate entries), and on a page count.
+void MdsWhiteboardClient::fetchEntriesPage(const std::vector<uint8_t> &ackBody,
                                             uint32_t startAfterId,
                                             std::vector<LogEntries::Entry> collected,
-                                            int pages, int candidate,
-                                            EntriesCallback callback)
+                                            int pages, EntriesCallback callback)
 {
-    const bool first = (pages == 0);
-    const std::vector<uint8_t> ack = ackBody;
-
-    if (first && ack.size() >= 8) {
-        // The ack's own first bytes, once per sync. encodeEntriesFetchTrigger
-        // rebuilds this prefix from scratch (F0, handle, 01 80 00) where
-        // every other encoder copies it, and if the two ever disagree the
-        // next page would be malformed for a reason no amount of staring at
-        // the parameter would explain.
-        qWarning().noquote()
-                << QStringLiteral("logbook entries ack prefix: %1")
-                           .arg(QString::fromLatin1(
-                                   QByteArray(reinterpret_cast<const char *>(ack.data()), 8)
-                                           .toHex()));
-    }
-
-    const int nCandidates = static_cast<int>(
-            sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
-    const EntriesPageCandidate &cand =
-            kEntriesPageCandidates[qBound(0, candidate, nCandidates - 1)];
-
-    // A spent handle is one of the two things still on the table, so the
-    // candidate that suspects it registers the path again and pages from
-    // that ack instead.
-    if (!first && cand.freshHandle) {
-        const QString resource = path;
-        getRaw([resource](uint16_t requestId) {
-            return Mds::encodeGetRequest(requestId, resource.toStdString());
-        }, [this, path, startAfterId, collected, pages, candidate, callback]
-                (bool ok, const Mds::Frame &freshAck, const QString &error) {
-            if (!ok || freshAck.body.size() < 6) {
-                qWarning().noquote()
-                        << QStringLiteral("logbook entries: re-registering %1 failed: %2")
-                                   .arg(path, error);
-                callback(true, collected, QString());
-                return;
-            }
-            // Same page, same candidate, but now against the new handle -
-            // and flagged as not-fresh so this does not recurse.
-            fetchEntriesPageOnHandle(path, freshAck.body, startAfterId, collected,
-                                      pages, candidate, callback);
-        });
-        return;
-    }
-
-    fetchEntriesPageOnHandle(path, ack, startAfterId, collected, pages, candidate,
-                              callback);
-}
-
-void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
-                                                    const std::vector<uint8_t> &ackBody,
-                                                    uint32_t startAfterId,
-                                                    std::vector<LogEntries::Entry> collected,
-                                                    int pages, int candidate,
-                                                    EntriesCallback callback)
-{
-    constexpr size_t kEntriesRecordsOffset = 8 + 2 + 16;
-    constexpr size_t kEntriesRecordLen = 24;
     constexpr uint16_t kEntriesStatusMore = 100;
     constexpr int kMaxEntriesPages = 16;
 
     const bool first = (pages == 0);
     const std::vector<uint8_t> ack = ackBody;
-    const int nCandidates = static_cast<int>(
-            sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
-    const EntriesPageCandidate &cand =
-            kEntriesPageCandidates[qBound(0, candidate, nCandidates - 1)];
-    uint32_t cursor = 0;
-    switch (cand.cursor) {
-    case EntriesCursorKind::None:       cursor = 0; break;
-    case EntriesCursorKind::PageNumber: cursor = static_cast<uint32_t>(pages); break;
-    case EntriesCursorKind::ItemOffset: cursor = static_cast<uint32_t>(collected.size()); break;
-    case EntriesCursorKind::LastId:     cursor = startAfterId; break;
-    }
-    const bool noParam = (cand.cursor == EntriesCursorKind::None);
 
-    getRaw([ack, first, cursor, noParam, &cand](uint16_t requestId) {
-        if (first || noParam)
-            return Mds::encodeEntriesFetchTrigger(requestId, ack);
-        std::vector<uint8_t> value(4);
-        for (int i = 0; i < 4; ++i)
-            value[i] = static_cast<uint8_t>((cursor >> (8 * i)) & 0xFF);
-        return Mds::encodeParameterisedFetch(requestId, ack,
-                                               { { cand.paramType, value } });
-    }, [this, path, ack, startAfterId, cursor, collected, pages, candidate, callback]
+    getRaw([ack, first, startAfterId](uint16_t requestId) {
+        // The first page keeps the proven no-parameter frame, so a watch
+        // whose whole logbook fits in one reply takes exactly the path it
+        // always has.
+        return first ? Mds::encodeEntriesFetchTrigger(requestId, ack)
+                      : Mds::encodePagedReadRequest(requestId, ack, startAfterId,
+                                                     Mds::kParamIndex);
+    }, [this, ack, startAfterId, collected, pages, callback]
             (bool fetchOk, const Mds::Frame &frame, const QString &fetchError) mutable {
-        const int nCands = static_cast<int>(
-                sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
-        const char *candName =
-                kEntriesPageCandidates[qBound(0, candidate, nCands - 1)].name;
         if (!fetchOk) {
             // A later page failing is not worth losing the earlier ones
             // over - the same rule the activity fragment loop uses.
@@ -748,80 +635,35 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
         }
 
         const std::vector<LogEntries::Entry> page = LogEntries::decode(frame.body);
-        const size_t roomFor = frame.body.size() > kEntriesRecordsOffset
-                ? (frame.body.size() - kEntriesRecordsOffset) / kEntriesRecordLen
-                : 0;
         const uint16_t status = frame.body.size() >= 8
                 ? static_cast<uint16_t>(frame.body[6]
                         | (static_cast<uint16_t>(frame.body[7]) << 8))
                 : 0;
-        qWarning().noquote()
-                << QStringLiteral("logbook entries page %1 [%2]: %3 decoded, %4 bytes, "
-                                   "room for %5 records, status %6, cursor %7")
-                           .arg(pages).arg(QString::fromLatin1(candName))
-                           .arg(page.size()).arg(frame.body.size())
-                           .arg(roomFor).arg(status).arg(cursor);
 
-        // **A page that repeats what is already in hand is a refusal too.**
-        // The "repeat" candidate - ask again with no parameter - came back
-        // with the same eighteen entries and the same status 100, and the
-        // loop appended them, so a watch with eighteen workouts reported
-        // thirty-six. The last id matching was caught one page too late to
-        // stop that.
-        //
-        // So the test is what the page *adds*, not what it ends with. An
-        // id already collected is dropped, and a page that adds nothing
-        // new counts as this candidate failing.
         int added = 0;
-        if (pages > 0) {
-            for (const LogEntries::Entry &entry : page) {
-                bool seen = false;
-                for (const LogEntries::Entry &have : collected) {
-                    if (have.id == entry.id) {
-                        seen = true;
-                        break;
-                    }
-                }
-                if (!seen) {
-                    collected.push_back(entry);
-                    ++added;
+        for (const LogEntries::Entry &entry : page) {
+            bool seen = false;
+            for (const LogEntries::Entry &have : collected) {
+                if (have.id == entry.id) {
+                    seen = true;
+                    break;
                 }
             }
-        }
-
-        // A refused page is this candidate's answer, not the resource's.
-        // Try the next way of asking for the *same* page before giving up,
-        // and keep everything already collected either way.
-        if (pages > 0 && added == 0) {
-            if (candidate + 1 < nCands) {
-                fetchEntriesPage(path, ack, startAfterId, collected, pages,
-                                  candidate + 1, callback);
-                return;
-            }
-            qWarning().noquote()
-                    << QStringLiteral("logbook entries: every way of asking for page %1 "
-                                       "was refused; keeping the %2 already read")
-                               .arg(pages).arg(collected.size());
-            // **The other list.** Four ways of asking this resource for a
-            // second page are refused, so the question stops being "what
-            // is the cursor" and becomes "is the rest even here".
-            //
-            // /Logbook/UnsynchronisedLogs is not a guess: libmds.so names
-            // it, and docs/logbook-data-format.md records that the
-            // official app fetches it during a sync and that it is a
-            // *separate* resource from /Logbook/Entries - a point that
-            // doc makes while retracting a theory which confused the two.
-            // The workouts missing here are always the newest ones, which
-            // is exactly what a list of not-yet-synchronised logs would
-            // hold.
-            fetchUnsynchronisedLogs(collected, callback);
-            return;
-        }
-
-        if (pages == 0) {
-            for (const LogEntries::Entry &entry : page)
+            if (!seen) {
                 collected.push_back(entry);
+                ++added;
+            }
         }
+
+        // One line per page: how many entries, how many bytes, what the
+        // watch said, and which id the page was asked to start after. A
+        // short list and a correct short list look identical from the
+        // decoded result alone, and this is what tells them apart.
+        qWarning().noquote()
+                << QStringLiteral("logbook entries page %1: %2 decoded, %3 new, %4 bytes, "
+                                   "status %5, after id %6")
+                           .arg(pages).arg(page.size()).arg(added).arg(frame.body.size())
+                           .arg(status).arg(startAfterId);
 
         if (collected.empty()) {
             callback(false, {}, tr("Entries response didn't decode to any entries "
@@ -829,16 +671,12 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
             return;
         }
 
-        const uint32_t newest = collected.back().id;
-        if (status != kEntriesStatusMore || page.empty()
-                || pages + 1 >= kMaxEntriesPages) {
+        if (status != kEntriesStatusMore || added == 0 || pages + 1 >= kMaxEntriesPages) {
             callback(true, collected, QString());
             return;
         }
 
-        // A candidate that worked keeps working: the next page starts from
-        // the one that just answered rather than from the top of the list.
-        fetchEntriesPage(path, ack, newest, collected, pages + 1, candidate, callback);
+        fetchEntriesPage(ack, collected.back().id, collected, pages + 1, callback);
     });
 }
 
@@ -2157,67 +1995,3 @@ void MdsWhiteboardClient::removeNotification(quint32 notificationId, DeliveryCal
     });
 }
 
-// Reads /Logbook/UnsynchronisedLogs with the same two-step exchange
-// /Logbook/Entries uses, and merges anything it names that is not already
-// in hand. Logged in full either way: if this resource answers with the
-// same record layout, the entries that /Entries would not hand over are
-// here and nothing else is needed; if it does not, the log says what it
-// did answer and the next step is a capture of the official app rather
-// than a fifth guess at a cursor.
-void MdsWhiteboardClient::fetchUnsynchronisedLogs(std::vector<LogEntries::Entry> collected,
-                                                   EntriesCallback callback)
-{
-    const QString path = QStringLiteral("/Logbook/UnsynchronisedLogs");
-    getRaw([path](uint16_t requestId) {
-        return Mds::encodeGetRequest(requestId, path.toStdString());
-    }, [this, path, collected, callback]
-            (bool ok, const Mds::Frame &ack, const QString &error) mutable {
-        if (!ok || ack.body.size() < 6) {
-            qWarning().noquote()
-                    << QStringLiteral("unsynchronised logs: %1 not available (%2)")
-                               .arg(path, error);
-            callback(true, collected, QString());
-            return;
-        }
-        const std::vector<uint8_t> ackBody = ack.body;
-        getRaw([ackBody](uint16_t requestId) {
-            return Mds::encodeEntriesFetchTrigger(requestId, ackBody);
-        }, [collected, callback](bool fetchOk, const Mds::Frame &frame,
-                                  const QString &fetchError) mutable {
-            if (!fetchOk) {
-                qWarning().noquote()
-                        << QStringLiteral("unsynchronised logs: fetch failed: %1")
-                                   .arg(fetchError);
-                callback(true, collected, QString());
-                return;
-            }
-            const std::vector<LogEntries::Entry> page = LogEntries::decode(frame.body);
-            const uint16_t status = frame.body.size() >= 8
-                    ? static_cast<uint16_t>(frame.body[6]
-                            | (static_cast<uint16_t>(frame.body[7]) << 8))
-                    : 0;
-            QStringList ids;
-            int added = 0;
-            for (const LogEntries::Entry &entry : page) {
-                ids.append(QString::number(entry.id));
-                bool seen = false;
-                for (const LogEntries::Entry &have : collected) {
-                    if (have.id == entry.id) {
-                        seen = true;
-                        break;
-                    }
-                }
-                if (!seen) {
-                    collected.push_back(entry);
-                    ++added;
-                }
-            }
-            qWarning().noquote()
-                    << QStringLiteral("unsynchronised logs: %1 decoded, %2 bytes, "
-                                       "status %3, %4 new: %5")
-                               .arg(page.size()).arg(frame.body.size()).arg(status)
-                               .arg(added).arg(ids.join(QStringLiteral(", ")));
-            callback(true, collected, QString());
-        });
-    });
-}

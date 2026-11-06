@@ -172,6 +172,22 @@ void testEncodePagedReadRequest()
     expectEq("encodePagedReadRequest(kParamIndex, item 10)",
               toHex(Mds::encodePagedReadRequest(1796, capsAck, 10, Mds::kParamIndex)),
               "7ea50d0d000407f07a000180000107000a000000d4c908df7e");
+
+    // /Logbook/Entries pages the same way, with the *last id already seen*
+    // as the cursor. A Race holding more than eighteen workouts lists
+    // eighteen and says status 100; this is the official app's request for
+    // the rest, from btsnoop_race_sync_20261106.log, reqId 0x01de, ack
+    // f02400018000c800. The cursor is 82 ea e9 6a = 1793714818, the last id
+    // of the first page.
+    //
+    // Pinned because four wrong requests came before it, and each was
+    // refused in a way that pointed at it: int32 and int64 with the id were
+    // 400 (wrong type code), kParamIndex with 1 and 18 was 404 (right type
+    // code, and a value that is not an id).
+    const auto entriesAck = fromHex("f02400018000c800");
+    expectEq("encodePagedReadRequest(kParamIndex, last entry id) - /Logbook/Entries page 2",
+              toHex(Mds::encodePagedReadRequest(0x01de, entriesAck, 1793714818, Mds::kParamIndex)),
+              "7ea50d0d00de01f0240001800001070082eae96aae69d2fb7e");
 }
 
 // --- captured response decode (watch -> phone, Handle Value Notification, handle 0x0015) ---

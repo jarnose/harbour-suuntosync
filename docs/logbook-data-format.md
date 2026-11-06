@@ -2034,65 +2034,72 @@ whole serial sailed through into a line written to be pasted on a public
 forum, which is where it ended up. The rule is now "a long run containing
 a digit": model names carry no digits and version strings are short.
 
-## `/Logbook/Entries` has a second page, and nobody knows how to ask yet (2026-11-06)
+## `/Logbook/Entries` is paged, and the cursor is the last id seen (2026-11-06)
 
-A Race with more than eighteen workouts stops listing at eighteen.
+A Race with more than eighteen workouts listed eighteen and stopped. The
+official app has no such problem, and its capture settles how it asks.
 
-**What was measured, in the order it was found:**
+**The request.** Reply 0x01dd is the first page, 458 bytes with status
+`0x0064` = 100, "call again". The official app answers with:
 
-- 30 October, 13 entries, status 200 in the capture this decoder came from
-  and a complete list. 5-6 November, **18 entries, status 100** - the code
-  `/Summary` uses for "call again", which this resource's reply had never
-  had read off it. `18 = 26 + ...` checks out against the byte count every
-  time (458 bytes = 26 + 18 x 24), so the decoder reads what it is given
-  correctly; it is given a page.
-- The list is ascending, so the missing workouts are always the **newest**.
-  The Race's own screen shows four rides the app never receives:
-  6 Nov 07:24, 5 Nov 15:16, 4 Nov 16:04, 4 Nov 07:24. Every one is newer
-  than the last id listed (1793714818, 3 Nov 16:06).
-- The oldest entry fell off between the two lists (2 Oct) while six new
-  ones appeared: 13 - 1 + 6 = 18 again. Worth remembering when reading a
-  list that looks capped: it is a window that moves.
+```
+page 1   f0 24 00 01 80 00
+page 2   f0 24 00 01 80 00  01  07 00  82 ea e9 6a
+                            |   |      '-- 1793714818 little-endian: the
+                            |   |          last id of page 1
+                            |   '-- kParamIndex
+                            '-- one parameter
+```
 
-**Four ways of asking for page 1, all refused or useless** - none of them
-a guess to repeat:
+The reply is 122 bytes, status `0x00c8` = 200: the header and four entries,
+exactly the four rides that were missing (4 Nov 07:24 and 16:04, 5 Nov
+15:16, 6 Nov 07:24). The app then fetched `Data` for each of them. It is
+the ordinary paged-read frame with `kParamIndex` and an id as its value.
+Both frames are pinned in `tests/test_mdswirecodec.cpp` and the reply in
+`tests/test_logentriesdecoder.cpp`, from
+`btsnoop_race_sync_20261106.log`.
 
-| request | reply |
+**What was measured on the way, and what it meant.** Eighteen entries,
+458 bytes = 26 + 18 x 24 every time, so the decoder reads a page correctly;
+it was only ever given one. The list is ascending, so the missing
+workouts were always the newest. On 30 October the same watch listed 13 (the
+status was not logged yet); by 5 November it held more than 18 and said 100.
+
+| what was sent | reply |
 |---|---|
-| the page-0 frame again, no parameter | the same 18 entries, status 100 |
-| index parameter (`kParamIndex`) = 1 | status 404, 10 bytes |
-| index parameter = 18 | status 404, 10 bytes |
-| `int32` or `int64` = last id seen | status 400, 10 bytes |
+| nothing, the page-0 frame again | the same 18 entries, status 100 |
+| `kParamInt32` carrying the last id | 400 |
+| `kParamInt64` carrying the last id | 400 |
+| `kParamIndex` carrying 1 | 404 |
+| `kParamIndex` carrying 18 | 404 |
+| **`kParamIndex` carrying the last id** | **the next page** |
 
-`/Logbook/UnsynchronisedLogs`, the one other list `libmds.so` names, answers
-**200 with no entries**.
+The two failures were telling, and the reading of them is where this went
+wrong twice, so it is worth setting down.
 
-**Two readings of mine that the evidence does not support, corrected:**
+- **400 versus 404 was information.** 400 came back for the *wrong type
+  code*; 404 came back for the *right type code with a value that is not
+  an id*. "Well-formed, and the thing asked for is not there." The shape
+  was right from the first `kParamIndex` attempt. What was never tried was
+  `kParamIndex` with the id: the id had only been sent as int32 and int64.
+- **That reading was written down correctly, then retracted, wrongly.** It
+  was first stated as "the index is the right shape and 18 the wrong
+  number". It was then withdrawn on the grounds that index 1 and index 18
+  got the same 404, so the value could not be what the watch objected to.
+  That inference is backwards. Neither 1 nor 18 is an id, so the *same*
+  not-found for both is exactly what the first reading predicts. Two
+  values that are equally wrong give one answer.
 
-- I called the 404 a find: "400 means malformed, 404 means well-formed but
-  not found, so the index is the right shape and 18 the wrong number". Index 1
-  and index 18 got the *same* 404. Two different values under one type code
-  producing one answer says the value was not what the watch objected to.
-  The likelier reading is that nothing in this request's structure matches
-  type 0x0007 at all. Unverified either way; do not build on it.
-- I called the empty `UnsynchronisedLogs` a dead hypothesis. It is only dead
-  if the official app has not already synced those four rides, because that
-  list is exactly what the official app's sync empties. Whether it had was
-  not known when this was written.
+**`/Logbook/UnsynchronisedLogs` is not the other list.** It answers 200 with
+no entries. It was suspected because `libmds.so` names it, and the official
+app had not synced since 19 October - so it holds no "not yet synced by the
+official app" rides either, and those rides existed. Whatever it lists, it
+is not what was missing.
 
-**Ruled out by reading rather than trying:** the ack prefix. The trigger
-rebuilds `f0 24 00 01 80 00` from scratch where other encoders copy it; the
-logged ack prefix is `f02400018000c800`, identical.
-
-**Why the existing captures do not help.** Eight HCI captures of the official
-app syncing exist (`suuntosync-fixtures-private/`). In the 12 October one the
-app sends `f0 24 00 01 80 00 00` for the entry list - zero parameters, the
-same frame this project sends - and goes straight to fetching `Data`. No
-list in any of them reached eighteen, so none contains a second page.
-
-**Next step: a capture of the official app syncing a watch that holds more
-than eighteen.** It is the one source that is not inference, and the first
-time this was needed it is how the `/Entries` shortcut was found.
-`AppController` keeps the four-candidate sweep until then: it costs a second
-of refused requests per sync and, because a page that adds nothing new is
-treated as a refusal, it cannot loop or duplicate.
+**What the capture would have saved.** Four rounds of a phone, a build and a
+log. The first moment it was possible to ask the official app was the
+moment the status word turned out to say "call again", and the 12 October
+capture already showed the app sending the same parameterless first frame.
+The reason not to capture earlier was that no capture then held a list past
+eighteen. That is a reason to take one when the watch does, not to guess
+instead.

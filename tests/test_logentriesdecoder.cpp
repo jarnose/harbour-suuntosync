@@ -69,6 +69,36 @@ void testDecodeRealEntriesResponse()
     }
 }
 
+// The second page of a real Race's /Logbook/Entries: 122 bytes, status 200
+// (0x00c8), the 26-byte header and four entries - the four rides from
+// 4 and 6 November that the first page, status 100, did not reach.
+// btsnoop_race_sync_20261106.log, reply to reqId 0x01de.
+void testDecodeRealSecondPage()
+{
+    const auto body = fromHex(
+            "f02400018000c800"                                  // prefix, status 200 at bytes 6-7
+            "0124"                                               // structure header
+            "6e240c00040000000c000000000000009fc1ea6a5ac8ea6a"  // array metadata + record 0 start
+            "0170666264000210a07b0000000000005c3beb6a4e3feb6a"
+            "0100000001000000be5e000000000000ab81ec6aa6a2ec6a"
+            "0189021001000000fc38010000000000a564ed6a1c6ded6a"
+            "01d70210c05d021025d2000000000000");
+    expectEqU("second page reply is the 122 bytes the capture shows", body.size(), 122);
+    const auto entries = LogEntries::decode(body);
+    expectEqU("decode real second page: count", entries.size(), 4);
+    if (entries.size() == 4) {
+        // 4 Nov 07:24, 4 Nov 16:04, 5 Nov 15:16, 6 Nov 07:24 - the ids the
+        // official app then fetched Data for.
+        expectEqU("  entry 0 id", entries[0].id, 1793769887);
+        expectEqU("  entry 1 id", entries[1].id, 1793801052);
+        expectEqU("  entry 2 id", entries[2].id, 1793884587);
+        expectEqU("  entry 3 id", entries[3].id, 1793942693);
+    }
+    // The status word is what says "that was all". 100 would mean "call
+    // again", which is how the first page of this same list ends.
+    expectEqU("second page status is 200, not 100", static_cast<unsigned>(body[6]) | (static_cast<unsigned>(body[7]) << 8), 200);
+}
+
 void testDecodeTruncatedResponseReturnsEmpty()
 {
     const auto body = fromHex("f02400018000c8000124560001");
@@ -87,6 +117,7 @@ void testDecodeEmptyResponseReturnsEmpty()
 int main()
 {
     testDecodeRealEntriesResponse();
+    testDecodeRealSecondPage();
     testDecodeTruncatedResponseReturnsEmpty();
     testDecodeEmptyResponseReturnsEmpty();
 

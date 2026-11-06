@@ -762,10 +762,37 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
                            .arg(page.size()).arg(frame.body.size())
                            .arg(roomFor).arg(status).arg(cursor);
 
+        // **A page that repeats what is already in hand is a refusal too.**
+        // The "repeat" candidate - ask again with no parameter - came back
+        // with the same eighteen entries and the same status 100, and the
+        // loop appended them, so a watch with eighteen workouts reported
+        // thirty-six. The last id matching was caught one page too late to
+        // stop that.
+        //
+        // So the test is what the page *adds*, not what it ends with. An
+        // id already collected is dropped, and a page that adds nothing
+        // new counts as this candidate failing.
+        int added = 0;
+        if (pages > 0) {
+            for (const LogEntries::Entry &entry : page) {
+                bool seen = false;
+                for (const LogEntries::Entry &have : collected) {
+                    if (have.id == entry.id) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    collected.push_back(entry);
+                    ++added;
+                }
+            }
+        }
+
         // A refused page is this candidate's answer, not the resource's.
         // Try the next way of asking for the *same* page before giving up,
         // and keep everything already collected either way.
-        if (pages > 0 && page.empty()) {
+        if (pages > 0 && added == 0) {
             if (candidate + 1 < nCands) {
                 fetchEntriesPage(path, ack, startAfterId, collected, pages,
                                   candidate + 1, callback);
@@ -779,8 +806,10 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
             return;
         }
 
-        for (const LogEntries::Entry &entry : page)
-            collected.push_back(entry);
+        if (pages == 0) {
+            for (const LogEntries::Entry &entry : page)
+                collected.push_back(entry);
+        }
 
         if (collected.empty()) {
             callback(false, {}, tr("Entries response didn't decode to any entries "
@@ -789,7 +818,7 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
         }
 
         const uint32_t newest = collected.back().id;
-        if (status != kEntriesStatusMore || page.empty() || newest <= startAfterId
+        if (status != kEntriesStatusMore || page.empty()
                 || pages + 1 >= kMaxEntriesPages) {
             callback(true, collected, QString());
             return;

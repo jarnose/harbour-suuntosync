@@ -600,31 +600,44 @@ void MdsWhiteboardClient::fetchLogEntries(const QString &path, EntriesCallback c
 // guess costs one extra round trip and the list already in hand, not a
 // hang.
 // The candidates for "give me the next page", tried in order until one is
-// not refused. int32 and int64 have each been refused with 400 on a real
-// Race, so this is not a sweep over guesses with nothing ruled out - it is
-// the two that remain, and the first that works is the answer.
+// not refused. Four ways of asking, and two of them are already answered
+// by a real Race - which is why the order starts with the two that are
+// not:
 //
-//  - kParamIndex, the item offset. /Activity/Moments/Sync/Data sends its
-//    cursor this way, and the capture that settled *that* showed 07 00
-//    where /Summary's showed 06 00. An offset of 18 is the next item.
-//  - kParamInt32 again, but against a freshly registered handle. The
-//    handle may be spent by the fetch that used it, in which case every
-//    parameter in the world is refused on the old one and the shape was
-//    never the problem.
+//   int32 id      -> 400, malformed
+//   int64 id      -> 400, malformed
+//   index 18      -> **404**, and that difference is the find. 400 says
+//                    the request made no sense; 404 says it made sense and
+//                    the thing asked for is not there. So kParamIndex is
+//                    the shape this resource accepts and eighteen is the
+//                    wrong number to put in it.
 //
-// Each attempt logs its status, so a run says which it was even if none
-// works. What is already in hand is never thrown away for a refused page.
+// What is left to try:
+//
+//   - no parameter at all, the same frame that fetched page 0, on the same
+//     handle. If the cursor lives in the handle rather than in the
+//     request, "ask again" is the whole protocol and every parameter was
+//     always going to be refused.
+//   - the index as a *page* rather than an item: 1, not 18. 404 for 18 is
+//     what a page index would say about a list that has two pages.
+//
+// Nothing already read is thrown away by a refusal, and the loop stops if
+// a page repeats what is already in hand.
+enum class EntriesCursorKind { None, PageNumber, ItemOffset, LastId };
+
 struct EntriesPageCandidate
 {
     const char *name;
     bool freshHandle;
+    EntriesCursorKind cursor;
     uint16_t paramType;
-    bool itemOffset; // the value is a position, not an id
 };
 
 static const EntriesPageCandidate kEntriesPageCandidates[] = {
-    { "index/offset",   false, Mds::kParamIndex, true  },
-    { "int32/fresh id", true,  Mds::kParamInt32, false },
+    { "repeat",       false, EntriesCursorKind::None,       0                },
+    { "index/page",   false, EntriesCursorKind::PageNumber, Mds::kParamIndex },
+    { "index/offset", false, EntriesCursorKind::ItemOffset, Mds::kParamIndex },
+    { "int32/fresh",  true,  EntriesCursorKind::LastId,     Mds::kParamInt32 },
 };
 
 void MdsWhiteboardClient::fetchEntriesPage(const QString &path,
@@ -701,19 +714,24 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
             sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
     const EntriesPageCandidate &cand =
             kEntriesPageCandidates[qBound(0, candidate, nCandidates - 1)];
-    const uint32_t cursor = cand.itemOffset
-            ? static_cast<uint32_t>(collected.size())
-            : startAfterId;
+    uint32_t cursor = 0;
+    switch (cand.cursor) {
+    case EntriesCursorKind::None:       cursor = 0; break;
+    case EntriesCursorKind::PageNumber: cursor = static_cast<uint32_t>(pages); break;
+    case EntriesCursorKind::ItemOffset: cursor = static_cast<uint32_t>(collected.size()); break;
+    case EntriesCursorKind::LastId:     cursor = startAfterId; break;
+    }
+    const bool noParam = (cand.cursor == EntriesCursorKind::None);
 
-    getRaw([ack, first, cursor, &cand](uint16_t requestId) {
-        if (first)
+    getRaw([ack, first, cursor, noParam, &cand](uint16_t requestId) {
+        if (first || noParam)
             return Mds::encodeEntriesFetchTrigger(requestId, ack);
         std::vector<uint8_t> value(4);
         for (int i = 0; i < 4; ++i)
             value[i] = static_cast<uint8_t>((cursor >> (8 * i)) & 0xFF);
         return Mds::encodeParameterisedFetch(requestId, ack,
                                                { { cand.paramType, value } });
-    }, [this, path, ack, startAfterId, collected, pages, candidate, callback]
+    }, [this, path, ack, startAfterId, cursor, collected, pages, candidate, callback]
             (bool fetchOk, const Mds::Frame &frame, const QString &fetchError) mutable {
         const int nCands = static_cast<int>(
                 sizeof(kEntriesPageCandidates) / sizeof(kEntriesPageCandidates[0]));
@@ -739,10 +757,10 @@ void MdsWhiteboardClient::fetchEntriesPageOnHandle(const QString &path,
                 : 0;
         qWarning().noquote()
                 << QStringLiteral("logbook entries page %1 [%2]: %3 decoded, %4 bytes, "
-                                   "room for %5 records, status %6, cursor after %7")
+                                   "room for %5 records, status %6, cursor %7")
                            .arg(pages).arg(QString::fromLatin1(candName))
                            .arg(page.size()).arg(frame.body.size())
-                           .arg(roomFor).arg(status).arg(startAfterId);
+                           .arg(roomFor).arg(status).arg(cursor);
 
         // A refused page is this candidate's answer, not the resource's.
         // Try the next way of asking for the *same* page before giving up,

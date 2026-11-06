@@ -44,6 +44,10 @@ jobs:
           run capabilities      ../src/ble/capabilities.cpp
           run pluginregistry    ../src/ble/pluginregistry.cpp
           run workoutsummary    ../src/store/workoutsummary.cpp
+          # Carries one real reply's bytes inline, so its exact check runs
+          # here; the comparison against the cloud's figures needs the
+          # private capture and says plainly that it was skipped.
+          run activitydecoder   ../src/ble/activitydecoder.cpp ../src/cloud/iso8601.cpp
           run suuntoauth        ../src/cloud/suuntoauth.cpp
           run zipwriter         ../src/cloud/zipwriter.cpp -lz
           # The FIT decoder's own tests live in harbour-edgesync, where it

@@ -19,7 +19,7 @@ Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.6.0-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.6.3-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
@@ -59,6 +59,37 @@ Two things before the app is useful:
 - **A Suunto account** is needed for anything cloud-side — the workout
   list, health upload, SuuntoPlus. Reading workouts, sleep and settings
   off the watch, and writing GPS assist data to it, need no account at all.
+
+### When a sync does not find something
+
+The app writes what a sync did to the system journal, and on this device the
+journal is volatile and keeps seconds, so it has to be **watched while the
+sync runs**, not read afterwards:
+
+```
+ssh defaultuser@<phone> "journalctl _COMM=harbour-suuntos -f"
+```
+
+Start that, sync, and the lines that settle most questions are these:
+
+| line | what it says |
+|---|---|
+| `logbook entries page N: … status S, after id I` | one page of the watch's workout list; 100 means more follow |
+| `watch logbook: N entries: <ids>` | everything the watch listed; an id is the workout's start time as a Unix timestamp |
+| `Synced X of the watch's Y workouts; Z were already here` | fetched, listed, and skipped as already stored |
+| `Read from the watch: N nights, M recovery, K activity` | what the watch's health read returned; `-` is a step that never got that far |
+| `sync chain: skipped … (reason)` | a step that was left out, and why |
+
+Those two appear in the phone's own language, so on a Finnish phone they read
+`Synkronoitiin …` and `Kellosta luettiin …`.
+
+If a workout is on the watch's own screen and its start time is not among the
+listed ids, the watch is not listing it. If it is listed and not stored, the
+failure is on the line after it.
+
+The `/Info` line is filtered for long unbroken runs of letters and digits,
+which is where serial numbers and Bluetooth addresses live. That is a rule,
+not a guarantee: read a log before posting it.
 
 ### Removing it again
 
@@ -210,6 +241,14 @@ Confirmed on real hardware, not just in tests:
   link busy for minutes, which is long enough for it to drop. If it does
   drop, the sync stops there and says how many it did not reach, rather
   than failing the rest of the list one by one against a dead link.
+
+  **The logbook comes in pages of eighteen**, oldest first, and a watch
+  holding more says so with a status of 100 — "call again". Until 1.6.3
+  the app read one page and stopped, so a watch with more than eighteen
+  workouts never delivered its newest ones, which is exactly the rides
+  anyone goes looking for. Asking for the next page took a capture of the
+  official app rather than a guess: four guesses at the cursor were refused
+  first. It is one parameter, the last id already seen.
 - **Two watch models, a Suunto Race and a Suunto 9 Baro.** SBEM chunk ids
   are per model — a Race carries GPS in chunk 0x0c and heart rate in 0x12,
   a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever
@@ -568,7 +607,7 @@ for a background process to leave a trail.
 
 Most golden-vector tests need fixtures that are **not** in this repository —
 they are real captures containing GPS tracks and sleep data. See
-`tests/README.md`. CI runs the thirteen suites that need none; the rest run on the
+`tests/README.md`. CI runs the fifteen suites that need none; the rest run on the
 machine the captures live on. The newer ones are written to be in the first
 group where they can be: the vector-tile suite builds a tile byte by byte and
 inlines it as hex, so its exact checks run everywhere and only its feature

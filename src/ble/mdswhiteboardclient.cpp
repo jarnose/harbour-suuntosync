@@ -616,10 +616,18 @@ void MdsWhiteboardClient::releaseHeldLogbookHandle(const std::vector<uint8_t> &n
 
     getRaw([held](uint16_t requestId) {
         return Mds::encodeReleaseHandle(requestId, held);
-    }, [next](bool ok, const Mds::Frame &, const QString &error) {
+    }, [next](bool ok, const Mds::Frame &frame, const QString &error) {
         if (!ok) {
             qWarning().noquote()
                     << QStringLiteral("logbook handle release was not answered: %1").arg(error);
+        } else if (statusOf(frame) != 200) {
+            // The official app's releases are all answered with a 0x03
+            // frame carrying 200 in the same place a GET's ack does. A
+            // watch that answers and says something else is refusing the
+            // release, which is different from not hearing it.
+            qWarning().noquote()
+                    << QStringLiteral("logbook handle release answered status %1")
+                               .arg(statusOf(frame));
         }
         next();
     });

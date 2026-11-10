@@ -16,6 +16,7 @@ constexpr uint8_t kSync = 0xA5;
 constexpr uint8_t kTypeGetRequest = 0x0A;
 constexpr uint8_t kTypeStreamStartTrigger = 0x10;
 constexpr uint8_t kTypeStreamStopTrigger = 0x11;
+constexpr uint8_t kTypeRelease = 0x0B;
 constexpr uint8_t kTypeHandleFetch = 0x0D;
 // PUT via a handle. The captured app uses it to write settings onto the
 // watch - the cloud URL and session key it needs for its own WiFi
@@ -140,6 +141,14 @@ std::vector<uint8_t> encodeStreamStopTrigger(uint16_t requestId, const std::vect
 {
     return encodeFrame(kTypeStreamStopTrigger, requestId,
                         streamTriggerBody(ackBody, "encodeStreamStopTrigger"));
+}
+
+std::vector<uint8_t> encodeReleaseHandle(uint16_t requestId, const std::vector<uint8_t> &ackBody)
+{
+    if (ackBody.size() < 6)
+        throw std::invalid_argument("encodeReleaseHandle: ackBody shorter than 6 bytes");
+    return encodeFrame(kTypeRelease, requestId,
+                        std::vector<uint8_t>(ackBody.begin(), ackBody.begin() + 6));
 }
 
 std::vector<uint8_t> encodeEntriesFetchTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody)

@@ -161,6 +161,7 @@ void MdsWhiteboardClient::detach()
     m_handshakeAcked = false;
     // Session-scoped: the handle inside it means nothing to the next session.
     m_removalAck.clear();
+    m_heldLogbookAck.clear();
     ++m_sessionGeneration;
 
     // Nothing queued or in flight will ever resolve now - fail everything
@@ -537,28 +538,90 @@ void MdsWhiteboardClient::fetchLogbookData(const QString &path, DataCallback cal
             return;
         }
 
-        try {
-            const std::vector<uint8_t> ackBody = ackFrame.body;
-            getRaw([ackBody](uint16_t requestId) {
-                return Mds::encodeStreamStartTrigger(requestId, ackBody);
-            }, [this, path, callback, ackBody](bool triggerOk, const Mds::Frame &frame,
-                                                 const QString &triggerError) {
-                if (!triggerOk) {
-                    callback(false, {}, tr("Stream-start trigger failed: %1").arg(triggerError));
-                    return;
-                }
-                m_bulkFetchActive = true;
-                m_bulkBuffer.clear();
-                m_bulkCallback = callback;
-                m_bulkAckBody = ackBody;
-                m_bulkPath = path;
-                m_bulkChunkCount = 0;
-                m_bulkTriggerStatus = statusOf(frame);
-                armBulkSilenceTimer();
-            });
-        } catch (const std::exception &e) {
-            callback(false, {}, tr("Could not build the stream-start trigger: %1").arg(e.what()));
+        const std::vector<uint8_t> ackBody = ackFrame.body;
+
+        // **What the watch said to the GET itself.** Until now only the
+        // trigger's answer was kept, so a watch that refused the GET and
+        // then refused the trigger looked like a watch that refused the
+        // trigger. The ack carries 200 where it is happy.
+        if (statusOf(ackFrame) != 200) {
+            qWarning().noquote() << QStringLiteral("logbook GET %1 answered status %2")
+                                            .arg(path).arg(statusOf(ackFrame));
         }
+
+        releaseHeldLogbookHandle(ackBody, [this, path, callback, ackBody]() {
+            try {
+                getRaw([ackBody](uint16_t requestId) {
+                    return Mds::encodeStreamStartTrigger(requestId, ackBody);
+                }, [this, path, callback, ackBody](bool triggerOk, const Mds::Frame &frame,
+                                                     const QString &triggerError) {
+                    if (!triggerOk) {
+                        callback(false, {}, tr("Stream-start trigger failed: %1")
+                                                    .arg(triggerError));
+                        return;
+                    }
+                    m_bulkFetchActive = true;
+                    m_bulkBuffer.clear();
+                    m_bulkCallback = callback;
+                    m_bulkAckBody = ackBody;
+                    m_bulkPath = path;
+                    m_bulkChunkCount = 0;
+                    m_bulkTriggerStatus = statusOf(frame);
+                    armBulkSilenceTimer();
+                });
+            } catch (const std::exception &e) {
+                callback(false, {}, tr("Could not build the stream-start trigger: %1")
+                                            .arg(e.what()));
+            }
+        });
+    });
+}
+
+// **Fifteen workouts, then 404 - because nothing ever let go.**
+//
+// A Suunto 5 with seventy-one workouts stored fifteen per sync and failed
+// the newest twelve, every one with "trigger answered 404, 0 chunks seen".
+// They were a contiguous run at the end of the list, which a bad entry
+// would not be, and an Ibiza had stored fifteen of eighteen the same way.
+//
+// Every GET of a path takes a hold on that resource's handle. The official
+// app releases the previous one each time it asks for the next, and this
+// client never did: twenty-eight GETs in a fourteen-workout capture, and
+// twenty-seven releases in it. Fifteen workouts here are thirty holds,
+// then the watch refuses.
+//
+// The rule is the capture's, exactly: nothing after the first GET, and
+// after each later /Data or /Summary GET, a release of the previous one's
+// handle. Data and Summary alternate, so the two handles do too.
+//
+// A release that fails or is not answered is carried past, not reported as
+// the fetch's failure: it is housekeeping against a limit, and the watch
+// that would not answer it is about to say something more useful.
+void MdsWhiteboardClient::releaseHeldLogbookHandle(const std::vector<uint8_t> &newAck,
+                                                    std::function<void()> next)
+{
+    const std::vector<uint8_t> held = m_heldLogbookAck;
+    m_heldLogbookAck = newAck;
+
+    // The first GET of a connection has nothing to let go of. And a handle
+    // that matches the one just taken is not released: that would let go of
+    // the hold this very GET made, which is what the official app never
+    // does and what two Data GETs in a row (the first one's Summary having
+    // failed) would otherwise do.
+    if (held.size() < 6 || newAck.size() < 6
+            || std::equal(held.begin(), held.begin() + 6, newAck.begin())) {
+        next();
+        return;
+    }
+
+    getRaw([held](uint16_t requestId) {
+        return Mds::encodeReleaseHandle(requestId, held);
+    }, [next](bool ok, const Mds::Frame &, const QString &error) {
+        if (!ok) {
+            qWarning().noquote()
+                    << QStringLiteral("logbook handle release was not answered: %1").arg(error);
+        }
+        next();
     });
 }
 
@@ -693,7 +756,14 @@ void MdsWhiteboardClient::fetchSummary(const QString &path, DataCallback callbac
             callback(false, {}, tr("GET %1 was acked with an unusably short body").arg(path));
             return;
         }
-        readNextPage(ackFrame.body, 0, {}, callback);
+        if (statusOf(ackFrame) != 200) {
+            qWarning().noquote() << QStringLiteral("logbook GET %1 answered status %2")
+                                            .arg(path).arg(statusOf(ackFrame));
+        }
+        const std::vector<uint8_t> ackBody = ackFrame.body;
+        releaseHeldLogbookHandle(ackBody, [this, ackBody, callback]() {
+            readNextPage(ackBody, 0, {}, callback);
+        });
     });
 }
 

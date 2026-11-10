@@ -203,6 +203,27 @@ std::vector<uint8_t> encodeStreamStartTrigger(uint16_t requestId, const std::vec
 // Throws std::invalid_argument if ackBody is shorter than 6 bytes.
 std::vector<uint8_t> encodeStreamStopTrigger(uint16_t requestId, const std::vector<uint8_t> &ackBody);
 
+// TYPE=0x0b: let go of the handle an earlier GET acquired. The body is that
+// GET's ack, first six bytes and nothing after - the ack minus its status.
+//
+// **Not optional either, and left out for the same reason the stop was:
+// small lists never hit the limit.** Every GET of a path takes a hold on
+// that resource's handle, and the official app releases the previous one
+// each time it asks for the next. This client never did. After fifteen
+// workouts - Data and Summary for each, thirty holds - the watch refuses
+// the next GET and the stream-start that follows it answers 404, which is
+// how a Suunto 5 with seventy-one workouts stored fifteen per sync and then
+// failed the newest twelve, and an Ibiza stored fifteen of eighteen.
+//
+// What the official app does, from btsnoop_race_sync_20261106.log, fourteen
+// workouts in one connection: after the first /Data GET nothing, and after
+// every later /Data or /Summary GET a release of the *previous* one's
+// handle - 00 24 0e (Data) after a Summary GET, 00 24 12 (Summary) after a
+// Data GET. Fourteen workouts are twenty-eight GETs and the capture holds
+// twenty-seven releases, which is the rule exactly. Handles are the
+// resource's, not the request's, so they alternate between those two.
+std::vector<uint8_t> encodeReleaseHandle(uint16_t requestId, const std::vector<uint8_t> &ackBody);
+
 // Builds the TYPE=0x0D "fetch by handle" request that returns a structured
 // resource's actual data directly from the handle named by a GET's ack -
 // for /Logbook/Entries specifically, this skips the entire multi-step

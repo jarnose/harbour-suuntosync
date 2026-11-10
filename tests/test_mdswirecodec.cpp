@@ -130,6 +130,22 @@ void testEncodeStreamStopTrigger()
               "7ea51107004e0500240e01800000367cfd9b7e");
 }
 
+void testEncodeReleaseHandle()
+{
+    // The two releases the official app alternates between, from
+    // btsnoop_race_sync_20261106.log. After a /Summary GET it lets go of the
+    // /Data handle (00 24 0e); after a /Data GET, of the /Summary handle
+    // (00 24 12). The body is the previous GET's ack, first six bytes only.
+    const auto dataAck = fromHex("00240e018000c800");
+    expectEq("encodeReleaseHandle(Data handle, reqId 0x01e3)",
+              toHex(Mds::encodeReleaseHandle(0x01e3, dataAck)),
+              "7ea50b0600e30100240e018000d9d748f07e");
+    const auto summaryAck = fromHex("002412018000c800");
+    expectEq("encodeReleaseHandle(Summary handle, reqId 0x01f9)",
+              toHex(Mds::encodeReleaseHandle(0x01f9, summaryAck)),
+              "7ea50b0600f9010024120180001d12fc077e");
+}
+
 void testEncodeEntriesFetchTrigger()
 {
     // frame reqid 0x04c5: the TYPE=0x0D request that returns the real
@@ -419,6 +435,7 @@ int main()
     testLiteralHandshakeRequest();
     testEncodeStreamStartTrigger();
     testEncodeStreamStopTrigger();
+    testEncodeReleaseHandle();
     testEncodeEntriesFetchTrigger();
     testEncodePagedReadRequest();
     testDecodeSinglePacketResponse();

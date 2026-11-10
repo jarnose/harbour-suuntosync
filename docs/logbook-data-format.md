@@ -1481,11 +1481,11 @@ earlier guesses in this document:
   teardown.
 
 `TYPE=0x0b` (release the *previously held* resource when acquiring a
-different one) is still not implemented here. The app sends it on every
-acquisition, but this client only ever touches `/Logbook/Entries` and
-`/Logbook/byId/*/Data`, and the `Entries -> Data` transition is
-confirmed working on real hardware without it, so it's left out rather
-than added speculatively.
+different one) was left out here at the time: the app sends it on every
+acquisition, but this client only touched `/Logbook/Entries` and
+`/Logbook/byId/*/Data`, and the `Entries -> Data` transition worked on
+real hardware without it. **That was wrong in a way a small list could not
+show** - see "Fifteen workouts, then 404" below.
 
 **Implemented**: `Mds::encodeStreamStopTrigger()` (golden-vector tested
 byte-for-byte against the real captured frame, including CRC) and
@@ -2103,3 +2103,84 @@ capture already showed the app sending the same parameterless first frame.
 The reason not to capture earlier was that no capture then held a list past
 eighteen. That is a reason to take one when the watch does, not to guess
 instead.
+
+
+## Fifteen workouts, then 404: nothing ever let go of a handle (2026-11-10)
+
+**Status: a hypothesis with three independent legs, not yet confirmed on a
+watch.** The fix is in; whether it is the fix is what the next sync on a
+long logbook says.
+
+A Suunto 5 ("Monza", firmware 2.23.20) with 71 workouts listed, after the
+paging fix, all four pages of them. Its sync:
+
+```
+Synkronoitiin 15 kellon 71 harjoituksesta; 44 oli jo täällä. Epäonnistui: 12
+  every one:  Joukkodataa ei saapunut ennen aikakatkaisua
+              (/Logbook/byId/<id>/Data, laukaisin vastasi 404, 0 lohkoa nähty)
+```
+
+71 = 44 stored + 15 fetched + 12 failed. In list order (oldest first) the
+15 fetched are positions 45-59 and the 12 failures are positions 60-71, a
+**contiguous run at the very end**. Those are the newest twelve, and they
+include the three workouts of 8 November the user reported missing.
+
+**Leg 1: the number.** Fifteen successes and then everything failing is a
+limit, not a property of entries. A pruned or damaged entry would be an
+old one, not the newest dozen after exactly fifteen good ones. And fifteen
+is not new: an Ibiza had stored **fifteen of eighteen** in an earlier log
+before the same kind of failure, on a different watch model. The Suunto 5's
+earlier "no bulk data arrived" report had the same signature.
+
+**Leg 2: what the official app does that this client does not.** Fourteen
+workouts in one connection, from `btsnoop_race_sync_20261106.log`:
+
+| frame | count |
+|---|---|
+| `GET /Logbook/byId/<id>/Data` | 14 |
+| `GET /Logbook/byId/<id>/Summary` | 14 |
+| `0x0b` release | **27** |
+| `0x11` stream stop | 14 |
+
+```
+GET  .../Data      after the very first one: nothing
+GET  .../Summary   0x0b  00 24 0e 01 80 00     let go of the Data handle
+GET  .../Data      0x0b  00 24 12 01 80 00     let go of the Summary handle
+```
+
+Twenty-eight GETs and twenty-seven releases is the rule exactly: nothing
+after the first, a release of the previous one's handle after each later
+one. The handles are the resource's, not the request's (Data is `0x0e24`,
+Summary `0x1224` every time), so they simply alternate. This client sends
+none, so fifteen workouts are thirty holds - Data and Summary each - and the
+watch is out.
+
+**Leg 3: the arithmetic of the contiguous tail.** If the limit is what
+stops it, then everything after the limit fails and everything before it
+works, and that is the shape in the log. A per-entry fault could not
+produce it.
+
+**What is not established.** That releasing is *sufficient* - a watch could
+have a second limit. That the limit is fifteen holds of each rather than,
+say, thirty in all (thirty acquisitions fit both). And that a new sync
+resets it: forty-four workouts stored before this sync suggests each earlier
+sync stored about fifteen and stopped, which is what a per-session limit
+predicts, but nobody saw those runs.
+
+**The fix** is `MdsWhiteboardClient::releaseHeldLogbookHandle()`, built on
+`Mds::encodeReleaseHandle()` (the two frames above are pinned byte for byte in
+`tests/test_mdswirecodec.cpp`). It follows the capture: no release for the
+first Data/Summary GET of a connection, a release of the previous one's
+handle after every later one. Two guards: a handle equal to the one just
+taken is never released (two Data GETs in a row, after a failed Summary,
+would otherwise let go of the hold this very GET made), and a release that is
+not answered is carried past rather than failing the fetch it precedes.
+
+The GET ack's own status is now logged when it is not 200. Until now only
+the trigger's answer was kept, so a watch that refused the *GET* and then
+refused the trigger was indistinguishable from one that only refused the
+trigger. That is also the first thing to read if this turns out not to be it.
+
+**For a user stuck on 1.6.3 meanwhile:** the sync skips what is already
+stored, so each press fetches the next fifteen. A list that is twelve short
+is one more press from complete.

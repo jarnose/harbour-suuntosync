@@ -105,6 +105,13 @@ private:
     // One page of /Logbook/Entries, and the next, until the watch stops
     // saying "call again". See the definition for the frame the official
     // app sends and what it took to find it.
+    // After a /Data or /Summary GET has been acked: let go of the handle the
+    // previous one took, if there was one, then carry on. A failed release
+    // never fails the fetch it precedes - it is housekeeping, and the thing
+    // it protects against is a limit, not a requirement.
+    void releaseHeldLogbookHandle(const std::vector<uint8_t> &newAck,
+                                   std::function<void()> next);
+
     void fetchEntriesPage(const std::vector<uint8_t> &ackBody, uint32_t startAfterId,
                            std::vector<LogEntries::Entry> collected, int pages,
                            EntriesCallback callback);
@@ -565,6 +572,12 @@ private:
     // exact lifetime the watch gives a registration is not established, and
     // a cached handle with that fallback holds under any of the candidates.
     std::vector<uint8_t> m_removalAck;
+
+    // The ack of the most recent /Logbook/byId/<id>/Data or /Summary GET,
+    // whose handle the next one has to let go of - see
+    // releaseHeldLogbookHandle(). Session-scoped like m_removalAck: a
+    // handle means nothing to the next connection.
+    std::vector<uint8_t> m_heldLogbookAck;
 
     struct QueuedRequest
     {

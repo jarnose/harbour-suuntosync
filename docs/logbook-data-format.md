@@ -2107,9 +2107,9 @@ instead.
 
 ## Fifteen workouts, then 404: nothing ever let go of a handle (2026-11-10)
 
-**Status: a hypothesis with three independent legs, not yet confirmed on a
-watch.** The fix is in; whether it is the fix is what the next sync on a
-long logbook says.
+**Status: confirmed on a Race with a controlled A/B (below); not yet seen
+on the Suunto 5 that reported it.** The three legs came first and the
+experiment after them.
 
 A Suunto 5 ("Monza", firmware 2.23.20) with 71 workouts listed, after the
 paging fix, all four pages of them. Its sync:
@@ -2160,12 +2160,48 @@ stops it, then everything after the limit fails and everything before it
 works, and that is the shape in the log. A per-entry fault could not
 produce it.
 
-**What is not established.** That releasing is *sufficient* - a watch could
-have a second limit. That the limit is fifteen holds of each rather than,
-say, thirty in all (thirty acquisitions fit both). And that a new sync
-resets it: forty-four workouts stored before this sync suggests each earlier
-sync stored about fifteen and stopped, which is what a per-session limit
-predicts, but nobody saw those runs.
+### The A/B, on a Race, 10 November
+
+Same watch, same twenty workouts, same phone; only the code changed. The
+`data` and `summary` of twenty workouts that the watch still lists were
+emptied in `workout_sml` **with the rows and their `uploaded_key` left in
+place** (see below for why), so the next sync saw twenty missing payloads.
+
+| | build | fetched | what happened |
+|---|---|---|---|
+| control | 1.6.3, no release | **15 of 20** | the 16th: `stream-start ... Kellon vastausta odotettiin liian kauan`, then the watch dropped the link and the other four failed with `Not connected` |
+| test | with release | **20 of 20** | no failure, no warning of any kind |
+
+All twenty refilled rows are **byte-identical** to the backup taken before
+the experiment (`data`, `summary`, `uploaded_key`). Nothing was queued for
+upload, so nothing reached the cloud twice.
+
+The control matters as much as the test. It reproduces the limit at exactly
+fifteen, on a third watch model, under conditions where nothing else
+changed - without it, twenty successes would only say the new code works
+once. The control's own failure mode differs from the Suunto 5's (stream-start
+timeout and a dropped link, against a 404 from the trigger), and so does the
+Ibiza's earlier log, but all three fail on the sixteenth.
+
+**What is still not established.** That the Suunto 5's 404 is the same
+limit as the Race's timeout: the count and the missing release both say so,
+and the fix has not been run on a Monza. That the limit is fifteen *per
+resource* rather than thirty holds in all - twenty workouts are forty
+acquisitions and passed, so it is not thirty in all. And that a plain second
+sync resets it: the test run came after an app restart and a Bluetooth
+reconnect, which a dropped link forces anyway, so this does not isolate it.
+
+### How to force a refetch without risking a duplicate upload
+
+Worth recording because the obvious way is the wrong one. A workout is
+refetched when its `workout_sml.data` is empty. **Empty the column; do not
+delete the row.** `uploaded_key` lives in that row, and without it the app
+treats the workout as never uploaded and sends it to the cloud again. A
+duplicate in the Suunto account cannot be undone from this side. The queue
+is `uploaded_key IS NULL AND data IS NOT NULL`, so an emptied row with its
+key is in neither state. Take a copy with SQLite's backup API first, and only
+empty rows the watch still lists: a workout the watch has pruned has this
+database as its only copy of the payload.
 
 **The fix** is `MdsWhiteboardClient::releaseHeldLogbookHandle()`, built on
 `Mds::encodeReleaseHandle()` (the two frames above are pinned byte for byte in

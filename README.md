@@ -19,7 +19,7 @@ Installing a local package needs **developer mode** (Settings → Developer
 tools), because it goes through `devel-su`:
 
 ```
-devel-su pkcon install-local -y harbour-suuntosync-1.6.3-1.aarch64.rpm
+devel-su pkcon install-local -y harbour-suuntosync-1.6.4-1.aarch64.rpm
 ```
 
 `pkcon` will say the package is untrusted. It is right: these are CI
@@ -249,6 +249,14 @@ Confirmed on real hardware, not just in tests:
   anyone goes looking for. Asking for the next page took a capture of the
   official app rather than a guess: four guesses at the cursor were refused
   first. It is one parameter, the last id already seen.
+
+  **And a watch refuses after fifteen workouts in one sync** unless each
+  fetch lets go of the previous one's handle, which the official app does
+  and this app did not until 1.6.4. It looked like the newest workouts
+  failing, in a block, on every model: a Suunto 5 stored fifteen of seventy-
+  one, an Ibiza fifteen of eighteen. Confirmed on a Race by emptying twenty
+  stored payloads and syncing twice: 15 of 20 before, 20 of 20 after, the
+  refilled data byte-identical. Not yet seen on a Suunto 5.
 - **Two watch models, a Suunto Race and a Suunto 9 Baro.** SBEM chunk ids
   are per model — a Race carries GPS in chunk 0x0c and heart rate in 0x12,
   a 9 Baro in 0x0d and 0x15 — so the field table is read off whichever

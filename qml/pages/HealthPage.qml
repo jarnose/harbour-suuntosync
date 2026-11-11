@@ -136,7 +136,7 @@ Page {
             MenuItem {
                 // Straight from the watch - no Suunto account involved, and
                 // it finds nights the watch hasn't uploaded yet.
-                visible: AppController.watchConnected
+                visible: AppController.watchPaired
                 // Sleep, recovery and daily activity - three
                 // resources, three mechanisms, one action.
                 text: qsTr("Sync health from watch")

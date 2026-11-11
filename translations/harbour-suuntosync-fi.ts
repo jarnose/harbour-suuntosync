@@ -811,6 +811,14 @@ löytyy - %2 tavua
         <source>Recovery returned %1 bytes but no readable samples.</source>
         <translation>Palautuminen palautti %1 tavua mutta ei luettavia näytteitä.</translation>
     </message>
+    <message>
+        <source>The watch did not connect. Is it nearby, with Bluetooth on?</source>
+        <translation>Kello ei yhdistynyt. Onko se lähellä ja Bluetooth päällä?</translation>
+    </message>
+    <message>
+        <source>Connecting to the watch...</source>
+        <translation>Yhdistetään kelloon...</translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1258,18 +1266,6 @@ löytyy - %2 tavua
     <message>
         <source>Entries response didn&apos;t decode to any entries (%1 byte body)</source>
         <translation>Merkintävastauksesta ei purkautunut yhtään merkintää (%1 tavun runko)</translation>
-    </message>
-    <message>
-        <source>Could not build the entries fetch trigger: %1</source>
-        <translation>Merkintöjen hakupyyntöä ei voitu rakentaa: %1</translation>
-    </message>
-    <message>
-        <source>Fetch failed: %1</source>
-        <translation>Haku epäonnistui: %1</translation>
-    </message>
-    <message>
-        <source>Could not build the fetch trigger: %1</source>
-        <translation>Hakupyyntöä ei voitu rakentaa: %1</translation>
     </message>
     <message>
         <source>GET %1 was acked with an unusably short body</source>

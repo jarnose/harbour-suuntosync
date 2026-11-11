@@ -27,6 +27,9 @@
 #include "../cloud/zipwriter.h"
 
 #include <QDebug>
+#include <QDBusReply>
+#include <QDBusInterface>
+#include <QDBusConnection>
 #include <QTimeZone>
 #include <QStandardPaths>
 #include <QDesktopServices>
@@ -1127,6 +1130,18 @@ AppController::AppController(QObject *parent)
             emit errorOccurred(tr("Failed to open secure storage: %1").arg(vaultError));
     });
 
+    // How long to wait for a connection the application opened itself. A
+    // watch that is there answers in seconds (the daemon's log has four and
+    // eleven); one that is not would otherwise be waited on for as long as
+    // BlueZ cares to try.
+    m_linkTimer = new QTimer(this);
+    m_linkTimer->setSingleShot(true);
+    m_linkTimer->setInterval(30000);
+    connect(m_linkTimer, &QTimer::timeout, this, [this]() {
+        finishLinkWait(false, tr("The watch did not connect. Is it nearby, with Bluetooth on?"));
+    });
+    subscribeWatchLink();
+
     connect(m_bluezAdapter, &BluezAdapter::deviceUpdated, this, &AppController::onDeviceUpdated);
     connect(m_bluezAdapter, &BluezAdapter::connectFinished,
             this, &AppController::onConnectFinished);
@@ -1280,15 +1295,17 @@ void AppController::onConnectFinished(const QString &objectPath, bool ok, const 
         }
         if (errorName != QLatin1String(BluezError::kAlreadyConnected)) {
             emit errorOccurred(tr("Could not connect to watch: %1").arg(error));
+            // Anyone waiting on the link has been told why already.
+            finishLinkWait(false, QString());
             return;
         }
         // Already connected is not a failure either: carry on as if the
         // call had succeeded, which is what the watch's state says.
     }
-    m_watchConnected = true;
-    emit watchConnectedChanged();
+    setWatchConnected(true);
     // No attach here either - see onDeviceUpdated().
     Q_UNUSED(objectPath);
+    finishLinkWait(true, QString());
 }
 
 void AppController::refreshDevices()
@@ -1336,6 +1353,7 @@ void AppController::selectWatch(const QString &objectPath, const QString &addres
     }
     m_pairedWatch = watch;
     m_watchConnected = false;
+    subscribeWatchLink();
     // A different watch means a different field table. Whatever is in
     // hand belongs to the old one, so drop back to the built-in until
     // this one's own has been loaded or read.
@@ -1400,6 +1418,7 @@ void AppController::forgetWatch()
     releaseWatchLink();
     m_pairedWatch = PairedWatch();
     m_watchConnected = false;
+    subscribeWatchLink();
     emit pairedWatchChanged();
     emit watchConnectedChanged();
 }
@@ -2152,13 +2171,127 @@ void AppController::releaseIdleWatchSession()
     releaseWatchLink();
 }
 
+bool AppController::watchLinkIsUp()
+{
+    if (m_pairedWatch.objectPath.isEmpty())
+        return false;
+    QDBusInterface properties(QStringLiteral("org.bluez"), m_pairedWatch.objectPath,
+                               QStringLiteral("org.freedesktop.DBus.Properties"),
+                               QDBusConnection::systemBus());
+    // Not the default twenty-five seconds: this runs on the way into every
+    // operation, and a wedged bluetoothd should cost a few, not that.
+    properties.setTimeout(4000);
+    const QDBusReply<QVariant> reply = properties.call(
+            QStringLiteral("Get"), QStringLiteral("org.bluez.Device1"),
+            QStringLiteral("Connected"));
+    return reply.isValid() && reply.value().toBool();
+}
+
+void AppController::setWatchConnected(bool up)
+{
+    if (up == m_watchConnected)
+        return;
+    m_watchConnected = up;
+    emit watchConnectedChanged();
+    // A new connection renegotiates the MTU, so what was measured on the old
+    // one stops being true.
+    if (!up)
+        m_whiteboardClient->forgetConnection();
+}
+
+void AppController::ensureWatchLink(std::function<void(bool up)> done)
+{
+    if (m_pairedWatch.objectPath.isEmpty()) {
+        emit errorOccurred(tr("Connect the watch first."));
+        done(false);
+        return;
+    }
+
+    if (watchLinkIsUp()) {
+        // BlueZ says up and the flag may say otherwise: BlueZ is the one
+        // that knows.
+        setWatchConnected(true);
+        done(true);
+        return;
+    }
+
+    setWatchConnected(false);
+    m_linkWaiters.push_back(std::move(done));
+    if (m_linkConnecting)
+        return;
+
+    // Open it ourselves. This is the step the person was doing by hand in
+    // the system's Bluetooth settings, every morning, for a link that had
+    // gone down while nothing was using it.
+    m_linkConnecting = true;
+    m_linkTimer->start();
+    emit errorOccurred(tr("Connecting to the watch..."));
+    m_bluezAdapter->connectToDevice(m_pairedWatch.objectPath);
+}
+
+void AppController::finishLinkWait(bool up, const QString &error)
+{
+    if (!m_linkConnecting && m_linkWaiters.empty())
+        return;
+    m_linkConnecting = false;
+    m_linkTimer->stop();
+
+    std::vector<std::function<void(bool)>> waiters;
+    waiters.swap(m_linkWaiters);
+    if (!up && !error.isEmpty())
+        emit errorOccurred(error);
+    for (const std::function<void(bool)> &waiter : waiters)
+        waiter(up);
+}
+
+void AppController::subscribeWatchLink()
+{
+    if (m_pairedWatch.objectPath == m_linkSubscribedPath)
+        return;
+    const QString interface = QStringLiteral("org.freedesktop.DBus.Properties");
+    const QString signal = QStringLiteral("PropertiesChanged");
+    if (!m_linkSubscribedPath.isEmpty()) {
+        QDBusConnection::systemBus().disconnect(
+                QStringLiteral("org.bluez"), m_linkSubscribedPath, interface, signal, this,
+                SLOT(onWatchPropertiesChanged(QString, QVariantMap, QStringList)));
+    }
+    m_linkSubscribedPath = m_pairedWatch.objectPath;
+    if (m_linkSubscribedPath.isEmpty())
+        return;
+    QDBusConnection::systemBus().connect(
+            QStringLiteral("org.bluez"), m_linkSubscribedPath, interface, signal, this,
+            SLOT(onWatchPropertiesChanged(QString, QVariantMap, QStringList)));
+}
+
+void AppController::onWatchPropertiesChanged(const QString &interface,
+                                              const QVariantMap &changed,
+                                              const QStringList &invalidated)
+{
+    Q_UNUSED(invalidated);
+    if (interface != QLatin1String("org.bluez.Device1")
+            || !changed.contains(QStringLiteral("Connected"))) {
+        return;
+    }
+    const bool up = changed.value(QStringLiteral("Connected")).toBool();
+    setWatchConnected(up);
+    // A connection the daemon opened, or that came up on its own, ends a
+    // wait just as well as one this class asked for.
+    if (up)
+        finishLinkWait(true, QString());
+}
+
 void AppController::withWatchSession(
         const std::function<void(const WatchSession &)> &operation)
 {
-    if (!m_watchConnected || m_pairedWatch.objectPath.isEmpty()) {
-        emit errorOccurred(tr("Connect the watch first."));
-        return;
-    }
+    ensureWatchLink([this, operation](bool up) {
+        if (up)
+            runWatchSession(operation);
+    });
+}
+
+void AppController::runWatchSession(
+        const std::function<void(const WatchSession &)> &operation)
+{
     if (m_whiteboardReady) {
         operation(currentWatchSession());
         return;
@@ -3628,20 +3761,32 @@ void AppController::startNextCoverStep()
             qWarning().noquote() << QStringLiteral("sync chain: skipped %1 (%2)")
                                              .arg(step, QString::fromLatin1(why));
         };
-        if (step == QStringLiteral("watchWorkouts")) {
-            if (!m_watchConnected) {
-                skip("watch not connected");
+        // A *paired* watch is what these need, not a connected one: the link
+        // is opened on demand, and gating on its state here is what made the
+        // sync disappear from the menu whenever the link had gone down.
+        //
+        // The step runs once the link is known, and a link that could not be
+        // made moves the chain on rather than stalling it - the chain
+        // advances on the sync flags changing, and an operation that never
+        // starts changes none.
+        if (step == QStringLiteral("watchWorkouts") || step == QStringLiteral("watchHealth")) {
+            if (m_pairedWatch.objectPath.isEmpty()) {
+                skip("no watch paired");
                 continue;
             }
-            syncWatchWorkouts();
-            return;
-        }
-        if (step == QStringLiteral("watchHealth")) {
-            if (!m_watchConnected) {
-                skip("watch not connected");
-                continue;
-            }
-            syncWatchHealth();
+            const bool workouts = (step == QStringLiteral("watchWorkouts"));
+            ensureWatchLink([this, step, workouts](bool up) {
+                if (!up) {
+                    qWarning().noquote() << QStringLiteral("sync chain: skipped %1 (watch not "
+                                                           "reachable)").arg(step);
+                    startNextCoverStep();
+                    return;
+                }
+                if (workouts)
+                    syncWatchWorkouts();
+                else
+                    syncWatchHealth();
+            });
             return;
         }
         if (step == QStringLiteral("cloudWorkouts")) {

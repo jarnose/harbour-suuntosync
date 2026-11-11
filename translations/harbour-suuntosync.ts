@@ -803,6 +803,14 @@ exists - %2 bytes
         <source>Recovery returned %1 bytes but no readable samples.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>The watch did not connect. Is it nearby, with Bluetooth on?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to the watch...</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>BluezAdapter</name>
@@ -1248,18 +1256,6 @@ exists - %2 bytes
     </message>
     <message>
         <source>Entries response didn&apos;t decode to any entries (%1 byte body)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not build the entries fetch trigger: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Fetch failed: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Could not build the fetch trigger: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

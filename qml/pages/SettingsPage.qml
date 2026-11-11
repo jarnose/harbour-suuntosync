@@ -239,7 +239,7 @@ Page {
                 // The one watch-side feature that needs no account: the
                 // assist-data endpoints take no credential at all.
                 x: Theme.horizontalPageMargin
-                visible: AppController.watchConnected
+                visible: AppController.watchPaired
                 enabled: !AppController.gpsUpdateInProgress
                 text: AppController.gpsUpdateInProgress
                       ? qsTr("Updating GPS data…")
@@ -250,7 +250,7 @@ Page {
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
-                visible: AppController.watchConnected
+                visible: AppController.watchPaired
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
@@ -337,7 +337,7 @@ Page {
                 text: AppController.wifiBusy ? qsTr("Talking to the watch…")
                                               : qsTr("Send to the watch")
                 enabled: !AppController.wifiBusy && AppController.wifiSsid.length > 0
-                         && AppController.watchConnected
+                         && AppController.watchPaired
                 onClicked: AppController.sendWifiToWatch()
             }
 
@@ -346,7 +346,7 @@ Page {
                 // Needed before the watch can fetch anything itself: the
                 // API address and a credential of its own.
                 text: qsTr("Give the watch its cloud credentials")
-                enabled: !AppController.wifiBusy && AppController.watchConnected
+                enabled: !AppController.wifiBusy && AppController.watchPaired
                          && AppController.cloudSignedIn
                 onClicked: AppController.sendCloudCredentialsToWatch()
             }
@@ -367,7 +367,7 @@ Page {
                 // resource the official app subscribes to. The watch does
                 // the fetching, over its own WiFi.
                 text: qsTr("Let the watch fetch its weather")
-                enabled: !AppController.wifiBusy && AppController.watchConnected
+                enabled: !AppController.wifiBusy && AppController.watchPaired
                          && AppController.cloudSignedIn
                 onClicked: AppController.syncWatchWeather()
             }
@@ -378,7 +378,7 @@ Page {
                 // weather - the date on its own screen - where it thinks
                 // it is, and the current reading.
                 text: qsTr("Read the watch's weather state")
-                enabled: !AppController.wifiBusy && AppController.watchConnected
+                enabled: !AppController.wifiBusy && AppController.watchPaired
                 onClicked: AppController.readWatchWeatherState()
             }
 
@@ -387,14 +387,14 @@ Page {
                 // The watch is the only one that knows whether its own
                 // download worked; this is where it says so.
                 text: qsTr("Read the watch's event log")
-                enabled: !AppController.wifiBusy && AppController.watchConnected
+                enabled: !AppController.wifiBusy && AppController.watchPaired
                 onClicked: AppController.readWatchEventLog()
             }
 
             Button {
                 x: Theme.horizontalPageMargin
                 text: qsTr("Read the watch's WiFi state")
-                enabled: !AppController.wifiBusy && AppController.watchConnected
+                enabled: !AppController.wifiBusy && AppController.watchPaired
                 onClicked: AppController.readWatchWifiState()
             }
 

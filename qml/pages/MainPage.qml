@@ -197,22 +197,27 @@ Page {
             // watch chain, both means everything in both directions. Each
             // chain skips the steps it cannot run, which is what makes one
             // entry honest in every state.
+            // These follow whether a watch is *paired*, not whether its link is
+            // up at this moment. The app opens the link itself when an
+            // operation needs it, so gating on the link would hide the very
+            // entry that brings it back - which is what an honest
+            // "not connected" would do every morning.
             MenuItem {
                 text: page.syncBusy ? page.syncBusyText() : qsTr("Sync everything")
                 enabled: !page.syncBusy
-                visible: AppController.watchConnected && AppController.cloudSignedIn
+                visible: AppController.watchPaired && AppController.cloudSignedIn
                 onClicked: AppController.runSyncChain("all")
             }
             MenuItem {
                 text: page.syncBusy ? page.syncBusyText() : qsTr("Sync from the watch")
                 enabled: !page.syncBusy
-                visible: AppController.watchConnected && !AppController.cloudSignedIn
+                visible: AppController.watchPaired && !AppController.cloudSignedIn
                 onClicked: AppController.runSyncChain("watch")
             }
             MenuItem {
                 text: page.syncBusy ? page.syncBusyText() : qsTr("Sync with the cloud")
                 enabled: !page.syncBusy
-                visible: !AppController.watchConnected && AppController.cloudSignedIn
+                visible: !AppController.watchPaired && AppController.cloudSignedIn
                 onClicked: AppController.runSyncChain("cloud")
             }
             MenuItem {
@@ -509,7 +514,7 @@ Page {
         ViewPlaceholder {
             enabled: listView.count === 0
             text: qsTr("No workouts yet")
-            hintText: (AppController.cloudSignedIn || AppController.watchConnected)
+            hintText: (AppController.cloudSignedIn || AppController.watchPaired)
                       ? qsTr("Pull down and sync to fetch your workout history")
                       : qsTr("Pair a Suunto watch or sign in to your Suunto account to get started")
         }

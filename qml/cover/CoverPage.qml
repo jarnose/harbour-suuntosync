@@ -291,11 +291,11 @@ CoverBackground {
                  && !AppController.healthSyncInProgress
                  && !AppController.uploadInProgress
                  && (AppController.coverAction === "all"
-                     ? (AppController.watchConnected || AppController.cloudSignedIn)
+                     ? (AppController.watchPaired || AppController.cloudSignedIn)
                      : (AppController.coverAction === "uploadWorkouts"
                         || AppController.coverAction === "uploadHealth"
                         ? AppController.cloudSignedIn
-                        : AppController.watchConnected))
+                        : AppController.watchPaired))
 
         CoverAction {
             iconSource: "image://theme/icon-cover-sync"

@@ -9,12 +9,14 @@
 #include <QHash>
 #include <QSet>
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
 #include <QStringList>
 #include <QVector>
 #include <functional>
+#include <vector>
 #include <memory>
 
 class TokenVault;
@@ -929,6 +931,13 @@ signals:
     void workoutUploaded(const QString &key, bool ok, const QString &message);
     void workoutUploadProgress(int done, int total);
 
+private slots:
+    // BlueZ's word on the paired watch's link, as it changes. A real slot
+    // because QtDBus connects by string, and the one place in this class
+    // that cannot use a pointer-to-member.
+    void onWatchPropertiesChanged(const QString &interface, const QVariantMap &changed,
+                                   const QStringList &invalidated);
+
 private:
     void onDeviceUpdated(const BluezAdapter::Device &device);
     void onConnectFinished(const QString &objectPath, bool ok, const QString &error,
@@ -1248,6 +1257,37 @@ private:
     // is connected, and reports an attach that fails or never completes the
     // same way, in which case `operation` never runs.
     void withWatchSession(const std::function<void(const WatchSession &)> &operation);
+
+    // ---- the link itself ----
+    //
+    // **The flag was a belief, and nothing ever corrected it.** m_watchConnected
+    // changed only when BlueZ was asked - from refreshDevices(), which only the
+    // pairing page calls - so a watch that went away overnight left the app
+    // saying "connected", and the first thing done with that was an attach that
+    // failed after twenty seconds with "Not connected". The daemon had the same
+    // flaw and was fixed for it once; it asks BlueZ every time. This is the
+    // application's turn.
+    //
+    // ensureWatchLink() is the only way to need the link: it asks BlueZ, opens
+    // the connection itself if it is down - which is what the person was doing
+    // by hand in the system's Bluetooth settings - and says whether it is up.
+    // The answer comes through `done`, once.
+    void ensureWatchLink(std::function<void(bool up)> done);
+    // BlueZ's current answer, asked rather than remembered.
+    bool watchLinkIsUp();
+    // Sets the flag, emits, and lets go of what was measured on the old link.
+    void setWatchConnected(bool up);
+    // Ends a wait for the link: tells everyone waiting, once.
+    void finishLinkWait(bool up, const QString &error);
+    // Keeps the subscription on the paired watch's PropertiesChanged current.
+    void subscribeWatchLink();
+    // The rest of withWatchSession() once the link is known to be up.
+    void runWatchSession(const std::function<void(const WatchSession &)> &operation);
+
+    QString m_linkSubscribedPath;
+    bool m_linkConnecting = false;
+    std::vector<std::function<void(bool)>> m_linkWaiters;
+    QTimer *m_linkTimer = nullptr;
     // The session every holder shares, created on demand.
     WatchSession currentWatchSession();
     // Detaches, if and only if nothing took a new session in the meantime.

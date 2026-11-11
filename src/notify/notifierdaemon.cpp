@@ -15,6 +15,9 @@ const int kMaxQueued = 8;
 // for as long as it is attached to the watch, so this is a slow poll on
 // purpose: there is nothing to be gained by asking often.
 const int kRetryMs = 5000;
+// One line an hour saying what BlueZ believes about the watch, so a night has a
+// timeline even when nothing happens in it - which is exactly when it matters.
+const int kHeartbeatMs = 60 * 60 * 1000;
 // How long a notification is worth delivering. Two minutes is long enough to
 // cover a watch that was simply asleep and short enough that nobody is
 // surprised by what turns up on their wrist.
@@ -80,12 +83,19 @@ NotifierDaemon::NotifierDaemon(const QString &databasePath, bool dryRun, QObject
     , m_calls(new CallMonitor(this))
     , m_contacts(new ContactLookup(this))
     , m_retry(new QTimer(this))
+    , m_heartbeat(new QTimer(this))
     , m_attachTimeout(new QTimer(this))
     , m_ringTimeout(new QTimer(this))
     , m_link(QFileInfo(databasePath).absolutePath(), WatchLink::Background)
 {
     m_retry->setInterval(kRetryMs);
     connect(m_retry, &QTimer::timeout, this, &NotifierDaemon::pump);
+
+    m_heartbeat->setInterval(kHeartbeatMs);
+    connect(m_heartbeat, &QTimer::timeout, this, [this]() {
+        subscribeWatchLink();
+        qInfo().noquote() << QStringLiteral("link heartbeat: %1").arg(linkSnapshot());
+    });
 
     m_ringTimeout->setSingleShot(true);
     m_ringTimeout->setInterval(kRingTimeoutMs);
@@ -150,6 +160,9 @@ bool NotifierDaemon::start(QString *error, bool withMonitor)
     if (!m_store.open(error))
         return false;
     reloadWatch();
+    subscribeWatchLink();
+    qInfo().noquote() << QStringLiteral("link at start: %1").arg(linkSnapshot());
+    m_heartbeat->start();
 
     connect(m_adapter, &BluezAdapter::deviceUpdated, this, &NotifierDaemon::onDeviceUpdated);
     connect(m_adapter, &BluezAdapter::connectFinished, this,
@@ -242,10 +255,28 @@ void NotifierDaemon::onConnectFinished(const QString &objectPath, bool ok, const
     }
     if (!ok && errorName != QLatin1String(BluezError::kAlreadyConnected)) {
         qWarning() << "could not connect to the watch:" << error;
+        // What BlueZ believes about the pairing *when it refuses*, once per
+        // run of refusals and then occasionally. "Input/output error" is all
+        // the error says, and the two things it is most likely to mean - the
+        // watch no longer holds our key, or something else has the watch -
+        // look the same from the outside and differ here: a bond that has
+        // gone reads Paired=false or Bonded=false.
+        ++m_connectFailures;
+        if (m_connectFailures == 1 || m_connectFailures % 60 == 0) {
+            qInfo().noquote()
+                    << QStringLiteral("link state after refused connect #%1: %2")
+                               .arg(m_connectFailures).arg(linkSnapshot());
+        }
         // Leave the queue alone and let the retry timer come back to it: a
         // watch out of range now may be in range in five seconds.
         m_retry->start();
         return;
+    }
+
+    if (m_connectFailures > 0) {
+        qInfo().noquote() << QStringLiteral("connected again after %1 refused attempts")
+                                     .arg(m_connectFailures);
+        m_connectFailures = 0;
     }
 
     // Take this as connected rather than waiting for BlueZ to say so.
@@ -436,6 +467,83 @@ bool NotifierDaemon::watchIsConnected()
     return reply.isValid() && reply.value().toBool();
 }
 
+void NotifierDaemon::subscribeWatchLink()
+{
+    if (m_watch.objectPath == m_linkSubscribedPath)
+        return;
+    const QString iface = QStringLiteral("org.freedesktop.DBus.Properties");
+    const QString signal = QStringLiteral("PropertiesChanged");
+    if (!m_linkSubscribedPath.isEmpty()) {
+        QDBusConnection::systemBus().disconnect(
+                QStringLiteral("org.bluez"), m_linkSubscribedPath, iface, signal, this,
+                SLOT(onWatchPropertiesChanged(QString, QVariantMap, QStringList)));
+    }
+    m_linkSubscribedPath = m_watch.objectPath;
+    if (m_linkSubscribedPath.isEmpty())
+        return;
+    const bool ok = QDBusConnection::systemBus().connect(
+            QStringLiteral("org.bluez"), m_linkSubscribedPath, iface, signal, this,
+            SLOT(onWatchPropertiesChanged(QString, QVariantMap, QStringList)));
+    qInfo().noquote() << QStringLiteral("watching the link of %1%2")
+                                 .arg(m_linkSubscribedPath,
+                                      ok ? QString() : QStringLiteral(" - subscription failed"));
+}
+
+void NotifierDaemon::onWatchPropertiesChanged(const QString &interface,
+                                              const QVariantMap &changed,
+                                              const QStringList &invalidated)
+{
+    Q_UNUSED(invalidated);
+    if (interface != QLatin1String("org.bluez.Device1"))
+        return;
+
+    // The flags that say what the link is doing. RSSI and the like change
+    // constantly and would bury them.
+    static const char *const kKeys[] = { "Connected", "ServicesResolved", "Paired",
+                                          "Bonded", "Trusted", "Blocked" };
+    QStringList parts;
+    for (const char *key : kKeys) {
+        const QString name = QLatin1String(key);
+        if (changed.contains(name)) {
+            parts << QStringLiteral("%1=%2").arg(name,
+                    changed.value(name).toBool() ? QStringLiteral("true")
+                                                  : QStringLiteral("false"));
+        }
+    }
+    if (!parts.isEmpty())
+        qInfo().noquote() << QStringLiteral("link: %1").arg(parts.join(QStringLiteral(", ")));
+}
+
+QString NotifierDaemon::linkSnapshot()
+{
+    if (m_watch.objectPath.isEmpty())
+        return QStringLiteral("no watch paired");
+
+    QDBusInterface properties(QStringLiteral("org.bluez"), m_watch.objectPath,
+                               QStringLiteral("org.freedesktop.DBus.Properties"),
+                               QDBusConnection::systemBus());
+    const QDBusReply<QVariantMap> reply = properties.call(
+            QStringLiteral("GetAll"), QStringLiteral("org.bluez.Device1"));
+    if (!reply.isValid())
+        return QStringLiteral("unreadable (%1)").arg(reply.error().message());
+
+    static const char *const kKeys[] = { "Connected", "ServicesResolved", "Paired", "Bonded",
+                                          "Trusted", "Blocked", "AddressType" };
+    const QVariantMap all = reply.value();
+    QStringList parts;
+    for (const char *key : kKeys) {
+        const QString name = QLatin1String(key);
+        if (!all.contains(name))
+            continue;
+        const QVariant value = all.value(name);
+        parts << QStringLiteral("%1=%2").arg(name,
+                value.type() == QVariant::Bool
+                        ? (value.toBool() ? QStringLiteral("true") : QStringLiteral("false"))
+                        : value.toString());
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
 // Puts a failed piece of work back at the head of the queue, so the next
 // pump offers it again. At the head rather than the tail because order is
 // load-bearing: a removal that overtook its own arrival would take nothing
@@ -493,6 +601,7 @@ void NotifierDaemon::pump()
     // something to deliver - one indexed SELECT on a local file - and the
     // alternative is sending to whichever watch was active at boot.
     reloadWatch();
+    subscribeWatchLink();
 
     if (m_watch.objectPath.isEmpty()) {
         // Nothing has been paired in the application yet.

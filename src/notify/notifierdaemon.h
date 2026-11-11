@@ -67,6 +67,10 @@ private slots:
     void onDeviceUpdated(const BluezAdapter::Device &device);
     void onConnectFinished(const QString &objectPath, bool ok, const QString &error,
                             const QString &errorName);
+    // BlueZ's own word on the watch's link, as it changes. See
+    // subscribeWatchLink() for why this exists.
+    void onWatchPropertiesChanged(const QString &interface, const QVariantMap &changed,
+                                   const QStringList &invalidated);
     void pump();
 
 private:
@@ -116,6 +120,24 @@ private:
     // daemon that believed a four-hour-old "connected" claimed the watch
     // lock and sat in an attach that could never finish.
     bool watchIsConnected();
+
+    // **A night in this daemon's log used to be blank.** It learned the link's
+    // state only by asking, and it only asked when a notification needed
+    // delivering - so a link that went down at three in the morning and came
+    // back at seven left no trace at all, and a report of "the connection
+    // drops overnight" could not be checked against anything the phone had
+    // recorded. 744 failed connects in one evening were in the log and not one
+    // disconnect in five days, over 321 sessions that each ended in one.
+    //
+    // Idempotent: called wherever the watch may have changed.
+    void subscribeWatchLink();
+    // One line of what BlueZ says about the watch right now: Connected,
+    // ServicesResolved, Paired, Bonded, Trusted, Blocked, address type.
+    QString linkSnapshot();
+    QString m_linkSubscribedPath;
+    QTimer *m_heartbeat;
+    // Connect attempts in a row that BlueZ refused, for the log's sake.
+    int m_connectFailures = 0;
     // Gives up the Whiteboard session and the lock, and deliberately leaves
     // the Bluetooth connection up: BlueZ refcounts it, the application can
     // open its own, and keeping it means the next notification pays for a

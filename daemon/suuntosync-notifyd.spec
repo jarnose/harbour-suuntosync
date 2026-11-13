@@ -25,7 +25,7 @@
 
 Name:       suuntosync-notifyd
 Summary:    Forwards phone notifications to a Suunto watch
-Version:    1.6.4
+Version:    1.6.5
 Release:    1
 License:    MIT
 URL:        https://github.com/jarnose/harbour-suuntosync
